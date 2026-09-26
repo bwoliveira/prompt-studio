@@ -1,0 +1,318 @@
+{
+  "about": "Official prompting docs the Prompt Studio engines are audited against. Snapshots live outside the plugin as <vendor>/<id>.md in --docs-dir, $PROMPT_DOCS_DIR or ../prompt-builders/official-docs. Refresh: python3 scripts/docs_sources.py fetch",
+  "docs": {
+    "anthropic": {
+      "opus55-prompting": {
+        "title": "Prompting Claude Opus 5.5",
+        "url": "https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5-5.md",
+        "sha256": "38355a519405b71173408c5c5f126c428eab61105eb92f38d950bf699ac5c215",
+        "fetched": "2026-09-26",
+        "chars": 28304
+      },
+      "pe-best-practices": {
+        "title": "Prompting best practices",
+        "url": "https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices.md",
+        "sha256": "d8da822f28a9df98f90c206466a5e808a561a3c6e9f948c3a44f27998f54cf12",
+        "fetched": "2026-09-26",
+        "chars": 65054
+      },
+      "mitigate-jailbreaks": {
+        "title": "Mitigate jailbreaks and prompt injections",
+        "url": "https://platform.claude.com/docs/en/test-and-evaluate/strengthen-guardrails/mitigate-jailbreaks.md",
+        "sha256": "5543541f08a4e6569693a952bfec8cc5b1eaee078d22e63f99087aeee254dc1f",
+        "fetched": "2026-09-26",
+        "chars": 12083
+      },
+      "opus55-whats-new": {
+        "title": "What's new in Claude Opus 5.5",
+        "url": "https://platform.claude.com/docs/en/models/opus-5-5/whats-new-opus-5-5.md",
+        "sha256": "6ba1ff350b0ced73d0eeba0330b37f14cd516a7100f3eb404410f82e6826d546",
+        "fetched": "2026-09-26",
+        "chars": 21800
+      },
+      "opus55-overview": {
+        "title": "Claude Opus 5.5 overview",
+        "url": "https://platform.claude.com/docs/en/models/opus-5-5/overview.md",
+        "sha256": "3325e10a852cc3f40cfaf01737d97a5cdf3a37b4cd7c0b68005e204ea32b1dd4",
+        "fetched": "2026-09-26",
+        "chars": 14225
+      },
+      "opus55-migration": {
+        "title": "Migration guide (Opus 5.5)",
+        "url": "https://platform.claude.com/docs/en/models/opus-5-5/migration-guide.md",
+        "sha256": "9a108c032bf9a368ea9d84648de028e5641f97ab3e65d1301db5e379c2c04b90",
+        "fetched": "2026-09-26",
+        "chars": 90144
+      },
+      "pe-overview": {
+        "title": "Prompt engineering overview",
+        "url": "https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/overview.md",
+        "sha256": "bbd9883560196e845718d2e3160b50afbfc828eb62d4674164536e38610d5c33",
+        "fetched": "2026-09-26",
+        "chars": 2746
+      },
+      "effort": {
+        "title": "Effort",
+        "url": "https://platform.claude.com/docs/en/build-with-claude/effort.md",
+        "sha256": "ab7a176aa3927fb96a3f2f5433b82e23a6e44950cd5eb5ca91d5f0bc7746f3d7",
+        "fetched": "2026-09-26",
+        "chars": 36866
+      },
+      "thinking-overview": {
+        "title": "Extended thinking",
+        "url": "https://platform.claude.com/docs/en/build-with-claude/thinking.md",
+        "sha256": "83e88221517bc29e812179108424c5f0ac740407a18625730de3e8e9bb5ec8dd",
+        "fetched": "2026-09-26",
+        "chars": 74166
+      },
+      "thinking-steering": {
+        "title": "Thinking steering and cost",
+        "url": "https://platform.claude.com/docs/en/build-with-claude/thinking-steering-and-cost.md",
+        "sha256": "77a3c015084155915ce820e8811f9d349f12914bda2706f4d9d3de7b4308af2e",
+        "fetched": "2026-09-26",
+        "chars": 42008
+      },
+      "sysprompt-opus55": {
+        "title": "System prompt release notes: Claude Opus 5.5",
+        "url": "https://platform.claude.com/docs/en/release-notes/system-prompts/claude-opus-5-5.md",
+        "sha256": "2e33ca9aad00727eb4b61974b888187ca0fba5f82a085ff7f2af64eb88c054fe",
+        "fetched": "2026-09-26",
+        "chars": 27471
+      },
+      "models-overview": {
+        "title": "Models overview",
+        "url": "https://platform.claude.com/docs/en/models/overview.md",
+        "sha256": "404372e69b13defcb4598bb8a8cfbc359c0c31384d809daf53d75c3ca9316bc3",
+        "fetched": "2026-09-26",
+        "chars": 17034
+      },
+      "opus5-prompting": {
+        "title": "Prompting Claude Opus 5 (Opus 5.5 docs link here for subagent control)",
+        "url": "https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5.md",
+        "sha256": "643499b80e34139a5007226a31908d64a65a2d64f08275d502e64ccd43a8413e",
+        "fetched": "2026-09-26",
+        "chars": 12108
+      },
+      "adaptive-thinking": {
+        "title": "adaptive-thinking",
+        "url": "https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking.md",
+        "sha256": "77a3c015084155915ce820e8811f9d349f12914bda2706f4d9d3de7b4308af2e",
+        "fetched": "2026-09-26",
+        "chars": 42008
+      },
+      "cc-best-practices": {
+        "title": "cc-best-practices",
+        "url": "https://code.claude.com/docs/en/best-practices.md",
+        "sha256": "fe0f54acd6c645de144feae2f26926ca6c4ad05cf56ec87c23c3bd4909044fc0",
+        "fetched": "2026-09-26",
+        "chars": 39999
+      },
+      "tool-use-overview": {
+        "title": "tool-use-overview",
+        "url": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview.md",
+        "sha256": "df2ee3fe3a44a38e69252c68d4a27fd3fabed79ea554ead8270c935ba4e95328",
+        "fetched": "2026-09-26",
+        "chars": 39001
+      },
+      "skills-best-practices": {
+        "title": "skills-best-practices",
+        "url": "https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices.md",
+        "sha256": "542eee1e150ff7e2853099dd9e24b94626817d5a50ba50af4a4c35101a355f13",
+        "fetched": "2026-09-26",
+        "chars": 41943
+      },
+      "agent-sdk-overview": {
+        "title": "agent-sdk-overview",
+        "url": "https://code.claude.com/docs/en/agent-sdk/overview.md",
+        "sha256": "3fa0a35853f706d5f7e73d62975ed502d77c521116a1a48389707f35b240c577",
+        "fetched": "2026-09-26",
+        "chars": 11057
+      },
+      "prompt-library": {
+        "title": "prompt-library",
+        "url": "https://code.claude.com/docs/en/prompt-library.md",
+        "sha256": "d4972b94378572fe1df21375b010c977f37ff4a891bf733753d60018a92bd7b1",
+        "fetched": "2026-09-26",
+        "chars": 56694
+      },
+      "cc-memory": {
+        "title": "cc-memory",
+        "url": "https://code.claude.com/docs/en/memory.md",
+        "sha256": "211356a949f98a2005ccc5ca66d5366cffeae5849d3df7cdddd51c61d9455cea",
+        "fetched": "2026-09-26",
+        "chars": 53479
+      }
+    },
+    "openai": {
+      "gpt6-using": {
+        "title": "Using GPT-6 (Astra, Sol, Luna): prompting best practices + migration",
+        "url": "https://developers.openai.com/api/docs/guides/latest-model/gpt-6-astra.md",
+        "sha256": "8982485767fcefe9b4c588777de67683b4f56abe9c9af1121c9431eb9c305557",
+        "fetched": "2026-09-26",
+        "chars": 17444
+      },
+      "gpt6-astra-model": {
+        "title": "GPT-6 Astra model page",
+        "url": "https://developers.openai.com/api/docs/models/gpt-6-astra.md",
+        "sha256": "f45ae813c3f69708e2576328056de14cdf71fec174c875f4b81d236105545625",
+        "fetched": "2026-09-26",
+        "chars": 3810
+      },
+      "gpt6-rethinking-prompts": {
+        "title": "Blog: Rethinking skills and prompts for GPT-6 Astra",
+        "url": "https://developers.openai.com/blog/rethinking-skills-and-prompts-for-gpt-6-astra.md",
+        "sha256": "a1deee4c0b3ca16a20385c27f0692e22d5150fdec81710c04742dd5da29f0468",
+        "fetched": "2026-09-26",
+        "chars": 6515
+      },
+      "gpt6-launch": {
+        "title": "GPT-6 Astra: A new generation of intelligence (launch post)",
+        "url": "https://openai.com/index/gpt-6-astra/",
+        "sha256": "f075eddffb45048e52fe8abc361e1352b8b82fb0248babaff06fc2ade738c1c9",
+        "fetched": "2026-09-26",
+        "chars": 40095,
+        "note": "openai.com returns 403 to plain HTTP clients; snapshot taken with a browser-grade extractor. `fetch` keeps the old copy when it fails."
+      },
+      "prompt-engineering": {
+        "title": "Prompt engineering",
+        "url": "https://developers.openai.com/api/docs/guides/prompt-engineering.md",
+        "sha256": "3a077358aaa7a23464ccaae32d684467d2972491c5889517ae1a72753e9d1e6d",
+        "fetched": "2026-09-26",
+        "chars": 37398
+      },
+      "prompting": {
+        "title": "Prompting overview",
+        "url": "https://developers.openai.com/api/docs/guides/prompting.md",
+        "sha256": "87257ecc56e3e15ce7199533ac55debcfb2b96c06ca3f7ea67a8508425917916",
+        "fetched": "2026-09-26",
+        "chars": 3241
+      },
+      "text-generation": {
+        "title": "Text generation",
+        "url": "https://developers.openai.com/api/docs/guides/text.md",
+        "sha256": "05dc04c0cec1b95dc20f27748c7ecd9f3e2b9e3418cf5b3a4f329ef16aa550d7",
+        "fetched": "2026-09-26",
+        "chars": 19253
+      },
+      "reasoning-best-practices": {
+        "title": "Reasoning best practices",
+        "url": "https://developers.openai.com/api/docs/guides/reasoning-best-practices.md",
+        "sha256": "00d3f8ee705eb2340513512da669b45aa534ea8c8412e65470cf576aa59baa76",
+        "fetched": "2026-09-26",
+        "chars": 17069
+      },
+      "reasoning": {
+        "title": "Reasoning models",
+        "url": "https://developers.openai.com/api/docs/guides/reasoning.md",
+        "sha256": "93327c5eb19df7ecf8c0bd9d581f58052dee9f090c38bb48906110b08d0ce251",
+        "fetched": "2026-09-26",
+        "chars": 70297
+      },
+      "agent-safety": {
+        "title": "Safety in building agents (prompt injection)",
+        "url": "https://developers.openai.com/api/docs/guides/agent-builder-safety.md",
+        "sha256": "e3902b08bb7fc6f922698bcc889c101caa3537e8bb641d0b9262347a564bb646",
+        "fetched": "2026-09-26",
+        "chars": 5800
+      },
+      "misalignment-monitoring": {
+        "title": "Misalignment monitoring",
+        "url": "https://developers.openai.com/api/docs/guides/safety-checks/misalignment-monitoring.md",
+        "sha256": "f2b674bbf98b65161bf235c2c8a96d3d93114f5eab73e55fa8f53afcdb14af46",
+        "fetched": "2026-09-26",
+        "chars": 7830
+      },
+      "gpt56-prompt-guidance": {
+        "title": "Prompting guidance for GPT-5.6 Sol (previous family; used only where the GPT-6 page is silent)",
+        "url": "https://developers.openai.com/api/docs/guides/prompt-guidance-gpt-5p6.md",
+        "sha256": "46181efec9fd1160ef537b0379282a14c1ba32380f2f8149a805128253c1115a",
+        "fetched": "2026-09-26",
+        "chars": 17227
+      },
+      "gpt56-using": {
+        "title": "Using GPT-5.6 (previous family)",
+        "url": "https://developers.openai.com/api/docs/guides/latest-model/gpt-5.6.md",
+        "sha256": "bcbc002991e3ff6491ba5c4d38d8f5c497fa785c0b11ea27d92c9d34676ab460",
+        "fetched": "2026-09-26",
+        "chars": 18902
+      },
+      "frontend-prompt": {
+        "title": "Frontend prompt instructions (written for GPT-5.5)",
+        "url": "https://developers.openai.com/api/docs/guides/frontend-prompt.md",
+        "sha256": "ac54f84fef7d6a5b7c23895e27cd8341b43ad5d090b66ed488dbe11ce8e54de6",
+        "fetched": "2026-09-26",
+        "chars": 7410
+      },
+      "latest-model": {
+        "title": "latest-model",
+        "url": "https://developers.openai.com/api/docs/guides/latest-model.md",
+        "sha256": "8982485767fcefe9b4c588777de67683b4f56abe9c9af1121c9431eb9c305557",
+        "fetched": "2026-09-26",
+        "chars": 17444
+      },
+      "models": {
+        "title": "models",
+        "url": "https://developers.openai.com/api/docs/models.md",
+        "sha256": "ad6adde919a6b4f2e92b03acb891366d2ded0e078229f406a519722c71a406c3",
+        "fetched": "2026-09-26",
+        "chars": 12055
+      },
+      "prompt-generation": {
+        "title": "prompt-generation",
+        "url": "https://developers.openai.com/api/docs/guides/prompt-generation.md",
+        "sha256": "aea2c3d70b29f9f1332df88fe704c993d6f6a03dabdd5431391dc78466be2f23",
+        "fetched": "2026-09-26",
+        "chars": 148667
+      },
+      "prompt-optimizer": {
+        "title": "prompt-optimizer",
+        "url": "https://developers.openai.com/api/docs/guides/prompt-optimizer.md",
+        "sha256": "8d5023829d246da253adecbe4b81a702c8ad8b3a978c749411b77d7865eb9f5a",
+        "fetched": "2026-09-26",
+        "chars": 3729
+      },
+      "migrate-from-prompt-object": {
+        "title": "migrate-from-prompt-object",
+        "url": "https://developers.openai.com/api/docs/guides/prompting/migrate-from-prompt-object.md",
+        "sha256": "51d6f79d786a29e8050b5d9842bfded0fceadcc1cfc1c9820565cf0ab019ae7b",
+        "fetched": "2026-09-26",
+        "chars": 15222
+      },
+      "deprecations": {
+        "title": "deprecations",
+        "url": "https://developers.openai.com/api/docs/deprecations.md",
+        "sha256": "dfdfac83f084aceebe8dfef1697fee36263eb6fb2ffe9f2069ae61e546aa663f",
+        "fetched": "2026-09-26",
+        "chars": 37570
+      },
+      "function-calling": {
+        "title": "function-calling",
+        "url": "https://developers.openai.com/api/docs/guides/function-calling.md",
+        "sha256": "078619f5bb7196abc4b162e23be8427b1243a8431aa4d14d3d869a8cd93ccc0b",
+        "fetched": "2026-09-26",
+        "chars": 74982
+      },
+      "migrate-to-responses": {
+        "title": "migrate-to-responses",
+        "url": "https://developers.openai.com/api/docs/guides/migrate-to-responses.md",
+        "sha256": "9550a98f822a87262c563894f7d7627eab486d86643d0c21803ba34efe351d7a",
+        "fetched": "2026-09-26",
+        "chars": 62929
+      },
+      "structured-outputs": {
+        "title": "structured-outputs",
+        "url": "https://developers.openai.com/api/docs/guides/structured-outputs.md",
+        "sha256": "09aa3814251cf168070294ace79d677091de04b330055048392548d604aa7104",
+        "fetched": "2026-09-26",
+        "chars": 136308
+      },
+      "codex-agents-md": {
+        "title": "codex-agents-md",
+        "url": "https://developers.openai.com/codex/guides/agents-md.md",
+        "sha256": "9d1f87a2d1cb55b4782b95abe710692b35b9659789c2db31a22c7074a3383e8e",
+        "fetched": "2026-09-26",
+        "chars": 9145
+      }
+    }
+  }
+}

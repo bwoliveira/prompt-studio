@@ -1,0 +1,173 @@
+from __future__ import annotations
+
+import importlib.util
+import sys
+from pathlib import Path
+
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "dashboard"))
+import plugin_api  # noqa: E402
+
+
+class FakeSuggest:
+    def __init__(self):
+        self.calls = []
+
+    def compose(self, payload):
+        self.calls.append(payload)
+        return {"ok": True, "prompt": "Prompt final da IA.", "notes": "ok", "model": "fake/model"}
+
+    def suggest(self, payload):
+        self.calls.append(payload)
+        return {"ok": True, "value": "Tomar iniciativa", "reason": "Pedido direto.", "model": "fake/model", "latency_ms": 1, "source": "model"}
+
+
+class FakeEngine:
+    def get_model_label(self):
+        return "fake/model"
+
+
+def client(monkeypatch):
+    fake = FakeSuggest()
+    monkeypatch.setattr(plugin_api, "_load", lambda name, attr: fake if name == "suggest_engine" else FakeEngine())
+    app = FastAPI()
+    app.include_router(plugin_api.router)
+    return TestClient(app), fake
+
+
+FIELD = {"id": "autonomy", "kind": "enum", "question": "Autonomia?", "options": ["Equilibrada", "Tomar iniciativa"], "recommended": "Equilibrada"}
+
+
+def test_suggest_route_passes_the_field_and_returns_the_engine_result(monkeypatch):
+    api, fake = client(monkeypatch)
+    response = api.post("/suggest", json={"target": "opus", "intent": "Crie um app", "ladder": [{"question": "Q", "answer": "A"}], "field": FIELD})
+    assert response.status_code == 200
+    assert response.json()["value"] == "Tomar iniciativa"
+    assert fake.calls[0]["field"]["options"] == ["Equilibrada", "Tomar iniciativa"]
+    assert fake.calls[0]["ladder"][0]["answer"] == "A"
+
+
+def test_suggest_route_rejects_incomplete_requests(monkeypatch):
+    api, fake = client(monkeypatch)
+    assert api.post("/suggest", json={"intent": "  ", "field": FIELD}).status_code == 400
+    assert api.post("/suggest", json={"intent": "Crie um app", "field": {**FIELD, "question": " "}}).status_code == 400
+    assert api.post("/suggest", json={"intent": "Crie um app"}).status_code == 422
+    assert fake.calls == []
+
+
+def test_suggest_route_reports_engine_crash(monkeypatch):
+    def broken(name, attr):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(plugin_api, "_load", broken)
+    app = FastAPI()
+    app.include_router(plugin_api.router)
+    response = TestClient(app).post("/suggest", json={"intent": "Crie um app", "field": FIELD})
+    assert response.status_code == 500 and response.json()["ok"] is False
+
+
+def test_v1_routes_are_gone_and_health_reports_the_model(monkeypatch):
+    api, _ = client(monkeypatch)
+    assert api.post("/interrogate", json={"text": "x"}).status_code == 404
+    assert api.post("/brief", json={"text": "x"}).status_code == 404
+    assert api.get("/health").json() == {"ok": True, "model": "fake/model"}
+
+
+def test_real_loader_finds_both_engines():
+    assert hasattr(plugin_api._load("suggest_engine", "suggest"), "suggest")
+    assert hasattr(plugin_api._load("llm_adapter", "get_model_label"), "get_model_label")
+
+
+def test_standalone_spec_loader():
+    # `hermes serve` imports plugin_api.py by path, without a package; the siblings must still load.
+    api_path = Path(__file__).resolve().parents[1] / "dashboard" / "plugin_api.py"
+    spec = importlib.util.spec_from_file_location("hermes_dashboard_plugin_test", api_path)
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    assert hasattr(mod._load("suggest_engine", "suggest"), "suggest")
+
+
+def test_compose_route(monkeypatch):
+    api, fake = client(monkeypatch)
+    r = api.post("/compose", json={"target": "astra", "intent": "Crie um app", "answers": [{"id": "context", "question": "Q", "answer": "A"}], "baseline": "B"})
+    assert r.status_code == 200 and r.json()["prompt"] == "Prompt final da IA."
+    assert fake.calls[0]["answers"][0]["answer"] == "A" and fake.calls[0]["baseline"] == "B"
+    assert api.post("/compose", json={"intent": " "}).status_code == 400
+
+
+def test_routes_pass_every_field_the_desktop_sends(monkeypatch):
+    # pydantic drops undeclared fields: guide, kind and isDefault must survive the request models.
+    api, fake = client(monkeypatch)
+    field = {**FIELD, "guide": "never invent an example"}
+    assert api.post("/suggest", json={"intent": "Crie um app", "field": field}).status_code == 200
+    assert fake.calls[-1]["field"]["guide"] == "never invent an example"
+    answers = [
+        {"id": "autonomy", "kind": "enum", "question": "Q", "answer": "Equilibrada", "isDefault": True},
+        {"id": "examples", "kind": "example", "question": "Q", "answer": "Olá"},
+    ]
+    assert api.post("/compose", json={"intent": "Crie um app", "answers": answers, "baseline": "B"}).status_code == 200
+    sent = fake.calls[-1]["answers"]
+    assert sent[0]["kind"] == "enum" and sent[0]["isDefault"] is True
+    assert sent[1]["kind"] == "example"
+
+
+# ---- v1.0.0: health reports load failures (A5, C8), loader contract (C7), locale field ----
+import logging  # noqa: E402
+import types  # noqa: E402
+
+import pytest  # noqa: E402
+
+
+def _broken_client(monkeypatch):
+    def broken(name, attr):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(plugin_api, "_load", broken)
+    app = FastAPI()
+    app.include_router(plugin_api.router)
+    return TestClient(app)
+
+
+def test_health_reports_a_broken_adapter_and_logs_it(monkeypatch, caplog):
+    api = _broken_client(monkeypatch)
+    with caplog.at_level(logging.ERROR):
+        body = api.get("/health").json()
+    assert body["ok"] is False and body["error"]
+    assert sum(r.levelno == logging.ERROR for r in caplog.records) == 1
+
+
+def test_loader_checks_the_function_on_the_package_path_too(monkeypatch):
+    monkeypatch.setattr(plugin_api, "__package__", "fakepkg")
+    monkeypatch.setattr(plugin_api.importlib, "import_module", lambda *a, **k: types.SimpleNamespace())
+    monkeypatch.setattr(plugin_api.importlib, "reload", lambda m: m)
+    with pytest.raises(RuntimeError, match="suggest_engine.suggest missing"):
+        plugin_api._load("suggest_engine", "suggest")
+
+
+def test_loader_logs_a_failed_reload(monkeypatch, caplog):
+    module = types.SimpleNamespace(suggest=lambda p: p)
+    monkeypatch.setattr(plugin_api, "__package__", "fakepkg")
+    monkeypatch.setattr(plugin_api.importlib, "import_module", lambda *a, **k: module)
+
+    def bad_reload(m):
+        raise ImportError("syntax")
+
+    monkeypatch.setattr(plugin_api.importlib, "reload", bad_reload)
+    with caplog.at_level(logging.DEBUG, logger=plugin_api.logger.name):
+        assert plugin_api._load("suggest_engine", "suggest") is module
+    assert any("reload" in r.getMessage() for r in caplog.records)
+
+
+def test_locale_reaches_both_engines_and_defaults_to_en(monkeypatch):
+    api, fake = client(monkeypatch)
+    api.post("/suggest", json={"intent": "x", "field": FIELD, "locale": "pt"})
+    assert fake.calls[-1]["locale"] == "pt"
+    api.post("/suggest", json={"intent": "x", "field": FIELD})
+    assert fake.calls[-1]["locale"] == "en"
+    api.post("/compose", json={"intent": "x", "locale": "pt"})
+    assert fake.calls[-1]["locale"] == "pt"
+    api.post("/compose", json={"intent": "x"})
+    assert fake.calls[-1]["locale"] == "en"

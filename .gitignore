@@ -1,0 +1,78 @@
+# Prompt Studio: keep secrets, local state and build noise out of git.
+
+# --- Secrets and credentials (never commit) ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.gpg
+*.asc
+id_rsa*
+id_ed25519*
+*.token
+*secret*
+*credential*
+auth.json
+.netrc
+.npmrc
+.pypirc
+
+# --- Hermes runtime state (config, sessions, logs, installs) ---
+config.yaml
+.hermes/
+.hermes-package.json
+.install-metadata.json*
+sessions/
+logs/
+*.log
+*.sqlite
+*.sqlite3
+*.db
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.python-version
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# --- Node ---
+node_modules/
+npm-debug.log*
+.npm/
+.cache/
+
+# --- Local copies of third-party material (kept outside the repo) ---
+official-docs/
+prompt-builders/
+*.bundle
+
+# --- Test and harness output ---
+*.tmp
+*.harness.js
+screenshots/
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.har
+
+# --- Editors and OS ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
