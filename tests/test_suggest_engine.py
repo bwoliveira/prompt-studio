@@ -847,3 +847,14 @@ def test_build_messages_ct03_snapshot():
     got = [engine.build_messages(p) for p in CT03_PAYLOADS]
     expected = json.loads((ROOT / "tests" / "fixtures_ct03_build_messages.json").read_text(encoding="utf-8"))
     assert got == expected
+
+
+def test_system_prompts_have_no_aggressive_emphasis():
+    # OP-8: Opus 4.5+/5.5 overreact to shouty prompts (pe-best-practices: "dial back any aggressive language").
+    # Allowed: the Astra rule quoting OpenAI's own wording ("reserve ALWAYS/NEVER/must for true invariants").
+    se = _load()
+    texts = [se.SUGGEST_SYSTEM, se.IMPROVE_SYSTEM, se.COMPOSE_SYSTEM, se.COMPOSE_SUBAGENT_RULE, *se.COMPOSE_TARGET_RULES.values()]
+    for text in texts:
+        text = text.replace("reserve ALWAYS/NEVER/must for true invariants", "")
+        for word in ("MUST", "NEVER", "ALWAYS", "CRITICAL", "IMPORTANT", "Do NOT", "Hard rule"):
+            assert word not in text, word
