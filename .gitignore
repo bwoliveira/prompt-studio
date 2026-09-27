@@ -88,6 +88,11 @@ screenshots/
 *.jpeg
 *.webp
 *.har
+# ...except curated images for the README (GI-3): only docs/images/, never screenshots of real sessions.
+!docs/images/
+!docs/images/*.png
+!docs/images/*.jpg
+!docs/images/*.webp
 
 # --- Editors and OS ---
 .DS_Store

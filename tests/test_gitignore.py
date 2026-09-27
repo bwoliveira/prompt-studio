@@ -37,3 +37,17 @@ def test_source_code_named_like_a_secret_is_not_ignored(name):
 def test_secret_data_files_stay_ignored(name):
     result = subprocess.run(["git", "check-ignore", "--no-index", "-q", name], cwd=REPO, check=False)
     assert result.returncode == 0, f"{name} is not ignored"
+
+
+@pytest.mark.parametrize("name", ["docs/images/flow.png", "docs/images/settings.webp"])
+def test_readme_images_under_docs_images_are_trackable(name):
+    # GI-3: curated README images live in docs/images/; images elsewhere stay ignored.
+    result = subprocess.run(["git", "check-ignore", "--no-index", "-q", name], cwd=REPO, check=False)
+    assert result.returncode == 1, f"{name} is ignored"
+
+
+@pytest.mark.parametrize("name", ["screenshot.png", "docs/shot.png", "tests/desktop/out.jpg", "screenshots/a.png"])
+def test_other_images_stay_ignored(name):
+    result = subprocess.run(["git", "check-ignore", "--no-index", "-q", name], cwd=REPO, check=False)
+    assert result.returncode == 0, f"{name} is not ignored"
+
