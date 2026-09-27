@@ -219,7 +219,8 @@ like any other side model:
 
 - `hermes config set auxiliary.prompt_studio.<field> …` prints *"not a recognized config key — it was saved
   anyway"*. The warning is harmless: the CLI checks keys against Hermes's built-in list only, which does not
-  include auxiliary tasks registered by plugins. The value is saved and the plugin reads it.
+  include auxiliary tasks registered by plugins. The value is saved and the plugin reads it. Add `--force` to skip
+  the warning, or edit `config.yaml` directly.
 
 The REST routes and their request and response shapes are in `docs/CONTRACT.md`.
 
@@ -228,7 +229,9 @@ The REST routes and their request and response shapes are in `docs/CONTRACT.md`.
 - **F4 does nothing:** F4 is registered by the plugin's own Desktop code, so if that code did not load,
   nothing listens for the key. Open **Capabilities → Plugins** and find Prompt Studio: a red **failed**
   badge means the Desktop half did not load, and the error is shown under it. Hermes Desktop also shows a
-  *Plugin "…" failed to load* toast at startup. Usually the fix is updating Hermes Desktop.
+  *Plugin "…" failed to load* toast at startup. To fix it, update the plugin (`hermes plugins update prompt-studio`)
+  and Hermes to the latest stable release, then reopen Hermes Desktop. Prompt Studio 1.6.0 and 1.6.1 need
+  Hermes 0.21.5 or newer on the Desktop (they import `ListRow`/`ToggleRow`, added to the Desktop SDK in 0.21.5).
 
 ## Privacy and security
 
