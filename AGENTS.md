@@ -6,8 +6,9 @@ Guidance for any coding agent working in this repository (Hermes, Claude Code, C
 ## Changes
 
 - Change only what the task needs; no extra features, refactors or new abstractions.
-- Never edit the installed Hermes code, official Hermes skills or official plugins. A Hermes problem goes upstream
-  as an issue or PR.
+- Never edit the installed Hermes code, official Hermes skills or official plugins. A Hermes problem the plugin
+  cannot fix goes into README.md as guidance for the user (what to do to avoid it); no upstream issue unless Bruno
+  asks.
 - The plugin sends no sampling parameters (temperature, top_p) to the model: Hermes decides them for each model.
 - Edit `desktop/src/*`, then `node scripts/build.mjs`; never edit `desktop/plugin.js` or `desktop/studio-core.mjs`.
 - New behavior comes with tests. UI tests never compare jsdom nodes with `assert.equal`/`deepEqual` (a failing diff

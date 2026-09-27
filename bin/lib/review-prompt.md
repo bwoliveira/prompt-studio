@@ -16,7 +16,8 @@ touched files when you need context. Do not modify anything; your answer follows
 - Behavior changes need tests. UI tests must not compare jsdom nodes with `assert.equal`/`deepEqual` (a failing
   diff of DOM nodes once used over 8 GB of RAM); `assert.ok(a === b)` is the safe form.
 - The plugin does not send sampling parameters (temperature, top_p) to the model; Hermes decides them.
-- The installed Hermes code is never edited by this project; Hermes problems go upstream as issues or PRs.
+- The installed Hermes code is never edited by this project; a Hermes problem the plugin cannot fix is documented
+  in README.md with what the user should do.
 - `README.md`, `CHANGELOG.md` (section "Unreleased") and `docs/` must stay true after the change.
 - Severity: P0 breaks the plugin or leaks a secret; P1 is a clear bug or a broken requirement; P2 is a real
   problem with a narrower impact (missing test for new behavior, outdated doc that misleads); P3 is minor.
