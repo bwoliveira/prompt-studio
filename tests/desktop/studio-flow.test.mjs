@@ -220,6 +220,8 @@ after(async () => {
 
 // ---------------------------------------------------------------- helpers
 const $ = sel => document.querySelector(sel)
+// Compare DOM nodes with assert.ok(x === y), never assert.equal(node, ...): when that fails, node's
+// assertion diff walks the whole jsdom graph and takes gigabytes of memory (froze the host once).
 const draft = () => $('[data-slot="composer-rich-input"]').textContent
 const tick = () => ui.act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
 // Bounded settle: a few macrotask ticks inside act(). Used only after generic actions (click/press)
@@ -322,7 +324,7 @@ test('AI recommendation runs by itself on every step (no click), and removed ste
   // The paste step comes first and never calls the AI: only the user knows if they have a text.
   await settle() // intentional: proves no /suggest is sent on the paste step
   assert.equal(suggestFields().length, 0, 'no /suggest on the paste step')
-  assert.equal($('[data-studio-ai-row]'), null, 'no AI row on the paste step')
+  assert.ok($('[data-studio-ai-row]') === null, 'no AI row on the paste step')
   await answerStep()
   for (let guard = 0; guard < 20 && $('[data-studio-step]'); guard += 1) {
     await waitFor(aiReady)
@@ -343,7 +345,7 @@ test('AI recommendation runs by itself on every step (no click), and removed ste
   for (const removed of REMOVED) assert.ok(!seen.includes(removed), `${removed} must not be asked`)
   assert.equal(new Set(seen).size, seen.length, 'no step asked twice')
   assert.match(currentText(), /All steps answered/)
-  assert.equal($('[data-studio-ai-row]'), null, 'no AI row once every step is answered')
+  assert.ok($('[data-studio-ai-row]') === null, 'no AI row once every step is answered')
 })
 
 test('"Generate prompt with AI" sends every accumulated answer to /compose and places the AI prompt', { skip }, async () => {
@@ -367,7 +369,7 @@ test('"Generate prompt with AI" sends every accumulated answer to /compose and p
   assert.match(body.answers[2].answer, /sugestão para context/)
   assert.ok(body.baseline.length > 100, 'site-engine baseline goes along')
   assert.equal(draft(), 'PROMPT DA IA (4 respostas)')
-  assert.equal($('[data-studio-current-text]'), null, 'studio closed after using the prompt')
+  assert.ok($('[data-studio-current-text]') === null, 'studio closed after using the prompt')
 })
 
 test('AI failures never block the flow: /suggest error still lets you answer; /compose error falls back to the site engine', { skip }, async () => {
@@ -384,7 +386,7 @@ test('AI failures never block the flow: /suggest error still lets you answer; /c
   await click('[data-studio-generate]')
   await waitFor(() => $('[data-studio-preview-note]'))
   assert.match($('[data-studio-preview-note]').textContent, /version without AI/, 'failure explained in the preview')
-  assert.equal($('[data-studio-switch-version]'), null, 'only one version to show')
+  assert.ok($('[data-studio-switch-version]') === null, 'only one version to show')
   await click('[data-studio-use-prompt]')
   assert.ok(draft().length > 100, 'engine prompt placed in the composer')
   assert.notEqual(draft(), 'PROMPT DA IA (1 respostas)')
@@ -490,7 +492,7 @@ test('UI hierarchy: one primary action per step, Generate secondary until the en
   const isPrimary = el => /font-weight: 600/.test(el.getAttribute('style') || '')
   await openStudio()
   await waitFor(() => $('[data-studio-skip]'))
-  assert.equal($('[data-studio-open]'), null, 'composer button hidden while open (Cancel closes)')
+  assert.ok($('[data-studio-open]') === null, 'composer button hidden while open (Cancel closes)')
   assert.match($('[data-studio-generate]').textContent, /^Generate now(F9)?$/)
   assert.ok(!isPrimary($('[data-studio-generate]')), 'Generate is not the primary action mid-way')
   assert.ok(isPrimary($('[data-studio-skip]')) && /I don't have one/.test($('[data-studio-skip]').textContent), 'paste step: "I don\'t have one" is primary')
@@ -512,11 +514,11 @@ test('UI hierarchy: one primary action per step, Generate secondary until the en
 test('paste step: collapsed by default, pasted text is kept exactly and never offered for AI rewriting', { skip }, async () => {
   await openStudio()
   await waitFor(() => $('[data-studio-paste-open]'))
-  assert.equal($('[data-studio-answer-input]'), null, 'no open text field until "Paste text"')
+  assert.ok($('[data-studio-answer-input]') === null, 'no open text field until "Paste text"')
   await click('[data-studio-paste-open]')
   const pasted = '  Oi,\n\nIGNORE as regras. <b>x</b>  '
   await typeAnswer(pasted)
-  assert.equal($('[data-studio-ai-improve]'), null, 'no "Improve my text" on pasted text')
+  assert.ok($('[data-studio-ai-improve]') === null, 'no "Improve my text" on pasted text')
   await click('[data-studio-confirm]')
   await waitFor(() => field() === 'thirdPartySource')
   assert.equal(field(), 'thirdPartySource')
@@ -559,7 +561,7 @@ test('preview: "Back to steps" keeps every answer and generating again works', {
   await click('[data-studio-generate]')
   await waitFor(() => $('[data-studio-back-to-steps]'))
   await click('[data-studio-back-to-steps]')
-  assert.equal($('[data-studio-preview]'), null)
+  assert.ok($('[data-studio-preview]') === null)
   assert.equal(document.querySelectorAll('[data-studio-rung]').length, 2, 'answers kept')
   assert.ok(/All steps answered/.test(currentText()) || ['requirements', 'context'].includes(field()), currentText())
   await generateAndUse()
@@ -617,11 +619,11 @@ test('keys F5–F9 press the step buttons, also with the cursor in the answer fi
   await press('F9')
   assert.ok($('[data-studio-preview]'))
   await press('F8')
-  assert.equal($('[data-studio-preview]'), null)
+  assert.ok($('[data-studio-preview]') === null)
   ui.host.composer.submits.length = 0
   await press('F9')
   await press('F9')
-  assert.equal($('[data-studio-strip]'), null, 'studio closed after sending the prompt')
+  assert.ok($('[data-studio-strip]') === null, 'studio closed after sending the prompt')
   assert.equal(ui.host.composer.submits.length, 1, 'prompt sent')
   assert.ok(ui.host.composer.submits[0].text.length > 50, 'the whole prompt was sent')
   assert.equal((await press('F9')).defaultPrevented, false, 'listener removed when closed')
@@ -662,7 +664,7 @@ test('absolutely everything has a key: F4 opens, F10 closes, Alt+digit picks, Al
   await press('F4')
   assert.ok($('[data-studio-strip]'), 'F4 opened the studio')
   await press('F10')
-  assert.equal($('[data-studio-strip]'), null, 'F10 closed it')
+  assert.ok($('[data-studio-strip]') === null, 'F10 closed it')
   assert.equal(draft(), INTENT, 'draft returned')
   await openStudio(INTENT, 'manual')
   assertEverythingHasAKey()
@@ -677,7 +679,7 @@ test('absolutely everything has a key: F4 opens, F10 closes, Alt+digit picks, Al
   assert.ok($('[data-studio-ai-use]'))
   assertEverythingHasAKey()
   await press('Alt+D')
-  assert.equal($('[data-studio-ai-use]'), null)
+  assert.ok($('[data-studio-ai-use]') === null)
   await press('Alt+S'); await waitFor(() => $('[data-studio-ai-use]'))
   const before = backend.calls.filter(c => c.path === '/suggest').length
   await press('Alt+N'); await waitFor(() => backend.calls.filter(c => c.path === '/suggest').length > before && $('[data-studio-ai-use]'))
@@ -702,7 +704,7 @@ test('absolutely everything has a key: F4 opens, F10 closes, Alt+digit picks, Al
   await press('Alt+Shift+2')
   assert.ok($('[data-studio-rung-editing]'))
   await press('F8')
-  assert.equal($('[data-studio-rung-editing]'), null)
+  assert.ok($('[data-studio-rung-editing]') === null)
   // Alt+A / Alt+O switch the model, Alt+I cycles the AI mode.
   await press('Alt+A')
   assert.equal($('[data-studio-target-option="astra"]').getAttribute('aria-checked'), 'true')
@@ -722,7 +724,7 @@ test('absolutely everything has a key: F4 opens, F10 closes, Alt+digit picks, Al
     assert.notEqual($('[data-studio-preview-title]').textContent, heading)
   }
   await press('F9')
-  assert.equal($('[data-studio-strip]'), null)
+  assert.ok($('[data-studio-strip]') === null)
   // Closed studio: Alt+letters and F5–F10 belong to the app again.
   for (const combo of ['F5', 'F10', 'Alt+S', 'Alt+1']) assert.equal((await press(combo)).defaultPrevented, false, combo)
   // Ctrl/Super chords are never taken.
@@ -805,7 +807,7 @@ test('U3/U7: F1 toggles a Shortcuts list with the full map and the left-Alt / nu
   await openStudio(INTENT, 'off')
   const help = $('[data-studio-shortcuts-help]')
   assert.equal(help.querySelector('[data-studio-key]')?.textContent, 'F1')
-  assert.equal($('[data-studio-shortcuts-list]'), null)
+  assert.ok($('[data-studio-shortcuts-list]') === null)
   const event = await press('F1')
   assert.equal(event.defaultPrevented, true)
   const list = $('[data-studio-shortcuts-list]')
@@ -817,7 +819,7 @@ test('U3/U7: F1 toggles a Shortcuts list with the full map and the left-Alt / nu
   assert.match(list.textContent, /physical number row/)
   assert.equal(help.getAttribute('aria-expanded'), 'true')
   await click('[data-studio-shortcuts-help]')
-  assert.equal($('[data-studio-shortcuts-list]'), null, 'click closes it')
+  assert.ok($('[data-studio-shortcuts-list]') === null, 'click closes it')
   await press('F10')
   assert.equal((await press('F1')).defaultPrevented, false, 'F1 is the app\'s while the studio is closed')
 })
@@ -834,7 +836,7 @@ test('U4/U5/U13: key caps are the SDK Kbd; the primary cap is inverted with no o
   const reserved = confirm.querySelector('[data-studio-key-reserved]')
   assert.ok(reserved, 'disabled Confirm keeps an invisible F5 cap')
   assert.match(reserved.getAttribute('style'), /visibility: hidden/)
-  assert.equal(confirm.querySelector('[data-studio-key]'), null, 'no visible key on a disabled button')
+  assert.ok(confirm.querySelector('[data-studio-key]') === null, 'no visible key on a disabled button')
 })
 
 test('U6: keys during IME composition are ignored', { skip }, async () => {
@@ -850,7 +852,7 @@ test('U6: keys during IME composition are ignored', { skip }, async () => {
 test('U17: while open, F5-F10 are swallowed even with no control for them; Esc/Tab/Enter are never taken (U2 declined)', { skip }, async () => {
   await openStudio(INTENT, 'off')
   assert.equal(field(), 'thirdPartyText')
-  assert.equal($('[data-studio-shortcut="F5"]'), null, 'no F5 control on the paste step')
+  assert.ok($('[data-studio-shortcut="F5"]') === null, 'no F5 control on the paste step')
   assert.equal((await press('F5')).defaultPrevented, true)
   for (const key of ['Escape', 'Tab', 'Enter']) assert.equal((await press(key)).defaultPrevented, false, key)
   assert.equal(field(), 'thirdPartyText', 'nothing ran')
@@ -988,7 +990,7 @@ test('Auto, choice step: the AI pick is the single recommended button (F5); no F
   assert.equal(primaries().length, 1, 'exactly one primary')
   assert.match(recommends()[0].textContent, new RegExp(`★ Recommended by AI: ${other}`))
   assert.equal(recommends()[0].querySelector('[data-studio-key]').textContent, 'F5')
-  assert.equal($('[data-studio-ai-use]'), null, 'no separate Use suggestion (F7) on a choice step')
+  assert.ok($('[data-studio-ai-use]') === null, 'no separate Use suggestion (F7) on a choice step')
   assert.ok(optionLabels().includes(local) && !optionLabels().includes(other), 'local pick neutral, AI pick not duplicated')
   assert.match($('[data-studio-ai-row]').textContent, /Why: porque sim/)
   assert.ok($('[data-studio-ai-discard]') && $('[data-studio-ai-retry]'))
@@ -1037,7 +1039,7 @@ test('On request: local recommendation only; once asked and ready, the AI pick r
   assert.equal(recommends().length, 1)
   assert.equal(stars().length, 1)
   assert.match(recommends()[0].textContent, new RegExp(`Recommended by AI: ${other}`))
-  assert.equal($('[data-studio-ai-use]'), null)
+  assert.ok($('[data-studio-ai-use]') === null)
   await setMode('off')
   assert.equal(recommends().length, 1)
   assert.match(recommends()[0].textContent, new RegExp(`^★ Recommended: ${local}`))
@@ -1151,8 +1153,8 @@ test('RG-1: switching the AI off while a suggestion is in flight drops the late 
   release()
   await settle() // intentional: proves the late suggestion is dropped
   assert.equal(aiMode(), 'off')
-  assert.equal($('[data-studio-ai-row]'), null, 'no suggestion row')
-  assert.equal($('[data-studio-ai-use]'), null)
+  assert.ok($('[data-studio-ai-row]') === null, 'no suggestion row')
+  assert.ok($('[data-studio-ai-use]') === null)
   assert.equal($('[data-studio-answer-input]').value, '', 'answer unchanged')
 })
 
@@ -1168,7 +1170,7 @@ test('RG-1: switching the AI off while /compose is in flight drops the late AI p
   await settle() // intentional: proves the late AI prompt is not applied
   assert.ok($('[data-studio-preview]'), 'preview shown')
   assert.doesNotMatch($('[data-studio-preview-text]').textContent, /PROMPT TARDIO/, 'late AI prompt not applied')
-  assert.equal($('[data-studio-switch-version]'), null)
+  assert.ok($('[data-studio-switch-version]') === null)
 })
 
 
@@ -1224,7 +1226,7 @@ test('CX-1: the gear button shows F3, F3 and a click open the settings dialog, F
   await press('F3')
   assert.ok($('[data-studio-settings-dialog]'), 'F3 opened the dialog')
   await closeSettings()
-  assert.equal($('[data-studio-settings-dialog]'), null)
+  assert.ok($('[data-studio-settings-dialog]') === null)
   await click('[data-studio-settings]')
   assert.ok($('[data-studio-settings-dialog]'), 'click opened it')
   await closeSettings()
@@ -1292,7 +1294,7 @@ test('CX-1: F4 on a stored session with AI on reads the context once; fresh draf
   await freshSettings(null)
   await openFresh()
   assert.equal(contextCalls().length, 0, 'fresh draft')
-  assert.equal($('[data-studio-context-status]'), null)
+  assert.ok($('[data-studio-context-status]') === null)
   // AI off: nothing read.
   await freshSettings('sess-1')
   await openFresh(INTENT, 'off')
@@ -1453,7 +1455,7 @@ test('FIN-1: the preview offers Send now (F9) and Put in composer to edit (Alt+E
   assert.match(send.textContent, /^Send now/)
   assert.match(edit.textContent, /^Put in composer to edit/)
   assert.ok($('[data-studio-back-to-steps]') && $('[data-studio-cancel]'), 'other preview buttons kept')
-  assert.equal(document.activeElement, send, 'focus on Send now')
+  assert.ok(document.activeElement === send, 'focus on Send now')
   assertEverythingHasAKey()
   await press('F1')
   assert.ok($('[data-studio-shortcuts-list] [data-studio-shortcut-row="Alt+E"]'), 'Alt+E in the F1 list')
@@ -1470,7 +1472,7 @@ test('FIN-1: F9 on the preview sends the prompt through host.composer.submit for
   const prompt = $('[data-studio-preview-text]').textContent
   await press('F9')
   assert.deepEqual(composer().submits, [{ sessionId: 'sess-live', text: prompt }])
-  assert.equal($('[data-studio-strip]'), null, 'studio closed')
+  assert.ok($('[data-studio-strip]') === null, 'studio closed')
   assert.equal(draft(), '', 'composer not left with a copy')
 })
 
@@ -1482,7 +1484,7 @@ test('FIN-1: when submit is refused (turn running) the prompt is placed in the c
   assert.equal(composer().submits.length, 1)
   assert.equal(draft(), prompt, 'prompt never lost')
   assert.ok(ui.notifications.some(n => n.message === ui.i18n.bundles.en.notify.placedNotSent), 'placed-not-sent note')
-  assert.equal($('[data-studio-strip]'), null)
+  assert.ok($('[data-studio-strip]') === null)
 })
 
 test('FIN-1: Alt+E puts the prompt in the composer to edit, never sends', { skip }, async () => {
@@ -1491,7 +1493,7 @@ test('FIN-1: Alt+E puts the prompt in the composer to edit, never sends', { skip
   await press('Alt+E', document.activeElement, { code: 'KeyE' })
   assert.equal(composer().submits.length, 0, 'not sent')
   assert.equal(draft(), prompt)
-  assert.equal($('[data-studio-strip]'), null)
+  assert.ok($('[data-studio-strip]') === null)
 })
 
 test('LOAD-1: while the session context is read only a loading state and Cancel (F10) show; options come after', { skip }, async () => {
@@ -1506,13 +1508,13 @@ test('LOAD-1: while the session context is read only a loading state and Cancel 
   assert.ok($('[data-studio-context-loading]'), 'loading state')
   assert.match($('[data-studio-context-loading]').textContent, /Reading this session/)
   for (const sel of ['[data-studio-paste-open]', '[data-studio-skip]', '[data-studio-options]', '[data-studio-ai-row]', '[data-studio-actions]', '[data-studio-generate]', '[data-studio-current-question]']) {
-    assert.equal($(sel), null, `${sel} hidden while reading`)
+    assert.ok($(sel) === null, `${sel} hidden while reading`)
   }
   assert.ok($('[data-studio-cancel]'), 'Cancel stays')
   assertEverythingHasAKey()
   release()
   await waitFor(() => $('[data-studio-paste-open]'))
-  assert.equal($('[data-studio-context-loading]'), null)
+  assert.ok($('[data-studio-context-loading]') === null)
   assert.ok($('[data-studio-actions]'))
 })
 
@@ -1540,7 +1542,7 @@ test('LOAD-1: F10 during the context read closes and returns the draft', { skip 
   await click('[data-studio-open]')
   assert.ok($('[data-studio-context-loading]'))
   await press('F10')
-  assert.equal($('[data-studio-strip]'), null)
+  assert.ok($('[data-studio-strip]') === null)
   assert.equal(draft(), INTENT)
 })
 
@@ -1548,7 +1550,7 @@ test('LOAD-2: Auto, while the step suggestion loads the choices it changes are h
   let pending = holdSuggest()
   await toEnumStep('auto')
   assert.ok($('[data-studio-ai-loading]'))
-  assert.equal($('[data-studio-options]'), null, 'choice cards hidden while loading')
+  assert.ok($('[data-studio-options]') === null, 'choice cards hidden while loading')
   assert.ok($('[data-studio-ai-stop]'), 'Stop (Alt+D) still there')
   assertEverythingHasAKey()
   pending.at(-1).reject(new Error('boom'))
@@ -1568,7 +1570,7 @@ test('LOAD-2: Auto, while the step suggestion loads the choices it changes are h
     await settle()
   }
   if ($('[data-studio-answer-input]') && $('[data-studio-ai-loading]') && pending.at(-1)?.body.field.recommended) {
-    assert.equal($('[data-studio-recommend]'), null, 'recommended hidden while loading')
+    assert.ok($('[data-studio-recommend]') === null, 'recommended hidden while loading')
     assert.ok($('[data-studio-answer-input]'), 'the field itself stays')
     pending.at(-1).resolve({ ok: true, value: 'TEXTO DA IA', reason: 'x' })
     await waitFor(() => $('[data-studio-recommend]'))
@@ -1581,8 +1583,8 @@ test('LOAD-3: while the AI writes the prompt, only Cancel and the mode switch re
   backend.compose = () => new Promise(resolve => { release = () => resolve({ ok: true, prompt: 'P', notes: '' }) })
   await openStudio()
   await click('[data-studio-generate]')
-  assert.equal($('[data-studio-generate]'), null, 'Generate hidden while writing')
-  assert.equal($('[data-studio-back]'), null, 'Back hidden while writing')
+  assert.ok($('[data-studio-generate]') === null, 'Generate hidden while writing')
+  assert.ok($('[data-studio-back]') === null, 'Back hidden while writing')
   assert.ok($('[data-studio-cancel]'))
   assert.ok($('[data-studio-ai-mode-option="off"]'))
   release()
@@ -1600,8 +1602,8 @@ test('SET-1: read-context switch off: no /context and no loading state, persiste
   await closeSettings()
   await openFresh()
   assert.equal(contextCalls().length, 0)
-  assert.equal($('[data-studio-context-loading]'), null)
-  assert.equal($('[data-studio-context-status]'), null)
+  assert.ok($('[data-studio-context-loading]') === null)
+  assert.ok($('[data-studio-context-status]') === null)
   assert.ok($('[data-studio-paste-open]'), 'options shown at once')
   await openSettings()
   assert.equal(sw().getAttribute('aria-checked'), 'false', 'reads back off after reopening')
