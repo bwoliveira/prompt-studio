@@ -143,7 +143,8 @@ other side model:
   ```
 
 `timeout` applies to each step's suggestion (it can lower the 20 s step limit); the final polish always gets its own 45 s budget. A fast model keeps each step at a few seconds. If `prompt_studio` pins no provider or model, the task
-follows the main model.
+follows the main model. With no `reasoning_effort` and no level in Settings, the plugin asks for `low` (except on
+Gemini, where thinking stays off).
 
 ## Session context
 

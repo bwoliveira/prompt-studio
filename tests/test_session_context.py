@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-SECRET = "sk-test-XXXXabcdef123456"
+SECRET = "sk-test-XXXXabcdef123456"  # gitleaks:allow (fake key for the redaction test)
 
 
 def _load():
@@ -130,7 +130,7 @@ def test_secrets_are_redacted_before_the_model_sees_them(monkeypatch):
     # Without agent.redact the local fallback still redacts.
     import sys
     monkeypatch.setitem(sys.modules, "agent.redact", None)
-    assert all(s not in sc.redact(text) for s in (SECRET, "abcdefghijklmnop1234", "hunter2hunter2"))
+    assert all(s not in sc.redact(text) for s in (SECRET, "abcdefghijklmnop1234", "hunter2hunter2"))  # gitleaks:allow (fake keys for the redaction test)
 
 
 def test_transcript_cap_keeps_the_recent_end():

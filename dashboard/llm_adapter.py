@@ -27,6 +27,9 @@ def _strip_thinking(text: str) -> str:
     return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
 
+DEFAULT_EFFORT = "low"  # used when neither auxiliary.prompt_studio nor the Settings pick sets an effort
+
+
 class Reply(tuple):
     """``(text, model)`` from one model call, plus the provider's ``finish_reason`` ("" when unknown).
 
@@ -152,6 +155,11 @@ def _default_llm(
             task = None
             task_config = {k: v for k, v in task_config.items() if k == "timeout"}
     provider_norm = (provider or "").strip().lower()
+    if not effort and provider_norm != "gemini":
+        # No effort in the config or the Settings pick: ask for "low" instead of the provider default
+        # (medium on Opus 5.5). Opus 5.5 docs: "Start at low effort and measure." Gemini keeps its own
+        # branch below, which turns thinking off when no effort is set.
+        effort = DEFAULT_EFFORT
 
     reasoning_config = parse_reasoning_effort(effort) if effort else None
 

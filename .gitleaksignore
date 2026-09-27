@@ -1,0 +1,3 @@
+# Fake secrets in the redaction tests of commit 9b33bc1 (tests/test_session_context.py); later commits mark them inline with gitleaks:allow.
+9b33bc1d6fc6142b27c6b57f666915601f1b8dcb:tests/test_session_context.py:generic-api-key:13
+9b33bc1d6fc6142b27c6b57f666915601f1b8dcb:tests/test_session_context.py:generic-api-key:133

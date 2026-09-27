@@ -84,7 +84,8 @@ def _call(**kw):
 def test_configured_extra_body_is_forwarded_and_route_info_names_the_model(monkeypatch):
     captured = _fake_hermes(monkeypatch, "openrouter", {"extra_body": {"top_k": 3}})
     assert _call() == ("out", "routed/rm")
-    assert captured["extra_body"] == {"top_k": 3} and captured["reasoning_config"] is None
+    # No effort configured: the plugin asks for "low" (lote 3 item 1), not the provider default.
+    assert captured["extra_body"] == {"top_k": 3} and captured["reasoning_config"] == {"enabled": True, "effort": "low"}
 
 
 def test_gemini_without_effort_disables_thinking_and_skips_response_format(monkeypatch):
@@ -203,7 +204,9 @@ def test_no_config_block_and_no_model_choice_lets_hermes_auto_route(monkeypatch)
     assert captured["task"] == "prompt_studio"
     for key in ("provider", "model", "base_url", "api_key"):
         assert key not in captured
-    assert captured["reasoning_config"] is None and captured["extra_body"] is None
+    # No effort anywhere: "low" is sent (lote 3 item 1). A provider that rejects the reasoning field is
+    # retried by Hermes without it (auxiliary_client parameter rungs), so the call still works.
+    assert captured["reasoning_config"] == {"enabled": True, "effort": "low"} and captured["extra_body"] is None
 
 
 def test_default_llm_reports_the_finish_reason_and_still_unpacks_as_text_and_model(monkeypatch):
@@ -239,3 +242,29 @@ def test_json_object_ct03_characterization():
     assert j("{ not json") is None
     assert j("") is None
     assert j(123) is None
+
+
+# Lote 3 item 1: with no effort anywhere, send "low" (Opus 5.5 docs: "Start at low effort and measure.")
+# instead of letting the API fall back to its own default (medium on Opus 5.5).
+def test_no_effort_configured_sends_low(monkeypatch):
+    captured = _fake_hermes(monkeypatch, "anthropic", {})
+    adapter._default_llm(messages=[], temperature=0.2, max_tokens=10, timeout=1)
+    assert captured["reasoning_config"] == {"enabled": True, "effort": "low"}
+
+
+def test_empty_choice_effort_without_config_effort_sends_low(monkeypatch):
+    captured = _fake_hermes(monkeypatch, "anthropic", {})
+    adapter._default_llm(messages=[], temperature=0.2, max_tokens=10, timeout=1,
+                         model_choice={"provider": "anthropic", "model": "claude-opus-5-5", "effort": ""})
+    assert captured["reasoning_config"] == {"enabled": True, "effort": "low"}
+
+
+def test_configured_or_chosen_effort_still_wins_over_the_low_default(monkeypatch):
+    captured = _fake_hermes(monkeypatch, "anthropic", {"reasoning_effort": "high"})
+    adapter._default_llm(messages=[], temperature=0.2, max_tokens=10, timeout=1)
+    assert captured["reasoning_config"] == {"enabled": True, "effort": "high"}
+    captured = _fake_hermes(monkeypatch, "anthropic", {})
+    adapter._default_llm(messages=[], temperature=0.2, max_tokens=10, timeout=1,
+                         model_choice={"provider": "anthropic", "model": "m", "effort": "none"})
+    assert captured["reasoning_config"] == {"enabled": False, "effort": "none"}
+
