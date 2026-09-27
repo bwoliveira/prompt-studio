@@ -211,6 +211,8 @@ def _run_with_deadline(
     except Exception as exc:  # provider down, provider timeout, auth, bad route
         # Provider text can carry URLs, request ids or body fragments: log it, return only the class.
         logger.warning("Prompt Studio model call failed: %s", type(exc).__name__, exc_info=exc)
+        if _llm.is_model_not_found(exc):
+            return {"ok": False, "code": "model_not_found", "error": f"model not found: {type(exc).__name__}", "model": _llm.get_model_label(model_choice)}
         return {"ok": False, "code": "unavailable", "error": f"model unavailable: {type(exc).__name__}", "model": _llm.get_model_label(model_choice)}
 
 

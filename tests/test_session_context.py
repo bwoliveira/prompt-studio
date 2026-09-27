@@ -176,6 +176,20 @@ def test_provider_exception_is_logged_never_returned(caplog):
     assert any(detail in str(r.exc_info and r.exc_info[1]) for r in caplog.records)
 
 
+def test_a_model_the_provider_does_not_know_gets_its_own_code():
+    sc = _load()
+
+    class NotFoundError(Exception):  # shape of openai/anthropic NotFoundError
+        status_code = 404
+
+    def missing(**_):
+        raise NotFoundError("model: claude-haiku-5 req_123")
+
+    out = sc.context({"session_id": "s1", "model_choice": {"provider": "anthropic", "model": "claude-haiku-5", "effort": ""}},
+                     llm=missing, opener=_opener(FakeDB([msg("user", "hi")])))
+    assert out["code"] == "model_not_found" and "req_123" not in json.dumps(out), out
+
+
 def test_store_failure_is_unavailable(caplog):
     sc = _load()
 

@@ -1333,7 +1333,13 @@ test('CX-1: a failed or timed-out context read shows a short note and the sugges
   } finally {
     delete globalThis.__promptStudioContextTimeoutMs
   }
-  for (const code of ['no_session', 'empty_session', 'invalid_summary']) {
+  // A chosen model the provider does not know says so.
+  await freshSettings('sess-1')
+  backend.context = () => ({ ok: false, code: 'model_not_found', error: 'model not found: NotFoundError' })
+  await openFresh()
+  await flush()
+  assert.equal($('[data-studio-context-status]').textContent.includes(ui.i18n.bundles.en.errors.model_not_found), true)
+  for (const code of ['no_session', 'empty_session', 'invalid_summary', 'model_not_found']) {
     assert.ok(ui.i18n.bundles.en.errors[code] && ui.i18n.bundles.pt.errors[code], `errors.${code} in en and pt`)
   }
 })
@@ -1350,6 +1356,15 @@ test('CX-1: language "pt" with Hermes in English shows Portuguese strings and qu
   await openFresh()
   assert.equal(contextCalls()[0].body.locale, 'pt')
   assert.match(currentText(), /colar|referência/i, 'question in Portuguese')
+  // The suggestion's reason and the polish notes are written in {language}: /suggest and /compose carry the locale too.
+  await pasteStep('')
+  await flush()
+  assert.ok(suggestCalls().length >= 1, 'auto suggestion asked')
+  assert.equal(suggestCalls().at(-1).body.locale, 'pt', 'suggest locale follows the Studio language')
+  await click('[data-studio-generate]')
+  await flush()
+  assert.equal(backend.calls.filter(c => c.path === '/compose').at(-1)?.body.locale, 'pt', 'compose locale follows the Studio language')
+  await openFresh()
   // Back to auto: English again (Hermes is in English).
   await openSettings()
   await click('[data-studio-language] [data-sdk-select-item="auto"]')

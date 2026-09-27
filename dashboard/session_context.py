@@ -173,6 +173,8 @@ def context(payload: Mapping[str, Any], llm: Callable[..., Any] | None = None, d
     except Exception as exc:
         # Provider text can carry request fragments: log it, return only a fixed sentence.
         logger.warning("Prompt Studio context model call failed: %s", type(exc).__name__, exc_info=exc)
+        if _llm.is_model_not_found(exc):
+            return _error("model_not_found", "model not found", model=label)
         return _error("unavailable", "model unavailable", model=label)
     data = _llm._json_object(text)
     result = data.get("summary") if isinstance(data, dict) else None

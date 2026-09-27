@@ -1322,7 +1322,8 @@ const UI_MESSAGES = {
       invalid_prompt: 'The model reply was not a usable prompt.',
       no_session: 'This session was not found.',
       empty_session: 'This session has no conversation yet.',
-      invalid_summary: 'The model did not return a usable summary.'
+      invalid_summary: 'The model did not return a usable summary.',
+      model_not_found: 'The provider does not offer this model; check the name in Settings (F3).'
     },
     context: {
       reading: 'Reading this session…',
@@ -1520,7 +1521,8 @@ const UI_MESSAGES = {
       invalid_prompt: 'A resposta do modelo não era um prompt utilizável.',
       no_session: 'Esta sessão não foi encontrada.',
       empty_session: 'Esta sessão ainda não tem conversa.',
-      invalid_summary: 'O modelo não devolveu um resumo utilizável.'
+      invalid_summary: 'O modelo não devolveu um resumo utilizável.',
+      model_not_found: 'O provedor não oferece este modelo; confira o nome nas Configurações (F3).'
     },
     context: {
       reading: 'Lendo esta sessão…',
@@ -2260,7 +2262,7 @@ async function generatePrompt() {
       // to the local engine instead of leaving the studio stuck on "writing".
       const response = await withTimeout(pluginContext.rest('/compose', {
         method: 'POST',
-        body: { target, intent: requestState.intent, answers: studioAnswers(target, requestState.intent, ladder, locale), baseline: engineResult.prompt, ...(helperChoice() ? { model_choice: helperChoice() } : {}) }
+        body: { target, intent: requestState.intent, answers: studioAnswers(target, requestState.intent, ladder, locale), baseline: engineResult.prompt, locale, ...(helperChoice() ? { model_choice: helperChoice() } : {}) }
       }), COMPOSE_CLIENT_TIMEOUT_MS)
       if (serial !== composeSerial || $studio.get().status !== 'briefing') return // cancelled meanwhile
       if ($aiMode.get() === 'off') {
@@ -2316,6 +2318,7 @@ async function requestSuggestion(mode = 'suggest') {
         target: currentTarget(),
         intent: state.intent,
         mode,
+        locale: activeLocale(),
         answer: improving ? typed : '',
         ladder: state.ladder.filter(rung => !isSkipped(rung.answer)).map(({ question, answer, category }) => ({ question, answer, category })),
         field: {

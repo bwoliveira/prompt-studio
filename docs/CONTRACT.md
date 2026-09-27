@@ -91,6 +91,7 @@ Response (HTTP 200): `{ "ok": true, "summary": "…", "model": "provider/model",
 | `empty_session` | no user/assistant text and no compaction summary | fixed sentence |
 | `timeout` | no reply within 15 s (also carries `model`) | `no summary within 15 s` |
 | `unavailable` | store or provider failure, or the reader cannot load (also `model` for provider failures) | `session store unavailable` / `model unavailable` / `context reader unavailable` |
+| `model_not_found` | the provider does not know the model name (also `model`) | `model not found` |
 | `invalid_summary` | reply is not JSON with a non-empty string `summary` (also `model`) | fixed sentence |
 
 The transcript text is never logged and never returned: only the summary, the route label and counts leave the backend.
@@ -121,9 +122,10 @@ back to `error` when the code is unknown or absent.
 | `invalid_prompt` | /compose | reply has no `prompt` of at least 20 characters | fixed sentence |
 | `timeout` | both | no reply before the deadline | `no model reply within 20 s` / `no prompt from the model within 45 s` |
 | `unavailable` | both | the provider call raised | `model unavailable: <ExceptionClassName>` |
+| `model_not_found` | both | the provider does not know the model name (404 / "model not found") | `model not found: <ExceptionClassName>` |
 | `empty_reply` | both | empty reply twice (also `empty: true`) | fixed sentence |
 
-`timeout`, `unavailable` and `empty_reply` also carry `model`. The route-level errors (400 for a blank draft, 500
+`timeout`, `unavailable`, `model_not_found` and `empty_reply` also carry `model`. The route-level errors (400 for a blank draft, 500
 `{ "ok": false, "error": "suggest engine unavailable" }` / `"compose engine unavailable"` when the engine cannot load
 or crashes, 422 over the size limits) have no `code`.
 

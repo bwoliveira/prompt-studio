@@ -167,6 +167,17 @@ def _default_llm(
     return extract_content_or_reasoning(response), f"{resolved_provider}/{resolved_model}"
 
 
+def is_model_not_found(exc: BaseException) -> bool:
+    """The provider does not know the model name (404 / "model not found"), e.g. a mistyped pick in Settings."""
+    if getattr(exc, "status_code", None) == 404 or type(exc).__name__ == "NotFoundError":
+        return True
+    try:
+        from agent.auxiliary_client import _is_model_not_found_error
+        return bool(_is_model_not_found_error(exc))
+    except Exception:
+        return False
+
+
 def get_model_label(model_choice: Mapping[str, Any] | None = None) -> str:
     """Best-effort configured (or chosen) auxiliary route for health/fallback responses."""
     chosen = _choice(model_choice)

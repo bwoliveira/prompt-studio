@@ -121,7 +121,13 @@ the app.
 
 ## Choose the model
 
-The suggestions and the final polish use the auxiliary task `prompt_studio`. Pick its model like any
+Nothing to set up: with no model picked, the Studio uses your Hermes default model for the questions and for
+reading the session context. To pick other models, open **Settings** (the gear in the Studio, or F3): one
+model for the questions and the final polish, and one for reading the session context (a fast model keeps F4
+quick). Each pick has its provider, model and reasoning level; the picks live in the plugin storage and the
+plugin never edits `config.yaml`.
+
+Without a pick, the suggestions and the final polish use the auxiliary task `prompt_studio`. Pick its model like any
 other side model:
 
 - **CLI:** `hermes model` → *Configure auxiliary models* → **Prompt Studio**
@@ -139,10 +145,19 @@ other side model:
 `timeout` applies to each step's suggestion (it can lower the 20 s step limit); the final polish always gets its own 45 s budget. A fast model keeps each step at a few seconds. If `prompt_studio` pins no provider or model, the task
 follows the main model.
 
+## Session context
+
+When F4 opens the Studio in a session that already has a conversation, the context model reads its last
+user and assistant turns (tool output and reasoning are left out, secrets are masked) and writes a short summary.
+The summary only helps the step suggestions; it never goes into the final prompt, because the main model already
+sees that conversation. Nothing is read in a new session, with the AI off, or with *Read this session's context
+when opening* turned off in Settings.
+
 ## Language
 
 The interface is in English and uses the Hermes Desktop plugin translation API (`ctx.i18n`). A
-Brazilian Portuguese bundle ships with the plugin and is used once Hermes Desktop offers that language.
+Brazilian Portuguese bundle ships with the plugin. By default the Studio follows the Hermes language; Settings
+(F3) can fix it to Português or English, which also sets the language of the questions and of the AI's notes.
 The prompt itself follows the language of your request.
 
 ## How it follows the Hermes plugin guidelines
