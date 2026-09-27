@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+
+import pytest
 import sys
 import types
 from pathlib import Path
@@ -267,4 +269,26 @@ def test_configured_or_chosen_effort_still_wins_over_the_low_default(monkeypatch
     adapter._default_llm(messages=[], temperature=0.2, max_tokens=10, timeout=1,
                          model_choice={"provider": "anthropic", "model": "m", "effort": "none"})
     assert captured["reasoning_config"] == {"enabled": False, "effort": "none"}
+
+
+# Lote 3 item 2: max_tokens caps thinking plus text. Measured on OpenRouter (which forwards the cap) with
+# claude-opus-5.5 and max_tokens 1024: effort max spent 1023 tokens on reasoning, finish_reason "length".
+@pytest.mark.parametrize("effort,cap", [("medium", 4096), ("high", 8192), ("xhigh", 8192), ("max", 8192), ("ultra", 8192)])
+def test_higher_effort_raises_a_small_token_cap(monkeypatch, effort, cap):
+    captured = _fake_hermes(monkeypatch, "openrouter", {"reasoning_effort": effort})
+    adapter._default_llm(messages=[], temperature=0.2, max_tokens=1024, timeout=1)
+    assert captured["max_tokens"] == cap
+
+
+@pytest.mark.parametrize("effort", ["", "none", "minimal", "low"])
+def test_low_or_no_effort_keeps_the_callers_cap(monkeypatch, effort):
+    captured = _fake_hermes(monkeypatch, "openrouter", {"reasoning_effort": effort} if effort else {})
+    adapter._default_llm(messages=[], temperature=0.2, max_tokens=1024, timeout=1)
+    assert captured["max_tokens"] == 1024
+
+
+def test_a_larger_callers_cap_is_never_lowered(monkeypatch):
+    captured = _fake_hermes(monkeypatch, "openrouter", {"reasoning_effort": "medium"})
+    adapter._default_llm(messages=[], temperature=0.2, max_tokens=6000, timeout=1)
+    assert captured["max_tokens"] == 6000
 

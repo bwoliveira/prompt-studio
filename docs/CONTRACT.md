@@ -13,7 +13,7 @@ value is treated as `en`. It never changes the prompt itself, which follows the 
 `model_choice` (/suggest, /compose, /context, optional): `{ "provider": "anthropic", "model": "claude-haiku-5",
 "effort": "low" }` (provider ≤ 80 chars, model ≤ 200, effort ≤ 16). Empty or missing `model`: exactly the config route
 (`auxiliary.prompt_studio`: provider, model, reasoning_effort, timeout, extra_body). With a `model`, the call goes to that
-provider/model; `effort` `""` keeps the config's `reasoning_effort` (and when that is unset too, `low` is sent, except on Gemini), `"none"` turns thinking off, and
+provider/model; `effort` `""` keeps the config's `reasoning_effort` (and when that is unset too, `low` is sent, except on Gemini); at `medium` the call's `max_tokens` is raised to at least 4096 and at `high` and above to at least 8192, because it caps thinking plus text, `"none"` turns thinking off, and
 `minimal|low|medium|high|xhigh|max|ultra` sets it; any other `effort` is a 422. When the chosen provider differs from
 `auxiliary.prompt_studio.provider` (or none is configured), the config's `base_url`, `api_key` and `extra_body` are not
 used (only its `timeout`), so a configured endpoint or key never reaches another provider. The Gemini thinking and JSON-mode

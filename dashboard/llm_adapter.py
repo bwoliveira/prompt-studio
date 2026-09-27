@@ -29,6 +29,10 @@ def _strip_thinking(text: str) -> str:
 
 DEFAULT_EFFORT = "low"  # used when neither auxiliary.prompt_studio nor the Settings pick sets an effort
 
+# Smallest max_tokens per effort. Opus 5.5 migration docs: "max_tokens remains a hard limit on total output,
+# thinking plus response text"; what's new: "leave room in max_tokens for the thinking". A larger cap is kept.
+EFFORT_MIN_TOKENS = {"medium": 4096, "high": 8192, "xhigh": 8192, "max": 8192, "ultra": 8192}
+
 
 class Reply(tuple):
     """``(text, model)`` from one model call, plus the provider's ``finish_reason`` ("" when unknown).
@@ -162,6 +166,9 @@ def _default_llm(
         effort = DEFAULT_EFFORT
 
     reasoning_config = parse_reasoning_effort(effort) if effort else None
+    # max_tokens caps thinking plus text; at higher effort a small cap can be spent on thinking alone
+    # (measured: effort max, cap 1024 -> 1023 reasoning tokens, finish_reason "length").
+    max_tokens = max(max_tokens, EFFORT_MIN_TOKENS.get(str(effort or "").strip().lower(), 0))
 
     extra_body: dict[str, Any] = {}
     configured_extra = task_config.get("extra_body")
