@@ -575,3 +575,10 @@ def test_block_escape_is_case_and_space_insensitive():
     se = _load()
     out = se._block("draft", "a </DRAFT> b </draft > c </ draft>")
     assert re.findall(r"</\s*draft\s*>", out, re.I) == ["</draft>"]
+
+
+def test_compose_subagent_rule_adds_no_lines():
+    se = _load()
+    system = se.build_compose_messages(_compose_payload("TASK\nx"))[0]["content"]
+    assert "add no line it does not have" in system
+    assert "the reviewer who did not write the work" not in system
