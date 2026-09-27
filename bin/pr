@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Pushes the current branch, opens its pull request and merges it (squash). Before the push it runs the local Codex
+# review (bin/review): P0, P1 or P2 block it. There is no CI review on GitHub here; the Hermes /review comes first
+# (AGENTS.md).
+# Usage: bin/pr [--skip-review] ["title"]   (--skip-review only with Bruno's authorization; default title: last commit)
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+SKIP_REVIEW=0
+if [[ "${1:-}" == "--skip-review" ]]; then SKIP_REVIEW=1; shift; fi
+
+BRANCH="$(git branch --show-current)"
+[[ "$BRANCH" != "main" ]] || { echo "Create a branch: git switch -c <type>/<subject>" >&2; exit 1; }
+[[ -z "$(git status --porcelain)" ]] || { echo "There are uncommitted changes." >&2; exit 1; }
+
+git fetch --quiet origin main
+REVIEWED="$(git rev-parse HEAD)"
+if (( SKIP_REVIEW )); then
+  echo "Local review skipped (--skip-review). Record Bruno's authorization in the PR description." >&2
+else
+  bin/review --base origin/main
+fi
+# Push exactly the reviewed commit: a commit made during the review never goes up unreviewed.
+[[ "$(git rev-parse HEAD)" == "$REVIEWED" ]] || { echo "The branch changed during the review; run bin/pr again." >&2; exit 1; }
+
+git push --quiet origin "$REVIEWED:refs/heads/$BRANCH"
+git branch --quiet --set-upstream-to="origin/$BRANCH"
+# Only an OPEN pull request of this branch into main counts: `gh pr view <branch>` also finds an old merged
+# PR when a branch name is reused, and merging that one would report success with nothing reaching main.
+PR="$(gh pr list --head "$BRANCH" --base main --state open --json number -q '.[0].number')"
+if [[ -z "$PR" ]]; then
+  PR="$(gh pr create --base main --head "$BRANCH" --title "${1:-$(git log -1 --format=%s)}" --fill)"
+  PR="${PR##*/}"
+fi
+[[ "$PR" =~ ^[0-9]+$ ]] || { echo "Could not find or open the pull request (got '$PR')." >&2; exit 1; }
+gh pr view "$PR" --json url -q .url
+# Merge only the reviewed commit; the remote branch goes away, the local one stays until you delete it.
+gh pr merge "$PR" --squash --match-head-commit "$REVIEWED"
+# `gh pr merge` also exits 0 when it only queued the PR or enabled auto-merge: delete the branch only once
+# GitHub reports the PR as MERGED, or the pending merge would be cancelled.
+STATE="$(gh pr view "$PR" --json state -q .state)"
+[[ "$STATE" == "MERGED" ]] || { echo "PR #$PR is not merged yet (state: $STATE); the branch was kept." >&2; exit 1; }
+gh api -X DELETE "repos/{owner}/{repo}/git/refs/heads/$BRANCH" >/dev/null 2>&1 || true
+gh pr view "$PR" --json state,mergeCommit -q '.state + " " + (.mergeCommit.oid // "")'
