@@ -231,7 +231,8 @@ The REST routes and their request and response shapes are in `docs/CONTRACT.md`.
   badge means the Desktop half did not load, and the error is shown under it. Hermes Desktop also shows a
   *Plugin "…" failed to load* toast at startup. To fix it, update the plugin (`hermes plugins update prompt-studio`)
   and Hermes to the latest stable release, then reopen Hermes Desktop. Prompt Studio 1.6.0 and 1.6.1 need
-  Hermes 0.21.5 or newer on the Desktop (they import `ListRow`/`ToggleRow`, added to the Desktop SDK in 0.21.5).
+  Hermes 0.21.5 or newer on the Desktop (they import `ListRow`/`ToggleRow`, added to the Desktop SDK in 0.21.5);
+  1.7.0 and later also load on 0.20.0 through 0.21.4.
 
 ## Privacy and security
 
