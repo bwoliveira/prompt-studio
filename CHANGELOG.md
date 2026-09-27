@@ -2,6 +2,14 @@
 
 Versions come from the commit subjects (there are no git tags). Newest first.
 
+## 1.5.4
+
+- Repository prepared for publishing: README rewritten, this CHANGELOG, workflow note in `docs/DESKTOP-DEV.md` (CT-11).
+- CT-04: suggest/compose system prompts written one rule per source line (runtime strings byte-identical).
+- CT-06: each draft-recognition pattern documents that it covers Portuguese (accents folded) and English.
+- GI-3: curated README images may live in `docs/images/`; images elsewhere stay ignored.
+- No behavior change.
+
 ## 1.5.3
 
 - Default reasoning effort is `low` when neither `auxiliary.prompt_studio` nor the Settings pick sets one (Opus 5.5 docs).
@@ -45,14 +53,13 @@ Versions come from the commit subjects (there are no git tags). Newest first.
 
 ## 1.2.0
 
-- Empty model reply is retried once and reported as no answer, not a connection error.
 - Compose keeps its 45 s provider budget; installer timeout 20 and argument validation; tagged suggest blocks with robust escaping; request size limits; broader secret ignores (SP-1, RD-1, SE-1, SE-2, SE-4, SE-9, GI-1).
 - OP-1/OP-3: Opus subagents default to auto with the guide's delegation rule; design line only for new interface work.
 - AS-1/AS-2: Astra frontend guidance and full approval paragraph; frontend lines only for building or changing an interface.
 
 ## 1.1.1
 
-- No commit subject names 1.1.1; no changes are recorded under it.
+- Retry an empty model reply once within the same deadline; report it as no answer ("The model did not answer"), not as a connection error. Anthropic's safety filter can end a reply with no text (`finish_reason: content_filter`).
 
 ## 1.1.0
 
