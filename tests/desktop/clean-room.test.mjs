@@ -1,7 +1,7 @@
 // Clean-room guard: the engines in desktop/src were written from the official vendor docs only.
 // No 8-word run of the third-party prompt-builder sites' engines may appear in them, unless the same
 // run is in the official docs (quoting the vendor is allowed). Those engines are read from a local
-// checkout next to this repo (PROMPT_BUILDERS_DIR, default ../prompt-builders/<site>/engine.mjs) so
+// checkout next to this repo (PROMPT_BUILDERS_DIR, default: the folder in buildersDir below, <site>/engine.mjs), so
 // their text is never stored here; the test is skipped when they or the docs snapshots are missing.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'

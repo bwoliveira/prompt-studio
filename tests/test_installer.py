@@ -30,6 +30,9 @@ def copy_repo(directory: Path) -> Path:
 
 
 REAL_HERMES = Path(shutil.which("hermes") or "/usr/local/bin/hermes")
+# install.sh is a bash script (Linux and macOS). On native Windows the plugin is installed with
+# `hermes plugins install` (see the README), so these installer tests do not apply there.
+NOT_ON_WINDOWS = unittest.skipIf(os.name == "nt", "install.sh is a bash script; on Windows use hermes plugins install")
 
 
 class UniqueKeyLoader(yaml.SafeLoader):
@@ -51,6 +54,7 @@ def load_config(home: Path) -> dict:
     return yaml.load((home / "config.yaml").read_text(encoding="utf-8"), Loader=UniqueKeyLoader)
 
 
+@NOT_ON_WINDOWS
 @unittest.skipUnless(REAL_HERMES.exists(), "requires the real hermes CLI")
 class InstallerTests(unittest.TestCase):
     def run_install(self, source: Path, home: Path, hermes: Path) -> subprocess.CompletedProcess[str]:
@@ -171,6 +175,7 @@ class InstallerTests(unittest.TestCase):
             self.assertIn("Hermes CLI not found", result.stderr)
             self.assertFalse(home.exists())
 
+@NOT_ON_WINDOWS
 class InstallerDefaultInstallTests(unittest.TestCase):
     """Read-only checks on ONE default install (shared via setUpClass; CT-09).
 
@@ -213,6 +218,7 @@ class InstallerDefaultInstallTests(unittest.TestCase):
         self.assertFalse((package / "tests").exists())
 
 
+@NOT_ON_WINDOWS
 class InstallerArgumentTests(unittest.TestCase):
     """Bad --home / --profile values are refused before anything is created or removed."""
 

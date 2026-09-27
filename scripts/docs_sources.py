@@ -6,7 +6,7 @@
     python3 scripts/docs_sources.py diff                     # which docs changed since the last fetch
 
 Snapshots go OUTSIDE the plugin, as <vendor>/<id>.md, to --docs-dir, else $PROMPT_DOCS_DIR, else
-../prompt-builders/official-docs next to this checkout: vendor docs quote injection examples, which the Hermes plugin security scan
+DEFAULT_SNAPSHOTS (a folder next to this checkout): vendor docs quote injection examples, which the Hermes plugin security scan
 rightly flags, and they are not ours to publish. The manifest (URL, fetch date, SHA-256) stays in the
 repo, so any audit can be reproduced and a changed doc shows up in `diff`.
 

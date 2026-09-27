@@ -33,6 +33,9 @@ The two prompt engines were written for this plugin from the official Anthropic 
 - Hermes 0.20.0 or later (`requires_hermes: ">=0.20.0"` in `plugin.yaml`), with Hermes Desktop.
 - The `hermes` CLI on `PATH`, or its path in `HERMES_BIN`.
 - Python 3.12 or later for the installer (set `PYTHON_BIN` to pick an interpreter).
+- **Platforms:** tested only on Linux (Linux Mint, with Hermes Desktop). Windows and macOS are not tested.
+  On Windows, install with `hermes plugins install` (below): `install.sh` is a bash script, so it and its
+  tests do not run on native Windows.
 
 ## Install
 
@@ -49,9 +52,6 @@ accepted):
 ```bash
 hermes plugins install bwoliveira/prompt-studio --ref <40-character-commit-sha>
 ```
-
-The repository is private for now. `hermes plugins install` never asks for a password: it uses
-`GITHUB_TOKEN` or `GH_TOKEN` from your `.env`, then your `gh auth login`, then your git credential helper.
 
 Update later with `hermes plugins update prompt-studio`. Then close and reopen Hermes Desktop so the
 backend mounts the plugin's routes and copies the desktop half out. **Capabilities → Plugins** should show
@@ -271,6 +271,8 @@ python3 scripts/docs_sources.py check --docs-dir <snapshot dir>   # every doc qu
   or the Hermes install; without them the tests are skipped with the reason printed, and with `CI=1` they
   fail instead.
 - The official doc snapshots used by `docs_sources.py` live outside the repository; see `docs/sources/README.md`.
+- `.gitattributes` keeps every text file with LF line endings, also on Windows checkouts, so
+  `node scripts/build.mjs --check` compares the same bytes on every system.
 - Secret scanning: run `gitleaks` over the full history. `.gitleaksignore` lists the only accepted findings,
   fake secrets in the redaction tests of one early commit; later test fixtures are marked inline with
   `gitleaks:allow`.

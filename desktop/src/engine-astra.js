@@ -1,5 +1,6 @@
 // GPT-6 Astra prompt engine for Prompt Studio. Pure ESM, no imports, no DOM, deterministic.
-// Written from the OpenAI docs archived in prompt-builders/official-docs/openai/ and the rules
+// Written from the OpenAI docs listed in docs/sources/MANIFEST.json (snapshots are kept outside this
+// repository; see docs/sources/README.md) and the rules
 // adopted in docs/PROMPT-DOCS-REVIEW.md. Each rule constant names its source; quoted doc
 // sentences stay verbatim in English.
 //

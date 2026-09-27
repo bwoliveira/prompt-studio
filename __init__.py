@@ -23,5 +23,5 @@ def register(ctx):
         AUX_TASK,
         display_name="Prompt Studio",
         description="Prompt Studio: per-step suggestions and the final prompt",
-        defaults={"timeout": 15},
+        defaults={"timeout": 20},
     )

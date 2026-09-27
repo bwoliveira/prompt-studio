@@ -40,7 +40,8 @@ const ID = 'prompt-studio'
 // desktop/src/engine-opus.js
 const OPUS_ENGINE = (() => {
 // Claude Opus 5.5 prompt engine for Prompt Studio. Pure ESM: no imports, no DOM, no clock, no randomness.
-// Written from the official Anthropic docs archived in prompt-builders/official-docs/anthropic/ and the
+// Written from the official Anthropic docs listed in docs/sources/MANIFEST.json (snapshots are kept
+// outside this repository; see docs/sources/README.md) and the
 // rules in docs/PROMPT-DOCS-REVIEW.md. Doc keys used below:
 //   [opus55] opus55-prompting.md   [opus5] opus5-prompting.md   [pe] pe-best-practices.md
 //   [jail] mitigate-jailbreaks.md  [cc] cc-best-practices.md    [review] docs/PROMPT-DOCS-REVIEW.md
@@ -402,7 +403,8 @@ return ENGINE
 // desktop/src/engine-astra.js
 const ASTRA_ENGINE = (() => {
 // GPT-6 Astra prompt engine for Prompt Studio. Pure ESM, no imports, no DOM, deterministic.
-// Written from the OpenAI docs archived in prompt-builders/official-docs/openai/ and the rules
+// Written from the OpenAI docs listed in docs/sources/MANIFEST.json (snapshots are kept outside this
+// repository; see docs/sources/README.md) and the rules
 // adopted in docs/PROMPT-DOCS-REVIEW.md. Each rule constant names its source; quoted doc
 // sentences stay verbatim in English.
 //
