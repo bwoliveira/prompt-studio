@@ -139,7 +139,8 @@ export const UI_MESSAGES = {
       no_session: 'This session was not found.',
       empty_session: 'This session has no conversation yet.',
       invalid_summary: 'The model did not return a usable summary.',
-      model_not_found: 'The provider does not offer this model; check the name in Settings (F3).'
+      model_not_found: 'The provider does not offer this model; check the name in Settings (F3).',
+      provider_refused: 'The provider refused this model for your account or plan (for example 403). Check the provider or pick another model in Settings (F3).'
     },
     context: {
       reading: 'Reading this session…',
@@ -342,7 +343,8 @@ export const UI_MESSAGES = {
       no_session: 'Esta sessão não foi encontrada.',
       empty_session: 'Esta sessão ainda não tem conversa.',
       invalid_summary: 'O modelo não devolveu um resumo utilizável.',
-      model_not_found: 'O provedor não oferece este modelo; confira o nome nas Configurações (F3).'
+      model_not_found: 'O provedor não oferece este modelo; confira o nome nas Configurações (F3).',
+      provider_refused: 'O provedor recusou este modelo para a sua conta ou plano (por exemplo, 403). Confira o provedor ou escolha outro modelo nas Configurações (F3).'
     },
     context: {
       reading: 'Lendo esta sessão…',

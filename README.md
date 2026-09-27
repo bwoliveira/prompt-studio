@@ -192,6 +192,10 @@ like any other side model:
 - `timeout` applies to each step's suggestion (it can lower the 20 s step limit); the final polish always
   gets its own 45 s budget. A fast model keeps each step at a few seconds.
 - If `prompt_studio` pins no provider or model, the task follows the main model.
+- If suggestions fail with "provider refused", the provider or plan denied the model, not the Studio. The
+  prompt can still be built without AI (Off mode).
+- Known case, reported by a tester: Command Code + Claude Opus 5.5 answers 403 `MODEL_NOT_IN_PLAN` to Hermes's
+  auxiliary client while the main chat works. This is a Hermes/provider issue.
 - **Default effort:** with no `reasoning_effort` and no level in Settings, the plugin asks for `low`
   (except on Gemini, where thinking stays off).
 - **Effort-aware `max_tokens`:** `max_tokens` covers thinking plus text, so at medium effort a smaller cap is

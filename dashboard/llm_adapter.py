@@ -226,6 +226,17 @@ def is_model_not_found(exc: BaseException) -> bool:
         return False
 
 
+def is_provider_refused(exc: BaseException) -> bool:
+    """The provider denies this model to the account/key/plan (401/403, e.g. 403 MODEL_NOT_IN_PLAN)."""
+    status = getattr(exc, "status_code", None)
+    if status is None:
+        status = getattr(getattr(exc, "response", None), "status_code", None)
+    if status in (401, 403) or type(exc).__name__ in ("AuthenticationError", "PermissionDeniedError"):
+        return True
+    text = str(exc).lower()
+    return "model_not_in_plan" in text or "not in plan" in text
+
+
 def get_model_label(model_choice: Mapping[str, Any] | None = None) -> str:
     """Best-effort configured (or chosen) auxiliary route for health/fallback responses."""
     chosen = _choice(model_choice)

@@ -303,3 +303,25 @@ def test_a_larger_callers_cap_is_never_lowered(monkeypatch):
     adapter._default_llm(messages=[], max_tokens=6000, timeout=1)
     assert captured["max_tokens"] == 6000
 
+
+
+def test_is_provider_refused_covers_401_403_and_plan_messages():
+    class E(Exception):
+        pass
+
+    def with_status(code):
+        e = E("x"); e.status_code = code; return e
+
+    class Resp:
+        status_code = 403
+
+    via_response = E("x"); via_response.response = Resp()
+    assert adapter.is_provider_refused(with_status(403)) and adapter.is_provider_refused(with_status(401))
+    assert adapter.is_provider_refused(via_response)
+    assert adapter.is_provider_refused(E("Error code: MODEL_NOT_IN_PLAN"))
+    assert adapter.is_provider_refused(E("model is Not In Plan"))
+    assert adapter.is_provider_refused(type("PermissionDeniedError", (Exception,), {})("x"))
+    assert adapter.is_provider_refused(type("AuthenticationError", (Exception,), {})("x"))
+    assert not adapter.is_provider_refused(with_status(404))
+    assert not adapter.is_provider_refused(with_status(500))
+    assert not adapter.is_provider_refused(RuntimeError("down"))

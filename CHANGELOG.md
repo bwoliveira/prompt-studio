@@ -6,6 +6,9 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
 
 - The plugin no longer sends a temperature: sampling stays as Hermes configures it for each model
   (Claude Opus 5.5, for example, rejects any non-default temperature).
+- A provider that refuses the model (401/403, e.g. 403 `MODEL_NOT_IN_PLAN`) now shows its own
+  `provider_refused` message in suggestions, the final prompt and the context read, instead of the
+  generic "AI unavailable".
 
 ## 1.6.1
 

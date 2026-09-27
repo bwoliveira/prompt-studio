@@ -236,6 +236,8 @@ def _run_with_deadline(
         logger.warning("Prompt Studio model call failed: %s", type(exc).__name__, exc_info=exc)
         if _llm.is_model_not_found(exc):
             return {"ok": False, "code": "model_not_found", "error": f"model not found: {type(exc).__name__}", "model": _llm.get_model_label(model_choice)}
+        if _llm.is_provider_refused(exc):
+            return {"ok": False, "code": "provider_refused", "error": f"provider refused: {type(exc).__name__}", "model": _llm.get_model_label(model_choice)}
         return {"ok": False, "code": "unavailable", "error": f"model unavailable: {type(exc).__name__}", "model": _llm.get_model_label(model_choice)}
 
 

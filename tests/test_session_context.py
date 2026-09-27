@@ -190,6 +190,19 @@ def test_a_model_the_provider_does_not_know_gets_its_own_code():
     assert out["code"] == "model_not_found" and "req_123" not in json.dumps(out), out
 
 
+def test_a_model_the_provider_refuses_gets_its_own_code():
+    sc = _load()
+
+    class AuthenticationError(Exception):
+        status_code = 401
+
+    def refused(**_):
+        raise AuthenticationError("bad key sk-abc")
+
+    out = sc.context({"session_id": "s1"}, llm=refused, opener=_opener(FakeDB([msg("user", "hi")])))
+    assert out["code"] == "provider_refused" and "sk-abc" not in json.dumps(out), out
+
+
 def test_store_failure_is_unavailable(caplog):
     sc = _load()
 
