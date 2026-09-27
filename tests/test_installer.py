@@ -91,32 +91,6 @@ class InstallerTests(unittest.TestCase):
     def assert_ok(self, result: subprocess.CompletedProcess[str]) -> None:
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
-    def test_successful_install_creates_all_artifacts_and_config(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            home = Path(temporary) / "tmp_home"
-            self.assert_ok(self.install_real(home))
-            self.assertTrue((home / "plugins/prompt-studio/plugin.yaml").is_file())
-            self.assertTrue((home / "plugins/prompt-studio/dashboard/plugin_api.py").is_file())
-            config = load_config(home)
-            self.assertIn("prompt-studio", config["plugins"]["enabled"])
-            self.assertEqual(config["auxiliary"]["prompt_studio"], {"provider": "auto", "timeout": 20})
-            self.assertEqual(set(config["auxiliary"]), {"prompt_studio"})
-
-    def test_desktop_half_ships_inside_package_without_marker(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            home = Path(temporary) / "tmp_home"
-            source = copy_repo(Path(temporary))
-            self.assert_ok(self.install_real(home, source=source))
-            installed = home / "plugins/prompt-studio/desktop/plugin.js"
-            self.assertTrue(installed.is_file())
-            self.assertEqual(installed.read_bytes(), (source / "desktop/plugin.js").read_bytes())
-            self.assertFalse(list(home.rglob(".hermes-package.json")))
-            self.assertFalse((home / "desktop-plugins/prompt-studio").exists())
-            package = home / "plugins/prompt-studio"
-            self.assertFalse(list(package.rglob("*.pyc")))
-            self.assertFalse(list(package.rglob("__pycache__")))
-            self.assertFalse((package / "tests").exists())
-
     def test_legacy_self_made_desktop_folder_is_removed_but_electron_one_kept(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary) / "tmp_home"
@@ -196,6 +170,48 @@ class InstallerTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
             self.assertIn("Hermes CLI not found", result.stderr)
             self.assertFalse(home.exists())
+
+class InstallerDefaultInstallTests(unittest.TestCase):
+    """Read-only checks on ONE default install (shared via setUpClass; CT-09).
+
+    Tests here must not mutate the install; anything needing a special starting
+    state or a second install lives in InstallerTests with its own fresh home.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._temporary = tempfile.TemporaryDirectory()
+        cls.addClassCleanup(cls._temporary.cleanup)
+        cls.home = Path(cls._temporary.name) / "tmp_home"
+        cls.source = copy_repo(Path(cls._temporary.name))
+        cls.result = InstallerTests.run_install(None, cls.source, cls.home, REAL_HERMES)  # type: ignore[arg-type]
+
+    def assert_ok(self, result: subprocess.CompletedProcess[str]) -> None:
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_successful_install_creates_all_artifacts_and_config(self) -> None:
+        home = self.home
+        self.assert_ok(self.result)
+        self.assertTrue((home / "plugins/prompt-studio/plugin.yaml").is_file())
+        self.assertTrue((home / "plugins/prompt-studio/dashboard/plugin_api.py").is_file())
+        config = load_config(home)
+        self.assertIn("prompt-studio", config["plugins"]["enabled"])
+        self.assertEqual(config["auxiliary"]["prompt_studio"], {"provider": "auto", "timeout": 20})
+        self.assertEqual(set(config["auxiliary"]), {"prompt_studio"})
+
+    def test_desktop_half_ships_inside_package_without_marker(self) -> None:
+        home, source = self.home, self.source
+        self.assert_ok(self.result)
+        installed = home / "plugins/prompt-studio/desktop/plugin.js"
+        self.assertTrue(installed.is_file())
+        self.assertEqual(installed.read_bytes(), (source / "desktop/plugin.js").read_bytes())
+        self.assertFalse(list(home.rglob(".hermes-package.json")))
+        self.assertFalse((home / "desktop-plugins/prompt-studio").exists())
+        package = home / "plugins/prompt-studio"
+        self.assertFalse(list(package.rglob("*.pyc")))
+        self.assertFalse(list(package.rglob("__pycache__")))
+        self.assertFalse((package / "tests").exists())
+
 
 class InstallerArgumentTests(unittest.TestCase):
     """Bad --home / --profile values are refused before anything is created or removed."""
