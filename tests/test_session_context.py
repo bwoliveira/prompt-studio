@@ -259,3 +259,17 @@ def test_model_choice_reaches_the_adapter(monkeypatch):
     choice = {"provider": "anthropic", "model": "h", "effort": "low"}
     out = sc.context({"session_id": "s1", "model_choice": choice}, opener=_opener(FakeDB([msg("user", "hi")])))
     assert seen[0]["model_choice"] == choice and seen[0]["hard_timeout"] is True and out["model"] == "anthropic/h"
+
+
+@pytest.mark.parametrize("status,code", [(402, "provider_payment"), (400, "provider_bad_request")])
+def test_payment_and_bad_request_get_their_own_codes(status, code):
+    sc = _load()
+
+    class APIStatusError(Exception):
+        status_code = status
+
+    def failing(**_):
+        raise APIStatusError("account acct-42 sk-abc")
+
+    out = sc.context({"session_id": "s1"}, llm=failing, opener=_opener(FakeDB([msg("user", "hi")])))
+    assert out["code"] == code and "sk-abc" not in json.dumps(out), out

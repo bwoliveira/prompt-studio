@@ -1396,7 +1396,15 @@ test('CX-1: a failed or timed-out context read shows a short note and the sugges
   await openFresh()
   await waitFor(() => $('[data-studio-context-status]')?.textContent.includes(ui.i18n.bundles.en.errors.provider_refused))
   assert.equal($('[data-studio-context-status]').textContent.includes(ui.i18n.bundles.en.errors.provider_refused), true)
-  for (const code of ['no_session', 'empty_session', 'invalid_summary', 'model_not_found', 'provider_refused']) {
+  // Billing (402) and bad request (400) get their own notes too.
+  for (const code of ['provider_payment', 'provider_bad_request']) {
+    await freshSettings('sess-1')
+    backend.context = () => ({ ok: false, code, error: `${code}: APIStatusError` })
+    await openFresh()
+    await waitFor(() => $('[data-studio-context-status]')?.textContent.includes(ui.i18n.bundles.en.errors[code]))
+    assert.ok($('[data-studio-context-status]').textContent.includes(ui.i18n.bundles.en.errors[code]))
+  }
+  for (const code of ['no_session', 'empty_session', 'invalid_summary', 'model_not_found', 'provider_refused', 'provider_payment', 'provider_bad_request']) {
     assert.ok(ui.i18n.bundles.en.errors[code] && ui.i18n.bundles.pt.errors[code], `errors.${code} in en and pt`)
   }
 })

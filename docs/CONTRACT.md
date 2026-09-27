@@ -93,6 +93,8 @@ Response (HTTP 200): `{ "ok": true, "summary": "…", "model": "provider/model",
 | `unavailable` | store or provider failure, or the reader cannot load (also `model` for provider failures) | `session store unavailable` / `model unavailable` / `context reader unavailable` |
 | `model_not_found` | the provider does not know the model name (also `model`) | `model not found` |
 | `provider_refused` | the provider denies the model to the account/key/plan: 401/403 or "MODEL_NOT_IN_PLAN" (also `model`) | `provider refused` |
+| `provider_payment` | billing refusal: 402, "insufficient_quota", "insufficient credits", "payment required", "billing" (also `model`) | `provider payment` |
+| `provider_bad_request` | the provider rejects the request: 400 / BadRequestError not matched above (also `model`) | `provider bad request` |
 | `invalid_summary` | reply is not JSON with a non-empty string `summary` (also `model`) | fixed sentence |
 
 The transcript text is never logged and never returned: only the summary, the route label and counts leave the backend.
@@ -125,9 +127,11 @@ back to `error` when the code is unknown or absent.
 | `unavailable` | both | the provider call raised | `model unavailable: <ExceptionClassName>` |
 | `model_not_found` | both | the provider does not know the model name (404 / "model not found") | `model not found: <ExceptionClassName>` |
 | `provider_refused` | both | the provider denies the model to the account/key/plan (401/403, "MODEL_NOT_IN_PLAN" / "not in plan"; 404 stays `model_not_found`) | `provider refused: <ExceptionClassName>` |
+| `provider_payment` | both | billing refusal (402, "insufficient_quota", "insufficient credits", "payment required", "billing") | `provider payment: <ExceptionClassName>` |
+| `provider_bad_request` | both | the provider rejects the request (400 / BadRequestError) and no code above matched | `provider bad request: <ExceptionClassName>` |
 | `empty_reply` | both | empty reply twice, or once when it ended on `finish_reason: length` (no retry: the same cap ends the same way) (also `empty: true`) | fixed sentence |
 
-`timeout`, `unavailable`, `model_not_found`, `provider_refused` and `empty_reply` also carry `model`. The route-level errors (400 for a blank draft, 500
+`timeout`, `unavailable`, `model_not_found`, `provider_refused`, `provider_payment`, `provider_bad_request` and `empty_reply` also carry `model`. The route-level errors (400 for a blank draft, 500
 `{ "ok": false, "error": "suggest engine unavailable" }` / `"compose engine unavailable"` when the engine cannot load
 or crashes, 422 over the size limits) have no `code`.
 

@@ -9,6 +9,8 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
 - A provider that refuses the model (401/403, e.g. 403 `MODEL_NOT_IN_PLAN`) now shows its own
   `provider_refused` message in suggestions, the final prompt and the context read, instead of the
   generic "AI unavailable".
+- Billing refusals (402, no credits or quota) and bad requests (400) also get their own messages
+  (`provider_payment`, `provider_bad_request`).
 
 ## 1.6.1
 

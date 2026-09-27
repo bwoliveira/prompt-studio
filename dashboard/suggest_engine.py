@@ -234,11 +234,9 @@ def _run_with_deadline(
     except Exception as exc:  # provider down, provider timeout, auth, bad route
         # Provider text can carry URLs, request ids or body fragments: log it, return only the class.
         logger.warning("Prompt Studio model call failed: %s", type(exc).__name__, exc_info=exc)
-        if _llm.is_model_not_found(exc):
-            return {"ok": False, "code": "model_not_found", "error": f"model not found: {type(exc).__name__}", "model": _llm.get_model_label(model_choice)}
-        if _llm.is_provider_refused(exc):
-            return {"ok": False, "code": "provider_refused", "error": f"provider refused: {type(exc).__name__}", "model": _llm.get_model_label(model_choice)}
-        return {"ok": False, "code": "unavailable", "error": f"model unavailable: {type(exc).__name__}", "model": _llm.get_model_label(model_choice)}
+        code = _llm.provider_error_code(exc)
+        prefix = "model unavailable" if code == "unavailable" else code.replace("_", " ")
+        return {"ok": False, "code": code, "error": f"{prefix}: {type(exc).__name__}", "model": _llm.get_model_label(model_choice)}
 
 
 EMPTY_REPLY_ERROR = "empty model reply (a provider filter may have blocked the request)"

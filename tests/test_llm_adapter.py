@@ -325,3 +325,44 @@ def test_is_provider_refused_covers_401_403_and_plan_messages():
     assert not adapter.is_provider_refused(with_status(404))
     assert not adapter.is_provider_refused(with_status(500))
     assert not adapter.is_provider_refused(RuntimeError("down"))
+
+
+def _status_exc(code, text="x", via_response=False):
+    e = Exception(text)
+    if via_response:
+        e.response = type("Resp", (), {"status_code": code})()
+    else:
+        e.status_code = code
+    return e
+
+
+def test_is_provider_payment_covers_402_and_billing_messages():
+    assert adapter.is_provider_payment(_status_exc(402))
+    assert adapter.is_provider_payment(_status_exc(402, via_response=True))
+    assert adapter.is_provider_payment(type("PaymentRequiredError", (Exception,), {})("x"))
+    for text in ("Error code: 429 insufficient_quota", "Insufficient credits for this request",
+                 "402 Payment Required", "check your billing details"):
+        assert adapter.is_provider_payment(Exception(text)), text
+    assert not adapter.is_provider_payment(_status_exc(403))
+    assert not adapter.is_provider_payment(_status_exc(400))
+    assert not adapter.is_provider_payment(RuntimeError("quota of tokens reached for context"))
+
+
+def test_is_provider_bad_request_covers_400_and_badrequesterror():
+    assert adapter.is_provider_bad_request(_status_exc(400))
+    assert adapter.is_provider_bad_request(_status_exc(400, via_response=True))
+    assert adapter.is_provider_bad_request(type("BadRequestError", (Exception,), {})("x"))
+    assert not adapter.is_provider_bad_request(_status_exc(402))
+    assert not adapter.is_provider_bad_request(_status_exc(500))
+    assert not adapter.is_provider_bad_request(RuntimeError("bad things"))
+
+
+def test_provider_error_code_precedence():
+    assert adapter.provider_error_code(_status_exc(404)) == "model_not_found"
+    assert adapter.provider_error_code(_status_exc(403, "insufficient_quota")) == "provider_refused"
+    assert adapter.provider_error_code(_status_exc(400, "billing hard limit")) == "provider_payment"
+    assert adapter.provider_error_code(_status_exc(402)) == "provider_payment"
+    assert adapter.provider_error_code(_status_exc(400)) == "provider_bad_request"
+    assert adapter.provider_error_code(_status_exc(429)) == "unavailable"
+    assert adapter.provider_error_code(_status_exc(500)) == "unavailable"
+    assert adapter.provider_error_code(TimeoutError()) == "unavailable"

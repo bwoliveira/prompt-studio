@@ -237,6 +237,40 @@ def is_provider_refused(exc: BaseException) -> bool:
     return "model_not_in_plan" in text or "not in plan" in text
 
 
+_PAYMENT_TEXT = ("insufficient_quota", "insufficient credits", "insufficient_credits", "payment required", "billing")
+
+
+def _status(exc: BaseException) -> Any:
+    status = getattr(exc, "status_code", None)
+    return status if status is not None else getattr(getattr(exc, "response", None), "status_code", None)
+
+
+def is_provider_payment(exc: BaseException) -> bool:
+    """The provider refuses for billing reasons (402, no credits, insufficient_quota)."""
+    if _status(exc) == 402 or type(exc).__name__ == "PaymentRequiredError":
+        return True
+    text = str(exc).lower()
+    return any(marker in text for marker in _PAYMENT_TEXT)
+
+
+def is_provider_bad_request(exc: BaseException) -> bool:
+    """The provider rejects the request itself (400), e.g. a setting the model or route does not accept."""
+    return _status(exc) == 400 or type(exc).__name__ == "BadRequestError"
+
+
+def provider_error_code(exc: BaseException) -> str:
+    """Error code for a failed provider call, most specific first; the provider text is never returned."""
+    if is_model_not_found(exc):
+        return "model_not_found"
+    if is_provider_refused(exc):
+        return "provider_refused"
+    if is_provider_payment(exc):
+        return "provider_payment"
+    if is_provider_bad_request(exc):
+        return "provider_bad_request"
+    return "unavailable"
+
+
 def get_model_label(model_choice: Mapping[str, Any] | None = None) -> str:
     """Best-effort configured (or chosen) auxiliary route for health/fallback responses."""
     chosen = _choice(model_choice)
