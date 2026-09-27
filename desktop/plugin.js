@@ -2019,7 +2019,7 @@ async function requestSuggestion(mode = 'suggest') {
     }), SUGGEST_CLIENT_TIMEOUT_MS)
     next = response?.ok
       ? { key, mode, status: 'ready', value: response.value || '', reason: response.reason || '', agrees: response.agrees, model: response.model || '', latency: response.latency_ms }
-      : { key, mode, status: 'error', errorKey: response?.error ? 'failed' : 'noAnswer', detail: String(response?.error || '') }
+      : { key, mode, status: 'error', errorKey: response?.error && !response?.empty ? 'failed' : 'noAnswer', detail: String(response?.error || '') }
   } catch (error) {
     next = { key, mode, status: 'error', ...describeFailure(error) }
   }

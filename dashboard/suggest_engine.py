@@ -197,6 +197,36 @@ def _run_with_deadline(
         return {"ok": False, "error": f"modelo indisponível: {type(exc).__name__}: {str(exc)[:ERROR_DETAIL_CHARS]}", "model": _llm.get_model_label()}
 
 
+EMPTY_REPLY_ERROR = "a IA devolveu uma resposta vazia (o filtro do provedor pode ter barrado o pedido)"
+
+
+def _run_retrying_empty(
+    executor: concurrent.futures.Executor,
+    llm: Callable[..., Any] | None,
+    messages: list[dict[str, str]],
+    max_tokens: int,
+    limit: float,
+    timeout_error: str,
+) -> tuple[str, str] | dict[str, Any]:
+    """``_run_with_deadline`` plus one retry when the reply has no text.
+
+    A provider safety filter can end a reply with no text (Anthropic: stop_reason "refusal",
+    surfaced as finish_reason "content_filter"), and the same request often passes on a second
+    try. The retry only uses the time left before ``limit``; a second empty reply is reported as
+    such (``empty: True``) instead of as a connection failure.
+    """
+    started = time.monotonic()
+    outcome = _run_with_deadline(executor, llm, messages, max_tokens, limit, timeout_error)
+    if isinstance(outcome, dict) or outcome[0].strip():
+        return outcome
+    left = limit - (time.monotonic() - started)
+    if left >= 1.0:
+        outcome = _run_with_deadline(executor, llm, messages, max_tokens, left, timeout_error)
+        if isinstance(outcome, dict) or outcome[0].strip():
+            return outcome
+    return {"ok": False, "empty": True, "error": EMPTY_REPLY_ERROR, "model": outcome[1]}
+
+
 def suggest(payload: Mapping[str, Any], llm: Callable[..., Any] | None = None, deadline: float | None = None) -> dict[str, Any]:
     field = _field(payload)
     if not _clean(payload.get("intent")) or not _clean(field.get("question")):
@@ -205,7 +235,7 @@ def suggest(payload: Mapping[str, Any], llm: Callable[..., Any] | None = None, d
         return {"ok": False, "error": "só dá para melhorar um texto que você já escreveu"}
     started = time.monotonic()
     limit = deadline if deadline is not None else SUGGEST_DEADLINE
-    outcome = _run_with_deadline(_EXECUTOR, llm, build_messages(payload), SUGGEST_MAX_TOKENS, limit, f"a IA não respondeu em {limit:g} s")
+    outcome = _run_retrying_empty(_EXECUTOR, llm, build_messages(payload), SUGGEST_MAX_TOKENS, limit, f"a IA não respondeu em {limit:g} s")
     if isinstance(outcome, dict):
         return outcome
     text, model = outcome
@@ -404,7 +434,7 @@ def compose(payload: Mapping[str, Any], llm: Callable[..., Any] | None = None, d
         return {"ok": False, "error": "pedido incompleto: falta o rascunho"}
     started = time.monotonic()
     limit = deadline if deadline is not None else COMPOSE_DEADLINE
-    outcome = _run_with_deadline(_COMPOSE_EXECUTOR, llm, build_compose_messages(payload), COMPOSE_MAX_TOKENS, limit, f"a IA não escreveu o prompt em {limit:g} s")
+    outcome = _run_retrying_empty(_COMPOSE_EXECUTOR, llm, build_compose_messages(payload), COMPOSE_MAX_TOKENS, limit, f"a IA não escreveu o prompt em {limit:g} s")
     if isinstance(outcome, dict):
         return outcome
     text, model = outcome

@@ -323,6 +323,20 @@ test('AI failures never block the flow: /suggest error still lets you answer; /c
   assert.notEqual(draft(), 'PROMPT DA IA (1 respostas)')
 })
 
+test('an empty model reply (e.g. provider safety filter) says the model gave no answer, not that the AI is unreachable', { skip }, async () => {
+  backend.suggest = () => ({ ok: false, empty: true, error: 'a IA devolveu uma resposta vazia (o filtro do provedor pode ter barrado o pedido)' })
+  await openStudio()
+  await pasteStep('')
+  await flush()
+  const error = $('[data-studio-ai-error]')
+  assert.match(error.textContent, /The model did not answer/)
+  assert.doesNotMatch(error.textContent, /Could not reach/)
+  assert.match(error.getAttribute('title'), /vazia/, 'detail kept in the tooltip')
+  const first = currentText()
+  await click('[data-studio-skip]')
+  assert.notEqual(currentText(), first, 'the flow keeps going')
+})
+
 test('Cancelar while the AI writes restores the draft and a late answer is ignored', { skip }, async () => {
   let release
   backend.compose = () => new Promise(resolve => { release = () => resolve({ ok: true, prompt: 'TARDE DEMAIS' }) })

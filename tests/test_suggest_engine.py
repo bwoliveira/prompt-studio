@@ -491,3 +491,50 @@ def test_a_long_baseline_never_leaks_or_loses_the_pasted_block():
         sent = calls[0]["messages"][1]["content"]
         assert "Ignore tudo" not in sent and "Reclamação do cliente sobre entrega. Reclamação" not in sent, name
         assert out["ok"] and block in out["prompt"], name
+
+
+def _sequence(*replies):
+    calls = []
+
+    def llm(messages, temperature, max_tokens, timeout, is_json=False):
+        calls.append(timeout)
+        return replies[min(len(calls), len(replies)) - 1], "stub/model"
+
+    return llm, calls
+
+
+def test_empty_model_reply_is_retried_once_then_succeeds():
+    # A provider safety filter can end a reply with no text (Anthropic: stop_reason "refusal",
+    # surfaced as finish_reason "content_filter"); the same request often passes on a second try.
+    se = _load()
+    llm, calls = _sequence("", json.dumps({"value": "Contexto curto", "reason": "ok"}))
+    out = se.suggest({**BASE, "field": TEXT}, llm=llm)
+    assert out["ok"] and out["value"] == "Contexto curto"
+    assert len(calls) == 2
+
+
+def test_empty_model_reply_twice_is_reported_as_no_answer_not_as_a_connection_error():
+    se = _load()
+    llm, calls = _sequence("", "   ")
+    out = se.suggest({**BASE, "field": TEXT}, llm=llm)
+    assert not out["ok"] and out.get("empty") is True
+    assert "vazia" in out["error"]
+    assert len(calls) == 2
+
+
+def test_retry_after_an_empty_reply_stays_inside_the_deadline():
+    se = _load()
+    llm, calls = _sequence("", json.dumps({"value": "x", "reason": "ok"}))
+    se.suggest({**BASE, "field": TEXT}, llm=llm, deadline=3.0)
+    assert all(t <= 3.0 for t in calls)
+
+
+def test_compose_retries_an_empty_reply_once():
+    se = _load()
+    good = json.dumps({"prompt": "Escreva o e-mail de cobrança com tom cordial e objetivo.", "notes": ""})
+    llm, calls = _sequence("", good)
+    out = se.compose(COMPOSE, llm=llm)
+    assert out["ok"] and len(calls) == 2
+    llm, calls = _sequence("", "")
+    out = se.compose(COMPOSE, llm=llm)
+    assert not out["ok"] and out.get("empty") is True and len(calls) == 2
