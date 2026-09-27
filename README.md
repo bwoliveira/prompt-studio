@@ -135,7 +135,7 @@ other side model:
       timeout: 20
   ```
 
-A fast model keeps each step at a few seconds. If `prompt_studio` pins no provider or model, the task
+`timeout` applies to each step's suggestion (it can lower the 20 s step limit); the final polish always gets its own 45 s budget. A fast model keeps each step at a few seconds. If `prompt_studio` pins no provider or model, the task
 follows the main model.
 
 ## Language

@@ -29,14 +29,27 @@ USAGE
 
 TARGET_HOME=""
 PROFILE=""
+HOME_GIVEN=0
+PROFILE_GIVEN=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --home) [[ $# -ge 2 ]] || { echo "[ERROR] --home requires a directory" >&2; exit 2; }; TARGET_HOME="$2"; shift 2 ;;
-    --profile) [[ $# -ge 2 ]] || { echo "[ERROR] --profile requires a name" >&2; exit 2; }; PROFILE="$2"; shift 2 ;;
+    --home) [[ $# -ge 2 ]] || { echo "[ERROR] --home requires a directory" >&2; exit 2; }; TARGET_HOME="$2"; HOME_GIVEN=1; shift 2 ;;
+    --profile) [[ $# -ge 2 ]] || { echo "[ERROR] --profile requires a name" >&2; exit 2; }; PROFILE="$2"; PROFILE_GIVEN=1; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "[ERROR] Unknown argument: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
+
+# Validate the target before anything is created or removed (the plugin folder is rm -rf'd below).
+if [[ -n "$TARGET_HOME" && -n "$PROFILE" ]]; then
+  echo "[ERROR] --home and --profile cannot be used together; pick one" >&2; exit 2
+fi
+if [[ "$HOME_GIVEN" == 1 && ( -z "$TARGET_HOME" || "$TARGET_HOME" != /* ) ]]; then
+  echo "[ERROR] --home must be a non-empty absolute path" >&2; exit 2
+fi
+if [[ "$PROFILE_GIVEN" == 1 ]] && ! [[ "$PROFILE" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]]; then
+  echo "[ERROR] Invalid profile name '$PROFILE': use lowercase letters, numbers, '-' or '_', starting with a letter or number, up to 64 characters" >&2; exit 2
+fi
 
 SOURCE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ ! -f "$SOURCE/plugin.yaml" || ! -f "$SOURCE/scripts/validate_install.py" ]]; then
@@ -96,7 +109,7 @@ fi
 # auxiliary.prompt_studio: keep an existing block; else write the defaults.
 if ! hermes_cli config get --json auxiliary.prompt_studio >/dev/null 2>&1; then
   hermes_cli config set --force auxiliary.prompt_studio.provider auto >/dev/null
-  hermes_cli config set --force auxiliary.prompt_studio.timeout 15 >/dev/null
+  hermes_cli config set --force auxiliary.prompt_studio.timeout 20 >/dev/null
 fi
 
 cat <<DONE

@@ -81,6 +81,7 @@ def _default_llm(
     timeout: float,
     is_json: bool = False,
     hard_timeout: bool = False,
+    use_config_timeout: bool = True,
 ) -> tuple[str, str]:
     """Universal Hermes adapter handling reasoning controls and token headroom across all providers."""
     from agent.auxiliary_client import (
@@ -119,7 +120,8 @@ def _default_llm(
 
     # Combine with the configured task timeout: the larger wins, unless the caller imposes a hard cap.
     cfg_timeout = task_config.get("timeout")
-    if isinstance(cfg_timeout, (int, float)) and cfg_timeout > 0:
+    # use_config_timeout=False (final polish): the caller's own budget is the timeout, as given.
+    if use_config_timeout and isinstance(cfg_timeout, (int, float)) and cfg_timeout > 0:
         # A caller-imposed hard cap (Prompt Studio deadlines) wins over a larger config value, so the
         # provider call ends on its own instead of pinning a worker thread past the deadline.
         timeout = min(timeout, float(cfg_timeout)) if hard_timeout else max(timeout, float(cfg_timeout))
@@ -157,6 +159,7 @@ def _invoke(
     timeout: float,
     is_json: bool = False,
     hard_timeout: bool = False,
+    use_config_timeout: bool = True,
 ) -> tuple[str, str]:
     if llm is not None:
         try:
@@ -164,7 +167,7 @@ def _invoke(
         except TypeError:
             result = llm(messages=messages, temperature=0.2, max_tokens=max_tokens, timeout=timeout)
     else:
-        result = _default_llm(messages=messages, temperature=0.2, max_tokens=max_tokens, timeout=timeout, is_json=is_json, hard_timeout=hard_timeout)
+        result = _default_llm(messages=messages, temperature=0.2, max_tokens=max_tokens, timeout=timeout, is_json=is_json, hard_timeout=hard_timeout, use_config_timeout=use_config_timeout)
 
     if isinstance(result, tuple) and len(result) >= 2:
         return str(result[0] or ""), str(result[1] or get_model_label())
