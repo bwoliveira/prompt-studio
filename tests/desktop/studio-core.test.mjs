@@ -214,3 +214,10 @@ test('plugin claims one key listener (printed keys only) and exposes the button 
     assert.match(ui, new RegExp(marker))
   }
 })
+
+test('OP-3: designAvoid step not asked for an interface bugfix, asked for new interface', () => {
+  const ids = intent => { const seen = []; walk('opus', intent, 'en', q => { seen.push(q.category); return q.recommended || SKIPPED }); return seen }
+  assert.ok(!ids('Corrija o bug de login no app React').includes('designAvoid'))
+  assert.ok(ids('Crie uma landing page para minha padaria').includes('designAvoid'))
+  assert.ok(ids('Corrija o bug de login no app React').includes('subagents'), 'OP-1: subagents step still asked')
+})
