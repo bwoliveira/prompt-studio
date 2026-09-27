@@ -241,6 +241,15 @@ const TEST_2 = 'Run tests appropriate to the change and complete required checks
 const STATE_L = 'When you stop, say whether the task is fully done'
 const EXPLORE_L = 'Stop exploring once the core request'
 
+test('AS-8: auto delegation rule only for hands-on deliverables, same set as Opus', () => {
+  for (const deliverable of ['implementation', 'workflow', 'data', 'review', 'analysis']) {
+    assert.ok(ENGINE.build({ goal: 'Do the work', deliverable }).prompt.includes('SUBAGENTS'), deliverable)
+  }
+  for (const deliverable of ['plan', 'text', 'answer']) {
+    assert.ok(!ENGINE.build({ goal: 'Do the work', deliverable }).prompt.includes('SUBAGENTS'), deliverable)
+  }
+})
+
 test('AS-8: default subagents is auto (delegate + legible), team only when chosen', () => {
   assert.equal(ENGINE.recommend({ goal: 'Fix the login bug' }), 'auto')
   const login = { goal: 'Fix the login bug' }

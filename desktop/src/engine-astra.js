@@ -323,7 +323,7 @@ function buildSafe(brief) {
   ])
 
   if (subagents === 'team') add('subagents', 'SUBAGENTS', [DELEGATE_LINE, SPLIT_LINE, REVIEWER_LINE, LEGIBLE_LINE, REAL_LINE])
-  else if (subagents === 'auto' && !light) add('subagents', 'SUBAGENTS', [DELEGATE_LINE, LEGIBLE_LINE])
+  else if (subagents === 'auto' && ['implementation', 'workflow', 'data', 'review', 'analysis'].includes(deliverable)) add('subagents', 'SUBAGENTS', [DELEGATE_LINE, LEGIBLE_LINE])
   else if (subagents === 'direct') add('subagents', 'SUBAGENTS', [DIRECT_LINE])
 
   if (b.thirdPartyText.trim()) {
