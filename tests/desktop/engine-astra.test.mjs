@@ -217,3 +217,12 @@ test('AS-1: frontend guidance for new builds and incremental UI changes only', (
   const backend = ENGINE.build({ goal: 'Fix the timeout bug in the billing API' }).prompt
   for (const s of ['feature-complete controls', 'Render and inspect', 'For this frontend change:']) assert.equal(backend.includes(s), false)
 })
+
+test('AS-1: deploy and pipeline work on a site is not frontend work', () => {
+  for (const goal of ['Automatize o deploy do site toda sexta', 'Create a CI pipeline that deploys the website', 'Configure o backup do servidor do site']) {
+    const prompt = ENGINE.build({ goal }).prompt
+    for (const s of ['feature-complete controls', 'Render and inspect', 'For this frontend change:']) assert.equal(prompt.includes(s), false, `${goal}: ${s}`)
+  }
+  // An incremental change needs an edit verb; a fix to a UI is still an incremental frontend change.
+  assert.ok(ENGINE.build({ goal: 'Corrija o bug do botão de login na tela React' }).prompt.includes('For this frontend change:'))
+})

@@ -78,8 +78,12 @@ const FRONTEND_CHANGE_LINES = [
   '- preserve responsive behavior and expected states;',
   '- render and inspect the result before finalizing.'
 ].join('\n')
-const UI_TERM = /\b(dashboards?|sites?|website|landing|pages?|pagina|telas?|screens?|interfaces?|ui|ux|frontend|front-end|layout|componentes?|components?|html|css|react|vue|svelte)\b/
+const UI_TERM = /\b(dashboards?|landing|telas?|screens?|interfaces?|ui|ux|frontend|front-end|layout|componentes?|components?|botao|botoes|buttons?|html|css|react|vue|svelte)\b/
+// Site/page words mean frontend only when the draft is not about running or shipping the site.
+const WEB_TERM = /\b(sites?|website|pages?|pagina)\b/
+const OPS_TERM = /\b(deploys?|deployment|pipelines?|ci|cd|backups?|servidor|servers?|cron|infra|docker|kubernetes|dns|nginx)\b/
 const UI_MAKE = /\b(crie|criar|construa|desenvolva|build|create|develop|make|implemente|implement)\b/
+const UI_EDIT = /\b(ajuste|ajustar|altere|alterar|mude|mudar|corrija|corrigir|conserte|fix|change|update|atualize|adjust|tweak|melhore|improve|estilize|style|redesign|redesenhe|reorganize|mova|move|adicione|add|remova|remove)\b/
 const UI_APP = /\b(apps?|aplicativos?)\b/
 
 // gpt6-rethinking-prompts.md: "If the task includes getting the implementation running, inspecting the
@@ -263,11 +267,13 @@ function buildSafe(brief) {
   add('task', 'TASK', [b.goal.trim() ? b.goal : 'No task was given. Ask the user what they need.'])
   add('context', 'CONTEXT', [b.context])
   const acts = ACTION.includes(deliverable)
+  // Frontend lines are for building or changing an interface (implementation), not for automation work.
   const goalText = fold(b.goal)
   const making = UI_MAKE.test(goalText)
-  const frontend = !acts ? [] : making && (UI_TERM.test(goalText) || UI_APP.test(goalText))
+  const ui = UI_TERM.test(goalText) || (WEB_TERM.test(goalText) && !OPS_TERM.test(goalText))
+  const frontend = deliverable !== 'implementation' ? [] : making && (ui || UI_APP.test(goalText))
     ? [FEATURE_COMPLETE_LINE, RENDER_LINE]
-    : !making && UI_TERM.test(goalText) ? [FRONTEND_CHANGE_LINES] : []
+    : !making && ui && UI_EDIT.test(goalText) ? [FRONTEND_CHANGE_LINES] : []
   add('requirements', 'REQUIREMENTS', [b.requirements, ...frontend])
   if (b.examples.trim()) add('examples', 'EXAMPLES', [b.examples, EXAMPLES_LINE])
   add('precedence', 'PRECEDENCE', [PRIORITY_LINE, TRANSPARENCY_LINE])

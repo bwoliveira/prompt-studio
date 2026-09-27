@@ -190,6 +190,8 @@ const GROUP = { implementation: 'do', workflow: 'do', data: 'do', analysis: 'thi
 // [opus55] the design guidance is about frontend work being created: only with a create/redesign verb, never for fixes.
 const REDESIGN_VERB = /\b(redesign|redesenhe|redesenhar|restyle)\b/
 const FIX_VERB = /\b(fix|corrija|corrigir|conserte|debug|depure|refactor|refatore|refatorar)\b/
+// Running or shipping a site is not frontend work ("Crie um script de deploy do site").
+const OPS_TERM = /\b(deploys?|deployment|pipelines?|ci|cd|backups?|servidor|servers?|cron|infra|docker|kubernetes|dns|nginx)\b/
 const INTERFACE = /\b(dashboards?|sites?|website|landing|pages?|pagina|telas?|screens?|interfaces?|ui|ux|frontend|front-end|layout|componentes?|components?|apps?|aplicativos?|html|css|react|vue|svelte)\b/
 
 function detect(b) {
@@ -216,7 +218,7 @@ function analyzeNormalized(b) {
   const conflicts = {}
   if (b.deliverable !== 'auto' && signal && GROUP[signal] !== GROUP[b.deliverable]) conflicts.deliverable = [b.deliverable]
   if (b.format === 'json' && (deliverable === 'text')) conflicts.format = ['json']
-  return { category, deliverable, conflicts, interface: (category === 'code' || deliverable === 'implementation') && INTERFACE.test(text) && (MAKE_VERB.test(text) || REDESIGN_VERB.test(text)) && !FIX_VERB.test(text) }
+  return { category, deliverable, conflicts, interface: (category === 'code' || deliverable === 'implementation') && INTERFACE.test(text) && (MAKE_VERB.test(text) || REDESIGN_VERB.test(text)) && !FIX_VERB.test(text) && !OPS_TERM.test(text) }
 }
 
 // FNV-1a 32-bit: deterministic, short, random-looking id for the pasted block.

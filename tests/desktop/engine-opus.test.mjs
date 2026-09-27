@@ -135,6 +135,12 @@ test('OP-3: visual design only for interface work being created, not fixes', () 
   assert.ok(ENGINE.build({ goal: 'Redesign the dashboard page' }).prompt.includes('Visual design'))
 })
 
+test('OP-3: deploy and pipeline work on a site gets no visual design line', () => {
+  for (const goal of ['Crie um pipeline de deploy do site', 'Create a CI pipeline that deploys the website', 'Crie um script de deploy do site', 'Build a backup job for the website server']) {
+    assert.ok(!ENGINE.build({ goal }).prompt.includes('Visual design'), goal)
+  }
+})
+
 test('AUTONOMY header with one line per mode', () => {
   const seen = new Set()
   for (const autonomy of ENGINE.options.autonomy) {
