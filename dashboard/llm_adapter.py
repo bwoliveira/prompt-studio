@@ -237,7 +237,12 @@ def is_provider_refused(exc: BaseException) -> bool:
     return "model_not_in_plan" in text or "not in plan" in text
 
 
-_PAYMENT_TEXT = ("insufficient_quota", "insufficient credits", "insufficient_credits", "payment required", "billing")
+# Unambiguous billing failures only: the bare word "billing" also shows up in rate-limit hints, outages and
+# parameter names, which are not a matter of credits (/review P2).
+_PAYMENT_TEXT = (
+    "insufficient_quota", "insufficient credits", "insufficient_credits", "payment required",
+    "billing_hard_limit", "credit balance is too low",
+)
 
 
 def _status(exc: BaseException) -> Any:
