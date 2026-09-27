@@ -182,8 +182,8 @@ uvx --with fastapi --with httpx --with pyyaml pytest -q tests
 hermes plugins validate .
 ```
 
-The source is in `desktop/src/` (engines, studio core, translations). `desktop/plugin.js` is the single
-file Hermes Desktop loads, so the build inlines the sources into it. Developer notes are in
+The source is in `desktop/src/` (engines, studio core, translations, Desktop UI). `desktop/plugin.js` is the single
+file Hermes Desktop loads, so the build generates it from those sources. Developer notes are in
 `docs/DESKTOP-DEV.md`, the REST contract is in `docs/CONTRACT.md`, and the reason for each step is in
 `docs/STEPS-REVIEW.md`.
 
