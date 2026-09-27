@@ -1532,6 +1532,15 @@ test('FIN-1: Alt+E puts the prompt in the composer to edit, never sends', { skip
   assert.ok($('[data-studio-strip]') === null)
 })
 
+test('KEYS-MAC: Option+E on macOS (dead key in e.key) still works as Alt+E via e.code', { skip }, async () => {
+  await toPreview()
+  const prompt = $('[data-studio-preview-text]').textContent
+  await press('Alt+E', document.activeElement, { key: 'Dead', code: 'KeyE' })
+  assert.equal(composer().submits.length, 0, 'not sent')
+  assert.equal(draft(), prompt)
+  assert.ok($('[data-studio-strip]') === null)
+})
+
 test('LOAD-1: while the session context is read only a loading state and Cancel (F10) show; options come after', { skip }, async () => {
   await freshSettings('sess-1')
   await openStudio(INTENT, 'auto')
