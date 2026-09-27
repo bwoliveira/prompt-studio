@@ -30,7 +30,7 @@ def test_invoke_accepts_tuple_mapping_and_plain_results():
     assert adapter._invoke(lambda **_: ("texto", "p/m"), [], max_tokens=10, timeout=1) == ("texto", "p/m")
     assert adapter._invoke(lambda **_: {"text": "t", "model": "p/m"}, [], max_tokens=10, timeout=1) == ("t", "p/m")
     # Older test doubles without is_json still work.
-    assert adapter._invoke(lambda messages, temperature, max_tokens, timeout: "t", [], max_tokens=10, timeout=1, is_json=True)[0] == "t"
+    assert adapter._invoke(lambda messages, max_tokens, timeout: "t", [], max_tokens=10, timeout=1, is_json=True)[0] == "t"
 
 
 def test_routes_through_the_prompt_studio_task_only():
@@ -50,9 +50,9 @@ def test_hard_timeout_caps_the_configured_timeout(monkeypatch):
     hc = types.ModuleType("hermes_constants")
     hc.parse_reasoning_effort = lambda v: None
     monkeypatch.setitem(sys.modules, "hermes_constants", hc)
-    adapter._default_llm(messages=[], temperature=0, max_tokens=10, timeout=20, hard_timeout=True)
+    adapter._default_llm(messages=[], max_tokens=10, timeout=20, hard_timeout=True)
     assert captured["timeout"] == 20
-    adapter._default_llm(messages=[], temperature=0, max_tokens=10, timeout=20)
+    adapter._default_llm(messages=[], max_tokens=10, timeout=20)
     assert captured["timeout"] == 60
 
 
@@ -80,7 +80,7 @@ def _fake_hermes(monkeypatch, provider, config, effort_parse=lambda v: {"enabled
 
 
 def _call(**kw):
-    return adapter._default_llm(messages=[], temperature=0, max_tokens=10, timeout=5, **kw)
+    return adapter._default_llm(messages=[], max_tokens=10, timeout=5, **kw)
 
 
 def test_configured_extra_body_is_forwarded_and_route_info_names_the_model(monkeypatch):
@@ -246,27 +246,38 @@ def test_json_object_ct03_characterization():
     assert j(123) is None
 
 
+# The plugin sends no temperature: sampling stays as Hermes configures it for the model (Opus 5.5 rejects any
+# non-default temperature, and Hermes already knows each model's rules).
+def test_no_temperature_reaches_hermes(monkeypatch):
+    captured = _fake_hermes(monkeypatch, "anthropic", {})
+    adapter._invoke(None, [{"role": "user", "content": "x"}], max_tokens=10, timeout=1)
+    assert "temperature" not in captured
+    seen = {}
+    adapter._invoke(lambda **kw: seen.update(kw) or "t", [], max_tokens=10, timeout=1)
+    assert "temperature" not in seen
+
+
 # Lote 3 item 1: with no effort anywhere, send "low" (Opus 5.5 docs: "Start at low effort and measure.")
 # instead of letting the API fall back to its own default (medium on Opus 5.5).
 def test_no_effort_configured_sends_low(monkeypatch):
     captured = _fake_hermes(monkeypatch, "anthropic", {})
-    adapter._default_llm(messages=[], temperature=0.2, max_tokens=10, timeout=1)
+    adapter._default_llm(messages=[], max_tokens=10, timeout=1)
     assert captured["reasoning_config"] == {"enabled": True, "effort": "low"}
 
 
 def test_empty_choice_effort_without_config_effort_sends_low(monkeypatch):
     captured = _fake_hermes(monkeypatch, "anthropic", {})
-    adapter._default_llm(messages=[], temperature=0.2, max_tokens=10, timeout=1,
+    adapter._default_llm(messages=[], max_tokens=10, timeout=1,
                          model_choice={"provider": "anthropic", "model": "claude-opus-5-5", "effort": ""})
     assert captured["reasoning_config"] == {"enabled": True, "effort": "low"}
 
 
 def test_configured_or_chosen_effort_still_wins_over_the_low_default(monkeypatch):
     captured = _fake_hermes(monkeypatch, "anthropic", {"reasoning_effort": "high"})
-    adapter._default_llm(messages=[], temperature=0.2, max_tokens=10, timeout=1)
+    adapter._default_llm(messages=[], max_tokens=10, timeout=1)
     assert captured["reasoning_config"] == {"enabled": True, "effort": "high"}
     captured = _fake_hermes(monkeypatch, "anthropic", {})
-    adapter._default_llm(messages=[], temperature=0.2, max_tokens=10, timeout=1,
+    adapter._default_llm(messages=[], max_tokens=10, timeout=1,
                          model_choice={"provider": "anthropic", "model": "m", "effort": "none"})
     assert captured["reasoning_config"] == {"enabled": False, "effort": "none"}
 
@@ -276,19 +287,19 @@ def test_configured_or_chosen_effort_still_wins_over_the_low_default(monkeypatch
 @pytest.mark.parametrize("effort,cap", [("medium", 4096), ("high", 8192), ("xhigh", 8192), ("max", 8192), ("ultra", 8192)])
 def test_higher_effort_raises_a_small_token_cap(monkeypatch, effort, cap):
     captured = _fake_hermes(monkeypatch, "openrouter", {"reasoning_effort": effort})
-    adapter._default_llm(messages=[], temperature=0.2, max_tokens=1024, timeout=1)
+    adapter._default_llm(messages=[], max_tokens=1024, timeout=1)
     assert captured["max_tokens"] == cap
 
 
 @pytest.mark.parametrize("effort", ["", "none", "minimal", "low"])
 def test_low_or_no_effort_keeps_the_callers_cap(monkeypatch, effort):
     captured = _fake_hermes(monkeypatch, "openrouter", {"reasoning_effort": effort} if effort else {})
-    adapter._default_llm(messages=[], temperature=0.2, max_tokens=1024, timeout=1)
+    adapter._default_llm(messages=[], max_tokens=1024, timeout=1)
     assert captured["max_tokens"] == 1024
 
 
 def test_a_larger_callers_cap_is_never_lowered(monkeypatch):
     captured = _fake_hermes(monkeypatch, "openrouter", {"reasoning_effort": "medium"})
-    adapter._default_llm(messages=[], temperature=0.2, max_tokens=6000, timeout=1)
+    adapter._default_llm(messages=[], max_tokens=6000, timeout=1)
     assert captured["max_tokens"] == 6000
 

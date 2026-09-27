@@ -136,7 +136,6 @@ def _effort_and_cap(effort: Any, provider_norm: str, max_tokens: int) -> tuple[A
 def _default_llm(
     *,
     messages: list[dict[str, str]],
-    temperature: float,
     max_tokens: int,
     timeout: float,
     is_json: bool = False,
@@ -204,7 +203,6 @@ def _default_llm(
     response = call_llm(
         task=task,
         messages=messages,
-        temperature=temperature,
         max_tokens=max_tokens,
         timeout=timeout,
         route_info=route,
@@ -252,13 +250,14 @@ def _invoke(
     use_config_timeout: bool = True,
     model_choice: Mapping[str, Any] | None = None,
 ) -> Reply:
+    # No temperature: the model's sampling stays as Hermes configures it for that model.
     if llm is not None:
         try:
-            result = llm(messages=messages, temperature=0.2, max_tokens=max_tokens, timeout=timeout, is_json=is_json)
+            result = llm(messages=messages, max_tokens=max_tokens, timeout=timeout, is_json=is_json)
         except TypeError:
-            result = llm(messages=messages, temperature=0.2, max_tokens=max_tokens, timeout=timeout)
+            result = llm(messages=messages, max_tokens=max_tokens, timeout=timeout)
     else:
-        result = _default_llm(messages=messages, temperature=0.2, max_tokens=max_tokens, timeout=timeout, is_json=is_json, hard_timeout=hard_timeout, use_config_timeout=use_config_timeout, model_choice=model_choice)
+        result = _default_llm(messages=messages, max_tokens=max_tokens, timeout=timeout, is_json=is_json, hard_timeout=hard_timeout, use_config_timeout=use_config_timeout, model_choice=model_choice)
 
     if isinstance(result, tuple) and len(result) >= 2:
         return Reply(str(result[0] or ""), str(result[1] or get_model_label(model_choice)), getattr(result, "finish_reason", ""))
