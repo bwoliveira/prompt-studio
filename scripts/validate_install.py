@@ -14,8 +14,41 @@ class ValidationError(Exception):
     pass
 
 
+def _parse_yaml_value(value: str, number: int) -> object:
+    """Scalar value of one manifest line: [] / {} literals, a quoted string, or a bare string."""
+    if value in ("[]", "{}"):
+        return [] if value == "[]" else {}
+    if value.startswith(("'", '"')):
+        if len(value) < 2 or value[-1] != value[0]:
+            raise ValidationError(f"invalid YAML at line {number}")
+        return value[1:-1]
+    if value.startswith(("[", "{")) or value.endswith(("]", "}")):
+        raise ValidationError(f"invalid YAML at line {number}")
+    return value
+
+
+def _parse_yaml_line(raw: str, number: int) -> tuple[str, str]:
+    """Split one top-level ``key: value`` line; raise on anything else."""
+    if raw.startswith((" ", "\t")) or ":" not in raw:
+        raise ValidationError(f"invalid YAML at line {number}")
+    key, value = raw.split(":", 1)
+    key, value = key.strip(), value.strip()
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]*", key) or not value:
+        raise ValidationError(f"invalid YAML at line {number}")
+    return key, value
+
+
 def parse_yaml_mapping(path: Path) -> dict[str, object]:
-    """Parse the deliberately small, flat plugin manifest without dependencies."""
+    """Parse the deliberately small, flat plugin manifest without dependencies.
+
+    Accepted YAML subset: blank lines and ``#`` comment lines (even indented) are
+    skipped; every other line must be an unindented ``key: value`` with key matching
+    ``[A-Za-z_][A-Za-z0-9_-]*`` and a non-empty value (split at the first ``:``).
+    Values are ``[]``/``{}`` (empty list/dict), a string wrapped in matching ``'`` or
+    ``"`` quotes (no escapes; quotes stripped), or a bare string not starting with
+    ``[``/``{`` nor ending with ``]``/``}``. No nesting, flow collections, multi-line
+    values, inline comments or type coercion. Duplicate keys are rejected.
+    """
     try:
         text = path.read_text(encoding="utf-8")
     except OSError as exc:
@@ -25,24 +58,10 @@ def parse_yaml_mapping(path: Path) -> dict[str, object]:
     for number, raw in enumerate(text.splitlines(), 1):
         if not raw.strip() or raw.lstrip().startswith("#"):
             continue
-        if raw.startswith((" ", "\t")) or ":" not in raw:
-            raise ValidationError(f"invalid YAML at line {number}")
-        key, value = raw.split(":", 1)
-        key, value = key.strip(), value.strip()
-        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]*", key) or not value:
-            raise ValidationError(f"invalid YAML at line {number}")
+        key, value = _parse_yaml_line(raw, number)
         if key in values:
             raise ValidationError(f"duplicate manifest field '{key}'")
-        if value in ("[]", "{}"):
-            values[key] = [] if value == "[]" else {}
-        elif value.startswith(("'", '"')):
-            if len(value) < 2 or value[-1] != value[0]:
-                raise ValidationError(f"invalid YAML at line {number}")
-            values[key] = value[1:-1]
-        elif value.startswith(("[", "{")) or value.endswith(("]", "}")):
-            raise ValidationError(f"invalid YAML at line {number}")
-        else:
-            values[key] = value
+        values[key] = _parse_yaml_value(value, number)
     return values
 
 

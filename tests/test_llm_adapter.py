@@ -224,3 +224,18 @@ def test_default_llm_reports_the_finish_reason_and_still_unpacks_as_text_and_mod
     # A response without choices has no finish_reason, and nothing breaks.
     fake.call_llm = lambda **kw: {"choices": []}
     assert adapter._invoke(None, [], max_tokens=10, timeout=1).finish_reason == ""
+
+
+# --- CT-03 characterization: pin _json_object behavior across its refactor.
+def test_json_object_ct03_characterization():
+    j = adapter._json_object
+    assert j("[1, 2]") is None  # direct parse of a non-dict falls through, no braces
+    assert j('[{"a": 1}]') == {"a": 1}  # non-dict top level, scan finds inner dict
+    assert j('```JSON\n{"a": 1}\n```') == {"a": 1}  # fence is case-insensitive
+    assert j('{"a": 1} {"value": 2}') == {"value": 2}  # preferred keys win over first
+    assert j('{"a": 1} {"b": 2}') == {"a": 1}  # else first candidate
+    assert j('{"a": {"prompt": 1}}') == {"a": {"prompt": 1}}  # direct parse wins
+    assert j('x {"a": {"prompt": 1}}') == {"prompt": 1}  # nested candidate has the key
+    assert j("{ not json") is None
+    assert j("") is None
+    assert j(123) is None

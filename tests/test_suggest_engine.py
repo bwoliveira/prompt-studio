@@ -826,3 +826,24 @@ def test_empty_reply_from_the_safety_filter_is_still_retried_once():
     se, llm, calls = _replies_with_finish(("", "content_filter"), (json.dumps({"value": "x", "reason": "ok"}), "stop"))
     out = se.suggest({**BASE, "field": TEXT}, llm=llm)
     assert out["ok"] and len(calls) == 2
+
+
+# --- CT-03 characterization: build_messages output is pinned across its refactor.
+CT03_PAYLOADS = [
+    {},
+    BASE | {"field": ENUM},
+    BASE | {"field": ENUM | {"recommended": ""}, "language": "en"},
+    BASE | {"field": TEXT | {"guide": "Be brief", "hint": "default text"}},
+    BASE | {"field": TEXT, "mode": "improve", "answer": "my answer", "session_context": "chat ctx"},
+    {"target": "unknown", "field": "notamapping", "ladder": ["x", {"question": "Q", "answer": ""},
+     {"question": "P", "answer": "pasted", "category": "thirdPartyText"},
+     {"question": "E", "answer": "", "category": "thirdPartyText"}]},
+    BASE | {"field": ENUM | {"options": ["A", " ", 3, "B"]}, "ladder": None},
+]
+
+
+def test_build_messages_ct03_snapshot():
+    engine = _load()
+    got = [engine.build_messages(p) for p in CT03_PAYLOADS]
+    expected = json.loads((ROOT / "tests" / "fixtures_ct03_build_messages.json").read_text(encoding="utf-8"))
+    assert got == expected

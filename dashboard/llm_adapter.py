@@ -50,50 +50,56 @@ def _finish_reason(response: Any) -> str:
     return value if isinstance(value, str) else ""
 
 
-def _json_object(text: str) -> dict[str, Any] | None:
-    """Find the best valid JSON object in prose, fences, or thinking output."""
-    if not isinstance(text, str):
-        return None
-    cleaned = _strip_thinking(text)
-
-    # 1. Direct JSON parse
+def _loads_dict(text: str) -> dict[str, Any] | None:
+    """json.loads ``text``; the value only when it is a dict, else None."""
     try:
-        val = json.loads(cleaned)
-        if isinstance(val, dict):
-            return val
+        val = json.loads(text)
     except json.JSONDecodeError:
-        pass
+        return None
+    return val if isinstance(val, dict) else None
 
-    # 2. Markdown fence ```json ... ```
+
+def _fenced_json(cleaned: str) -> dict[str, Any] | None:
+    """The dict inside the first markdown fence ```json ... ```, if valid."""
     fence_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, re.DOTALL | re.IGNORECASE)
-    if fence_match:
-        try:
-            val = json.loads(fence_match.group(1))
-            if isinstance(val, dict):
-                return val
-        except json.JSONDecodeError:
-            pass
+    return _loads_dict(fence_match.group(1)) if fence_match else None
 
-    # 3. Scan across '{' occurrences with raw_decode
+
+def _scan_json_objects(cleaned: str) -> list[dict[str, Any]]:
+    """Every dict raw-decodable from a '{' occurrence, in order."""
     decoder = json.JSONDecoder()
     candidates: list[dict[str, Any]] = []
     for match in re.finditer(r"\{", cleaned):
         try:
             value, _ = decoder.raw_decode(cleaned[match.start():])
-            if isinstance(value, dict):
-                candidates.append(value)
         except json.JSONDecodeError:
             continue
+        if isinstance(value, dict):
+            candidates.append(value)
+    return candidates
 
-    if not candidates:
-        return None
 
-    # Prefer a candidate with the keys the Studio routes expect.
+def _pick_candidate(candidates: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Prefer a candidate with the keys the Studio routes expect, else the first."""
     for cand in candidates:
         if "value" in cand or "prompt" in cand:
             return cand
+    return candidates[0] if candidates else None
 
-    return candidates[0]
+
+def _json_object(text: str) -> dict[str, Any] | None:
+    """Find the best valid JSON object in prose, fences, or thinking output."""
+    if not isinstance(text, str):
+        return None
+    cleaned = _strip_thinking(text)
+    # 1. Direct JSON parse; 2. markdown fence; 3. scan across '{' occurrences.
+    direct = _loads_dict(cleaned)
+    if direct is not None:
+        return direct
+    fenced = _fenced_json(cleaned)
+    if fenced is not None:
+        return fenced
+    return _pick_candidate(_scan_json_objects(cleaned))
 
 
 def _choice(model_choice: Mapping[str, Any] | None) -> tuple[str, str, str] | None:
