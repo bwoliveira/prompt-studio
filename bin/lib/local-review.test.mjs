@@ -292,7 +292,7 @@ echo "$*" >> "${bin}/log"
 case "$1 $2" in
   "pr list") printf '%s\\n' "$FAKE_OPEN_PR" ;;
   "pr create") echo "https://github.com/o/r/pull/8" ;;
-  "pr view") echo "https://github.com/o/r/pull/1" ;;
+  "pr view") case "$*" in *state*) echo "\${FAKE_STATE:-MERGED}" ;; *) echo "https://github.com/o/r/pull/1" ;; esac ;;
 esac
 exit 0
 `);
@@ -316,4 +316,18 @@ test('bin/pr merges the OPEN pull request of the branch, never an old merged one
     assert.doesNotMatch(log, /^pr merge fix\/x/m, 'never merge by branch name');
     for (const d of [dir, origin, gh]) rmSync(d, { recursive: true, force: true });
   }
+});
+
+test('bin/pr keeps the branch and fails when the merge command leaves the PR open (queue or auto-merge)', () => {
+  const { dir, origin } = prRepo();
+  const gh = fakeGh();
+  const r = spawnSync('bash', ['bin/pr'], {
+    cwd: dir, encoding: 'utf8',
+    env: { ...process.env, PATH: `${gh}:${process.env.PATH}`, FAKE_OPEN_PR: '7', FAKE_STATE: 'OPEN' },
+  });
+  assert.notEqual(r.status, 0, r.stdout);
+  assert.match(r.stderr, /not merged/);
+  const log = readFileSync(join(gh, 'log'), 'utf8');
+  assert.doesNotMatch(log, /git\/refs\/heads/, 'the branch must not be deleted while the PR is open');
+  for (const d of [dir, origin, gh]) rmSync(d, { recursive: true, force: true });
 });
