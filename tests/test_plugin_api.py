@@ -189,7 +189,7 @@ def test_oversized_requests_are_rejected_before_the_engine(monkeypatch):
 def test_every_request_string_and_list_has_a_max_length():
     for model in (plugin_api.LadderRung, plugin_api.SuggestField, plugin_api.SuggestRequest, plugin_api.ComposeAnswer, plugin_api.ComposeRequest):
         for name, f in model.model_fields.items():
-            if name in ("field", "isDefault"):
+            if name in ("field", "isDefault", "model_choice"):
                 continue
             assert any(getattr(m, "max_length", None) for m in f.metadata), f"{model.__name__}.{name}"
 
@@ -224,3 +224,76 @@ def test_compose_route_reports_engine_crash_as_documented_500(monkeypatch, caplo
 def test_suggest_route_engine_crash_body_is_the_documented_500(monkeypatch):
     response = _broken_client(monkeypatch).post("/suggest", json={"intent": "Crie um app", "field": FIELD})
     assert response.status_code == 500 and response.json() == {"ok": False, "error": "suggest engine unavailable"}
+
+
+# --- CX-1: /context route, model_choice and session_context fields.
+class FakeContext:
+    def __init__(self):
+        self.calls = []
+
+    def context(self, payload):
+        self.calls.append(payload)
+        return {"ok": True, "summary": "s", "model": "fake/ctx", "turns": 1, "ms": 5}
+
+
+def _ctx_client(monkeypatch):
+    fake, ctx = FakeSuggest(), FakeContext()
+    monkeypatch.setattr(plugin_api, "_load", lambda name, attr: {"suggest_engine": fake, "session_context": ctx}.get(name, FakeEngine()))
+    app = FastAPI()
+    app.include_router(plugin_api.router)
+    return TestClient(app), fake, ctx
+
+
+CHOICE = {"provider": "anthropic", "model": "claude-haiku-5", "effort": "low"}
+
+
+def test_context_route_passes_the_request_to_the_reader(monkeypatch):
+    api, _, ctx = _ctx_client(monkeypatch)
+    r = api.post("/context", json={"session_id": "abc_1.2:3-x", "profile": "work", "locale": "pt", "model_choice": CHOICE})
+    assert r.status_code == 200 and r.json()["summary"] == "s"
+    assert ctx.calls[0] == {"session_id": "abc_1.2:3-x", "profile": "work", "locale": "pt", "model_choice": CHOICE}
+
+
+@pytest.mark.parametrize("body", [
+    {"session_id": "../x"}, {"session_id": ""}, {"session_id": "x" * 129}, {},
+    {"session_id": "s", "profile": "a/b"}, {"session_id": "s", "profile": "p" * 65},
+    {"session_id": "s", "model_choice": {"provider": "p", "model": "m", "effort": "turbo"}},
+    {"session_id": "s", "model_choice": {"provider": "p" * 81, "model": "m"}},
+    {"session_id": "s", "model_choice": {"provider": "p", "model": "m" * 201}},
+])
+def test_context_route_rejects_malformed_requests(monkeypatch, body):
+    api, _, ctx = _ctx_client(monkeypatch)
+    assert api.post("/context", json=body).status_code == 422 and ctx.calls == []
+
+
+def test_context_route_reports_a_broken_reader(monkeypatch, caplog):
+    monkeypatch.setattr(plugin_api, "_load", lambda name, attr: (_ for _ in ()).throw(RuntimeError("x")))
+    app = FastAPI()
+    app.include_router(plugin_api.router)
+    with caplog.at_level(logging.ERROR):
+        r = TestClient(app).post("/context", json={"session_id": "s"})
+    assert r.status_code == 200 and r.json() == {"ok": False, "code": "unavailable", "error": "context reader unavailable"}
+
+
+def test_model_choice_and_session_context_reach_the_engines(monkeypatch):
+    api, fake, _ = _ctx_client(monkeypatch)
+    api.post("/suggest", json={"intent": "x", "field": FIELD, "model_choice": CHOICE, "session_context": "ctx"})
+    assert fake.calls[-1]["model_choice"] == CHOICE and fake.calls[-1]["session_context"] == "ctx"
+    api.post("/compose", json={"intent": "x", "model_choice": CHOICE, "session_context": "ctx"})
+    assert fake.calls[-1]["model_choice"] == CHOICE and "session_context" not in fake.calls[-1]
+    for effort in ("", "none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"):
+        assert api.post("/compose", json={"intent": "x", "model_choice": {**CHOICE, "effort": effort}}).status_code == 200
+    assert api.post("/compose", json={"intent": "x", "model_choice": {**CHOICE, "effort": "turbo"}}).status_code == 422
+    assert api.post("/suggest", json={"intent": "x", "field": FIELD, "session_context": "c" * 3001}).status_code == 422
+
+
+def test_new_request_models_are_bounded():
+    for model in (plugin_api.ModelChoice, plugin_api.ContextRequest):
+        for name, f in model.model_fields.items():
+            if name == "model_choice":
+                continue
+            assert any(getattr(m, "max_length", None) for m in f.metadata), f"{model.__name__}.{name}"
+
+
+def test_real_loader_finds_the_context_reader():
+    assert hasattr(plugin_api._load("session_context", "context"), "context")

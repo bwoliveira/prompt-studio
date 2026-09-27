@@ -138,3 +138,69 @@ def test_json_object_edge_cases():
     assert adapter._json_object("[1, 2]") is None  # top-level non-object
     assert adapter._json_object('x {"a": 1} y') == {"a": 1}  # no Studio keys: first candidate
     assert adapter._invoke(lambda **_: None, [], max_tokens=1, timeout=1)[0] == ""
+
+
+# --- CX-1: per-task model choice (provider/model/effort) on the helper and context calls.
+def test_empty_model_choice_keeps_todays_call(monkeypatch):
+    config = {"reasoning_effort": "low", "extra_body": {"top_k": 3}}
+    before = _fake_hermes(monkeypatch, "openrouter", config)
+    _call()
+    before = dict(before)
+    for choice in (None, {}, {"provider": "anthropic", "model": "", "effort": "high"}):
+        captured = _fake_hermes(monkeypatch, "openrouter", config)
+        _call(model_choice=choice)
+        assert captured == {**before, "route_info": captured["route_info"]}
+        assert captured["task"] == "prompt_studio" and "provider" not in captured and "model" not in captured
+
+
+def test_model_choice_is_forwarded_with_its_effort(monkeypatch):
+    captured = _fake_hermes(monkeypatch, "anthropic", {"provider": "anthropic", "reasoning_effort": "high"})
+    _call(model_choice={"provider": "anthropic", "model": "claude-haiku-5", "effort": "low"})
+    assert captured["provider"] == "anthropic" and captured["model"] == "claude-haiku-5"
+    assert captured["reasoning_config"] == {"enabled": True, "effort": "low"}
+    assert captured["task"] == "prompt_studio"
+    captured = _fake_hermes(monkeypatch, "anthropic", {"provider": "anthropic", "reasoning_effort": "high"})
+    _call(model_choice={"provider": "anthropic", "model": "claude-haiku-5", "effort": ""})
+    assert captured["reasoning_config"] == {"enabled": True, "effort": "high"}  # config effort
+    captured = _fake_hermes(monkeypatch, "anthropic", {"reasoning_effort": "high"})
+    _call(model_choice={"provider": "anthropic", "model": "claude-haiku-5", "effort": "none"})
+    assert captured["reasoning_config"] == {"enabled": False, "effort": "none"}
+
+
+def test_model_choice_for_another_provider_never_gets_the_config_endpoint_or_key(monkeypatch):
+    config = {"provider": "", "base_url": "http://cfg.local/v1", "api_key": "sk-test-XXXX", "extra_body": {"top_k": 3}}
+    captured = _fake_hermes(monkeypatch, None, config)
+    _call(model_choice={"provider": "anthropic", "model": "claude-haiku-5", "effort": ""})
+    # call_llm adopts auxiliary.<task>.base_url/api_key for an explicit provider unless the task is dropped.
+    assert captured["task"] is None
+    assert not captured.get("base_url") and not captured.get("api_key")
+    assert captured["extra_body"] is None
+    # Same provider as the config: the task (and its endpoint) stays.
+    captured = _fake_hermes(monkeypatch, "custom", {**config, "provider": "custom"})
+    _call(model_choice={"provider": "custom", "model": "m2", "effort": ""})
+    assert captured["task"] == "prompt_studio" and captured["extra_body"] == {"top_k": 3}
+
+
+def test_model_choice_drives_the_provider_adaptation_and_label(monkeypatch):
+    captured = _fake_hermes(monkeypatch, "openai", {"provider": "openai"})
+    _call(is_json=True, model_choice={"provider": "gemini", "model": "gemini-3-flash", "effort": ""})
+    assert captured["extra_body"] == {"thinking_config": {"thinkingBudget": 0, "includeThoughts": False}}
+    assert adapter.get_model_label({"provider": "gemini", "model": "gemini-3-flash"}) == "gemini/gemini-3-flash"
+    assert adapter.get_model_label({"provider": "", "model": ""}) == "openai/m"
+
+
+def test_invoke_hands_the_model_choice_to_the_default_adapter(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(adapter, "_default_llm", lambda **kw: seen.update(kw) or ("t", "p/m"))
+    adapter._invoke(None, [], max_tokens=1, timeout=1, model_choice={"provider": "p", "model": "m"})
+    assert seen["model_choice"] == {"provider": "p", "model": "m"}
+
+
+def test_no_config_block_and_no_model_choice_lets_hermes_auto_route(monkeypatch):
+    # No auxiliary.prompt_studio block at all: Hermes resolves provider 'auto' (the user's main model).
+    captured = _fake_hermes(monkeypatch, "auto", {})
+    assert _call() == ("out", "routed/rm")
+    assert captured["task"] == "prompt_studio"
+    for key in ("provider", "model", "base_url", "api_key"):
+        assert key not in captured
+    assert captured["reasoning_config"] is None and captured["extra_body"] is None
