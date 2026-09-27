@@ -111,9 +111,28 @@ test('SUBAGENTS team / direct / auto', () => {
   assert.ok(team.includes('reviewer'))
   assert.ok(team.includes('Time matters here'))
   assert.ok(ENGINE.build({ goal: 'Crie um app', subagents: 'direct' }).prompt.includes('SUBAGENTS\nDo not use subagents; perform the work directly.'))
-  assert.ok(!ENGINE.build({ goal: 'Crie um app', subagents: 'auto' }).prompt.includes('SUBAGENTS'))
-  assert.equal(ENGINE.recommend({ goal: 'Crie um app' }), 'team')
+  // OP-1: 'auto' (the default) now carries the guide's delegation sentence for hands-on work (was: no section).
+  const AUTO = 'SUBAGENTS\nDelegate to a subagent only for large tasks that are genuinely independent and parallelizable, such as a wide multi-file investigation.'
+  assert.ok(ENGINE.build({ goal: 'Crie um app', subagents: 'auto' }).prompt.includes(AUTO))
+  assert.equal(ENGINE.recommend({ goal: 'Crie um app' }), 'auto')
   assert.equal(ENGINE.recommend({ goal: 'Escreva um e-mail curto' }), 'auto')
+})
+
+test('OP-1: subagents default is auto; team only when chosen', () => {
+  const plain = ENGINE.build({ goal: 'Crie um app' }).prompt
+  assert.ok(plain.includes('keep spawn counts low.'))
+  assert.ok(!plain.includes('Use subagents.'))
+  assert.ok(!ENGINE.build({ goal: 'Corrija o bug de login no app React' }).prompt.includes('Use subagents.'))
+  for (const deliverable of ['text', 'answer']) assert.ok(!ENGINE.build({ goal: 'Faça isso', deliverable }).prompt.includes('SUBAGENTS'), deliverable)
+  assert.ok(!ENGINE.build({ goal: 'Escreva um e-mail curto' }).prompt.includes('SUBAGENTS'))
+})
+
+test('OP-3: visual design only for interface work being created, not fixes', () => {
+  assert.ok(!ENGINE.build({ goal: 'Corrija o bug de login no app React' }).prompt.includes('Visual design'))
+  assert.ok(!ENGINE.build({ goal: 'Refatore o componente React do header' }).prompt.includes('Visual design'))
+  assert.equal(ENGINE.analyze({ goal: 'Corrija o bug de login no app React' }).interface, false)
+  assert.ok(ENGINE.build({ goal: 'Crie uma landing page para minha padaria' }).prompt.includes('Visual design'))
+  assert.ok(ENGINE.build({ goal: 'Redesign the dashboard page' }).prompt.includes('Visual design'))
 })
 
 test('AUTONOMY header with one line per mode', () => {

@@ -20,7 +20,7 @@ step uses the recommendation.
 | 5 | How will you know it is done? | both | A checkable definition of done replaces the engine's generic line. | DONE WHEN section |
 | 6 | Interface patterns to avoid | Opus, code tasks only | The Opus 5.5 page recommends naming the visual patterns to avoid; the list is a taste call. "Avoid nothing" drops the line. | REQUIREMENTS design line (O11) |
 | 7 | How much autonomy? | both (Opus adds "unattended") | How far the model may go without checking in depends on the user's situation, not the draft. | AUTONOMY section (O12-O15, A7-A13) |
-| 8 | Use subagents? | both | Team, model decides, or none. Team is recommended except for a single text or answer, because the user prioritizes subagents over cost. | SUBAGENTS section (section 3 of the rule reference) |
+| 8 | Use subagents? | both | Team, model decides, or none. For Opus "model decides" is recommended (it carries the guide's delegation rule for hands-on work); team only when the user picks it, since delegation multiplies cost and time on small tasks. Astra keeps team except for a single text or answer. | SUBAGENTS section (section 3 of the rule reference) |
 | 9 | Do you have an example of the result? | both, not for code or agent tasks | Examples steer format and tone; only the user has real ones. Several examples are separated by a `---` line. | EXAMPLE/EXAMPLES section |
 | 10 | Response format | both | Prose, steps, table or JSON is a use-case choice. Default: match the task (no line). | OUTPUT format line |
 | 11 | Response length | both | Concise vs. detailed is a reader preference. Default: balanced (no line). | OUTPUT length line |

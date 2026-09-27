@@ -109,6 +109,9 @@ const SUBAGENT_REAL = 'Only report delegation that actually happened through sub
 // [opus55] "Time signals for multiagent harnesses" (verbatim sentence).
 const TIME_LINE = 'Time matters here: do not spend time that can be avoided, and the earlier a correct result is obtained, the better.'
 const SUBAGENT_DIRECT = 'Do not use subagents; perform the work directly.'
+// [opus5] the guide's own sample delegation guidance, verbatim: "Delegation pays off on genuinely independent,
+// sizeable tracks of work, but it multiplies cost and time when applied to small tasks." Default ('auto') for hands-on work.
+const SUBAGENT_AUTO = 'Delegate to a subagent only for large tasks that are genuinely independent and parallelizable, such as a wide multi-file investigation. Do not delegate work you can finish yourself in a handful of tool calls, and do not use subagents to verify or double-check your own work. If one subagent can complete the task, use one rather than several, and keep spawn counts low.'
 
 // [pe] "Wrap examples in <example> tags (multiple examples in <examples> tags)"; [pe] "Examples ... guide".
 const EXAMPLE_NOTE_ONE = 'Use the example as a guide to format, tone and level of detail, not as content to copy.'
@@ -205,6 +208,9 @@ const CATEGORY_DEFAULT = { code: 'implementation', research: 'analysis', writing
 // Deliverables that do/change things vs. ones that read and report; crossing groups is a conflict.
 const GROUP = { implementation: 'do', workflow: 'do', data: 'do', analysis: 'think', review: 'think', plan: 'think', answer: 'think', text: 'write' }
 
+// [opus55] the design guidance is about frontend work being created: only with a create/redesign verb, never for fixes.
+const REDESIGN_VERB = /\b(redesign|redesenhe|redesenhar|restyle)\b/
+const FIX_VERB = /\b(fix|corrija|corrigir|conserte|debug|depure|refactor|refatore|refatorar)\b/
 const INTERFACE = /\b(dashboards?|sites?|website|landing|pages?|pagina|telas?|screens?|interfaces?|ui|ux|frontend|front-end|layout|componentes?|components?|apps?|aplicativos?|html|css|react|vue|svelte)\b/
 
 function detect(b) {
@@ -231,7 +237,7 @@ function analyzeNormalized(b) {
   const conflicts = {}
   if (b.deliverable !== 'auto' && signal && GROUP[signal] !== GROUP[b.deliverable]) conflicts.deliverable = [b.deliverable]
   if (b.format === 'json' && (deliverable === 'text')) conflicts.format = ['json']
-  return { category, deliverable, conflicts, interface: (category === 'code' || deliverable === 'implementation') && INTERFACE.test(text) }
+  return { category, deliverable, conflicts, interface: (category === 'code' || deliverable === 'implementation') && INTERFACE.test(text) && (MAKE_VERB.test(text) || REDESIGN_VERB.test(text)) && !FIX_VERB.test(text) }
 }
 
 // FNV-1a 32-bit: deterministic, short, random-looking id for the pasted block.
@@ -248,11 +254,9 @@ const escapePasted = text => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;
 const oneLine = text => text.replace(/\s+/g, ' ').slice(0, 300)
 const isNone = text => /^(none|nenhum|nada|nao evitar nada|-)$/.test(fold(text).trim())
 
-function recommend(brief) {
-  try {
-    const { deliverable } = analyzeNormalized(normalize(brief))
-    return deliverable === 'text' || deliverable === 'answer' ? 'auto' : 'team'
-  } catch { return 'team' }
+// [opus5] delegation "multiplies cost and time when applied to small tasks": let the model decide unless the user picks a team.
+function recommend() {
+  return 'auto'
 }
 
 // ---------------------------------------------------------------- build
@@ -299,7 +303,9 @@ function buildNormalized(b) {
 
   add('autonomy', 'AUTONOMY', [AUTONOMY_LINES[b.autonomy]])
 
-  const mode = b.subagents || (deliverable === 'text' || deliverable === 'answer' ? 'auto' : 'team')
+  // [opus5] delegation only when chosen: the default is 'auto', which still states the guide's delegation rule for hands-on work.
+  const mode = b.subagents || 'auto'
+  if (mode === 'auto' && ['implementation', 'workflow', 'data', 'review', 'analysis'].includes(deliverable)) add('subagents', 'SUBAGENTS', [SUBAGENT_AUTO])
   if (mode === 'team') add('subagents', 'SUBAGENTS', [[SUBAGENT_SPLIT, SUBAGENT_SIZE, SUBAGENT_REVIEWER, SUBAGENT_REAL, TIME_LINE].join(' ')])
   if (mode === 'direct') add('subagents', 'SUBAGENTS', [SUBAGENT_DIRECT])
 
@@ -981,7 +987,7 @@ function acceptedValues(step, target, intent, ladder) {
   })
 }
 
-// Subagent recommendation: the engine's own, else a team except for a single text or answer.
+// Subagent recommendation: the engine's own (Opus: always 'auto'), else a team except for a single text or answer.
 function recommendSubagents(target, brief) {
   const engine = engineOf(target)
   if (typeof engine.recommend === 'function') return engine.recommend(brief)

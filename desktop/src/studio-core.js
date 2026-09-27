@@ -130,7 +130,7 @@ function acceptedValues(step, target, intent, ladder) {
   })
 }
 
-// Subagent recommendation: the engine's own, else a team except for a single text or answer.
+// Subagent recommendation: the engine's own (Opus: always 'auto'), else a team except for a single text or answer.
 function recommendSubagents(target, brief) {
   const engine = engineOf(target)
   if (typeof engine.recommend === 'function') return engine.recommend(brief)
