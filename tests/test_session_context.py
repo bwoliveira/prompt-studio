@@ -190,6 +190,19 @@ def test_a_model_the_provider_does_not_know_gets_its_own_code():
     assert out["code"] == "model_not_found" and "req_123" not in json.dumps(out), out
 
 
+def test_a_model_the_provider_refuses_gets_its_own_code():
+    sc = _load()
+
+    class AuthenticationError(Exception):
+        status_code = 401
+
+    def refused(**_):
+        raise AuthenticationError("bad key sk-abc")
+
+    out = sc.context({"session_id": "s1"}, llm=refused, opener=_opener(FakeDB([msg("user", "hi")])))
+    assert out["code"] == "provider_refused" and "sk-abc" not in json.dumps(out), out
+
+
 def test_store_failure_is_unavailable(caplog):
     sc = _load()
 
@@ -246,3 +259,17 @@ def test_model_choice_reaches_the_adapter(monkeypatch):
     choice = {"provider": "anthropic", "model": "h", "effort": "low"}
     out = sc.context({"session_id": "s1", "model_choice": choice}, opener=_opener(FakeDB([msg("user", "hi")])))
     assert seen[0]["model_choice"] == choice and seen[0]["hard_timeout"] is True and out["model"] == "anthropic/h"
+
+
+@pytest.mark.parametrize("status,code", [(402, "provider_payment"), (400, "provider_bad_request")])
+def test_payment_and_bad_request_get_their_own_codes(status, code):
+    sc = _load()
+
+    class APIStatusError(Exception):
+        status_code = status
+
+    def failing(**_):
+        raise APIStatusError("account acct-42 sk-abc")
+
+    out = sc.context({"session_id": "s1"}, llm=failing, opener=_opener(FakeDB([msg("user", "hi")])))
+    assert out["code"] == code and "sk-abc" not in json.dumps(out), out

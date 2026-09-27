@@ -303,3 +303,75 @@ def test_a_larger_callers_cap_is_never_lowered(monkeypatch):
     adapter._default_llm(messages=[], max_tokens=6000, timeout=1)
     assert captured["max_tokens"] == 6000
 
+
+
+def test_is_provider_refused_covers_401_403_and_plan_messages():
+    class E(Exception):
+        pass
+
+    def with_status(code):
+        e = E("x"); e.status_code = code; return e
+
+    class Resp:
+        status_code = 403
+
+    via_response = E("x"); via_response.response = Resp()
+    assert adapter.is_provider_refused(with_status(403)) and adapter.is_provider_refused(with_status(401))
+    assert adapter.is_provider_refused(via_response)
+    assert adapter.is_provider_refused(E("Error code: MODEL_NOT_IN_PLAN"))
+    assert adapter.is_provider_refused(E("model is Not In Plan"))
+    assert adapter.is_provider_refused(type("PermissionDeniedError", (Exception,), {})("x"))
+    assert adapter.is_provider_refused(type("AuthenticationError", (Exception,), {})("x"))
+    assert not adapter.is_provider_refused(with_status(404))
+    assert not adapter.is_provider_refused(with_status(500))
+    assert not adapter.is_provider_refused(RuntimeError("down"))
+
+
+def _status_exc(code, text="x", via_response=False):
+    e = Exception(text)
+    if via_response:
+        e.response = type("Resp", (), {"status_code": code})()
+    else:
+        e.status_code = code
+    return e
+
+
+def test_is_provider_payment_covers_402_and_billing_messages():
+    assert adapter.is_provider_payment(_status_exc(402))
+    assert adapter.is_provider_payment(_status_exc(402, via_response=True))
+    assert adapter.is_provider_payment(type("PaymentRequiredError", (Exception,), {})("x"))
+    for text in ("Error code: 429 insufficient_quota", "Insufficient credits for this request",
+                 "402 Payment Required", "billing_hard_limit_reached",
+                 "Your credit balance is too low to access the API"):
+        assert adapter.is_provider_payment(Exception(text)), text
+    assert not adapter.is_provider_payment(_status_exc(403))
+    assert not adapter.is_provider_payment(_status_exc(400))
+    assert not adapter.is_provider_payment(RuntimeError("quota of tokens reached for context"))
+
+
+# /review P2: the word "billing" alone is not a billing failure (rate limit, outage, a parameter name).
+def test_billing_word_alone_is_not_a_payment_error():
+    assert adapter.provider_error_code(_status_exc(429, "Rate limit reached. See billing documentation.")) == "unavailable"
+    assert adapter.provider_error_code(_status_exc(500, "Billing service temporarily unavailable")) == "unavailable"
+    assert adapter.provider_error_code(_status_exc(400, "Invalid parameter: billing_account")) == "provider_bad_request"
+    assert adapter.provider_error_code(_status_exc(429, "insufficient_quota")) == "provider_payment"
+
+
+def test_is_provider_bad_request_covers_400_and_badrequesterror():
+    assert adapter.is_provider_bad_request(_status_exc(400))
+    assert adapter.is_provider_bad_request(_status_exc(400, via_response=True))
+    assert adapter.is_provider_bad_request(type("BadRequestError", (Exception,), {})("x"))
+    assert not adapter.is_provider_bad_request(_status_exc(402))
+    assert not adapter.is_provider_bad_request(_status_exc(500))
+    assert not adapter.is_provider_bad_request(RuntimeError("bad things"))
+
+
+def test_provider_error_code_precedence():
+    assert adapter.provider_error_code(_status_exc(404)) == "model_not_found"
+    assert adapter.provider_error_code(_status_exc(403, "insufficient_quota")) == "provider_refused"
+    assert adapter.provider_error_code(_status_exc(400, "billing_hard_limit_reached")) == "provider_payment"
+    assert adapter.provider_error_code(_status_exc(402)) == "provider_payment"
+    assert adapter.provider_error_code(_status_exc(400)) == "provider_bad_request"
+    assert adapter.provider_error_code(_status_exc(429)) == "unavailable"
+    assert adapter.provider_error_code(_status_exc(500)) == "unavailable"
+    assert adapter.provider_error_code(TimeoutError()) == "unavailable"

@@ -175,6 +175,12 @@ def context(payload: Mapping[str, Any], llm: Callable[..., Any] | None = None, d
         logger.warning("Prompt Studio context model call failed: %s", type(exc).__name__, exc_info=exc)
         if _llm.is_model_not_found(exc):
             return _error("model_not_found", "model not found", model=label)
+        if _llm.is_provider_refused(exc):
+            return _error("provider_refused", "provider refused", model=label)
+        if _llm.is_provider_payment(exc):
+            return _error("provider_payment", "provider payment", model=label)
+        if _llm.is_provider_bad_request(exc):
+            return _error("provider_bad_request", "provider bad request", model=label)
         return _error("unavailable", "model unavailable", model=label)
     data = _llm._json_object(text)
     result = data.get("summary") if isinstance(data, dict) else None

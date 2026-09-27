@@ -1357,7 +1357,10 @@ const UI_MESSAGES = {
       no_session: 'This session was not found.',
       empty_session: 'This session has no conversation yet.',
       invalid_summary: 'The model did not return a usable summary.',
-      model_not_found: 'The provider does not offer this model; check the name in Settings (F3).'
+      model_not_found: 'The provider does not offer this model; check the name in Settings (F3).',
+      provider_refused: 'The provider refused the request: API key not accepted (401) or model not allowed for your account or plan (403). Check the provider API key and plan, or pick another model in Settings (F3).',
+      provider_payment: 'The provider refused the request for billing reasons (for example 402: no credits or quota). Check your plan or credits, or pick another model in Settings (F3).',
+      provider_bad_request: 'The provider rejected the request (400). The model or route may not accept these settings; try another model or route in Settings (F3). Details are in the Hermes log.'
     },
     context: {
       reading: 'Reading this session…',
@@ -1560,7 +1563,10 @@ const UI_MESSAGES = {
       no_session: 'Esta sessão não foi encontrada.',
       empty_session: 'Esta sessão ainda não tem conversa.',
       invalid_summary: 'O modelo não devolveu um resumo utilizável.',
-      model_not_found: 'O provedor não oferece este modelo; confira o nome nas Configurações (F3).'
+      model_not_found: 'O provedor não oferece este modelo; confira o nome nas Configurações (F3).',
+      provider_refused: 'O provedor recusou o pedido: chave de API não aceita (401) ou modelo não liberado para a sua conta ou plano (403). Confira a chave de API e o plano do provedor, ou escolha outro modelo nas Configurações (F3).',
+      provider_payment: 'O provedor recusou o pedido por cobrança (por exemplo 402: sem créditos ou cota). Confira o plano ou os créditos, ou escolha outro modelo nas Configurações (F3).',
+      provider_bad_request: 'O provedor rejeitou o pedido (400). O modelo ou a rota podem não aceitar estes ajustes; tente outro modelo ou rota nas Configurações (F3). Os detalhes estão no log do Hermes.'
     },
     context: {
       reading: 'Lendo esta sessão…',

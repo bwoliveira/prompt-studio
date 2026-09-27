@@ -221,3 +221,12 @@ test('OP-3: designAvoid step not asked for an interface bugfix, asked for new in
   assert.ok(ids('Crie uma landing page para minha padaria').includes('designAvoid'))
   assert.ok(ids('Corrija o bug de login no app React').includes('subagents'), 'OP-1: subagents step still asked')
 })
+
+
+// /review P3: provider_refused also covers 401 (a wrong or expired key), so the message must point to the key too.
+test('provider_refused tells the user to check the key as well as the plan (en and pt)', () => {
+  assert.match(UI_MESSAGES.en.errors.provider_refused, /401/)
+  assert.match(UI_MESSAGES.en.errors.provider_refused, /API key/)
+  assert.match(UI_MESSAGES.pt.errors.provider_refused, /401/)
+  assert.match(UI_MESSAGES.pt.errors.provider_refused, /chave/)
+})
