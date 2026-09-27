@@ -11,31 +11,52 @@ built locally by the plugin's own engine for the chosen model.
 
 The two prompt engines were written for this plugin from the official Anthropic and OpenAI documentation.
 
-## Built for Claude Opus 5.5 and GPT-6 Astra
+## Contents
 
-The two models need different prompts, and the engines follow each vendor's guidance:
+- [Requirements](#requirements)
+- [Install](#install)
+- [Usage](#usage)
+- [Keyboard](#keyboard)
+- [Configuration](#configuration)
+- [Privacy and security](#privacy-and-security)
+- [Built for Claude Opus 5.5 and GPT-6 Astra](#built-for-claude-opus-55-and-gpt-6-astra)
+- [How it follows the Hermes plugin guidelines](#how-it-follows-the-hermes-plugin-guidelines)
+- [Development](#development)
+- [Repository layout](#repository-layout)
+- [Credits](#credits)
+- [License](#license)
 
-- **Claude Opus 5.5** (Anthropic, *Prompting Claude Opus 5.5* and the prompting best practices):
-  - Pasted material goes in `<pasted_content>` tags with the documented note; long material goes above the task.
-  - Autonomy is stated plainly, and "explore first" is added when the request gives little context.
-  - Scope stays to what was asked.
-  - No "double-check your work" lines: Opus verifies on its own, so the prompt asks for evidence instead,
-    such as the commands run and what they returned.
-- **GPT-6 Astra** (OpenAI, *Using GPT-6* and *Rethinking skills and prompts for GPT-6 Astra*):
-  - The request is stated to take precedence over skills and `AGENTS.md`.
-  - An action request is framed as work to finish, not a plan to propose.
-  - Only the official testing line is used, without extra verification lines.
-  - The plain-writing lines apply to text answers.
-  - Pasted material goes last, inside `<document>` tags.
-- **Both models:**
-  - An optional **subagents** step. "Team" splits the task into independent parts that run in parallel,
-    and names one reviewer who did not write any of the work and starts from a fresh context.
-  - Examples go in `<example>` tags.
-  - Pasted text is escaped so it cannot close its tags, and it is marked as data, not instructions.
+## Requirements
 
-`docs/PROMPT-DOCS-REVIEW.md` lists every rule line with the quote it comes from.
+- Hermes 0.20.0 or later (`requires_hermes: ">=0.20.0"` in `plugin.yaml`), with Hermes Desktop.
+- The `hermes` CLI on `PATH`, or its path in `HERMES_BIN`.
+- Python 3.12 or later for the installer (set `PYTHON_BIN` to pick an interpreter).
 
-## How it works
+## Install
+
+The repository is private, so Prompt Studio is installed from a checkout with `install.sh`:
+
+```bash
+git clone https://github.com/bwoliveira/prompt-studio.git
+cd prompt-studio
+./install.sh                    # default Hermes home ($HERMES_HOME or ~/.hermes)
+./install.sh --profile <name>   # or a named profile
+./install.sh --home <path>      # or a custom Hermes home (absolute path)
+```
+
+`--home` and `--profile` cannot be used together. The script checks the manifest and the Hermes version,
+copies the package (with its desktop half) into `plugins/prompt-studio/`, and changes configuration only
+through the `hermes` CLI (`hermes plugins enable`, `hermes config set`). It is safe to re-run; run it again
+after `git pull` to update.
+
+Then close and reopen Hermes Desktop so the backend mounts the plugin's routes and copies the desktop half
+out. **Capabilities → Plugins** should show *Prompt Studio* enabled.
+
+**Remote backend** (Desktop connected over SSH or a URL): run `install.sh` on the backend host, then copy
+`desktop/plugin.js` to `~/.hermes/desktop-plugins/prompt-studio/plugin.js` on the machine that runs
+the app.
+
+## Usage
 
 1. Write your request in the message field and press **F4**, or click **✨ Prompt Studio**, or run
    *Prompt Studio* from the command palette.
@@ -56,6 +77,15 @@ The two models need different prompts, and the engines follow each vendor's guid
    Every step has a recommended choice. You can skip, go back, or edit any earlier answer.
 4. Generate. The preview shows the prompt; switch between the AI version and the version built without AI,
    then **Use this prompt** to place it in the message field.
+
+The AI mode (Auto, On request, Off) decides when step suggestions are requested.
+
+### Language
+
+The interface is in English and uses the Hermes Desktop plugin translation API (`ctx.i18n`). A
+Brazilian Portuguese bundle ships with the plugin. By default the Studio follows the Hermes language; Settings
+(F3) can fix it to Português or English, which also sets the language of the questions and of the AI's notes.
+The prompt itself follows the language of your request.
 
 ## Keyboard
 
@@ -93,42 +123,27 @@ Keys and scope:
 - **Conflicts checked:** these keys were checked against Hermes Desktop's own bindings and the Linux Mint
   (Cinnamon) desktop, which uses only Alt with the F-keys.
 
-## Install
-
-Prompt Studio is installed from a checkout of this repository with `install.sh`, which needs the `hermes`
-CLI (on `PATH`, or set `HERMES_BIN`):
-
-```bash
-cd prompt-studio        # your checkout of this repository
-./install.sh            # default Hermes home (~/.hermes)
-./install.sh --profile <name>   # or a named profile
-./install.sh --home <path>      # or a custom Hermes home
-```
-
-It checks the manifest and the Hermes version, copies the package (with its desktop half) into
-`plugins/prompt-studio/`, and changes configuration only through the `hermes` CLI (`hermes plugins enable`,
-`hermes config set`). It is safe to re-run; run it again after `git pull` to update.
-
-Then close and reopen Hermes Desktop so the backend mounts the plugin's routes and copies the desktop half
-out. **Capabilities → Plugins** should show *Prompt Studio* enabled. Requires Hermes 0.20.0 or later.
-
-**Remote backend** (Desktop connected over SSH or a URL): run `install.sh` on the backend host, then copy
-`desktop/plugin.js` to `~/.hermes/desktop-plugins/prompt-studio/plugin.js` on the machine that runs
-the app.
-
-> This repository is not published yet. Once it is on GitHub, `hermes plugins install
-> <owner>/prompt-studio --enable` will install it directly; until then, use `install.sh` as above.
-
-## Choose the model
+## Configuration
 
 Nothing to set up: with no model picked, the Studio uses your Hermes default model for the questions and for
-reading the session context. To pick other models, open **Settings** (the gear in the Studio, or F3): one
-model for the questions and the final polish, and one for reading the session context (a fast model keeps F4
-quick). Each pick has its provider, model and reasoning level; the picks live in the plugin storage and the
+reading the session context.
+
+### Settings (F3)
+
+Open **Settings** (the gear in the Studio, or F3) to pick:
+
+- one model for the questions and the final polish;
+- one model for reading the session context (a fast model keeps F4 quick);
+- whether to read this session's context when opening;
+- the Studio language.
+
+Each model pick has its provider, model and reasoning level. The picks live in the plugin storage; the
 plugin never edits `config.yaml`.
 
-Without a pick, the suggestions and the final polish use the auxiliary task `prompt_studio`. Pick its model like any
-other side model:
+### Auxiliary task `auxiliary.prompt_studio`
+
+Without a pick, the suggestions and the final polish use the auxiliary task `prompt_studio`. Pick its model
+like any other side model:
 
 - **CLI:** `hermes model` → *Configure auxiliary models* → **Prompt Studio**
 - **config.yaml:**
@@ -142,24 +157,54 @@ other side model:
       timeout: 20
   ```
 
-`timeout` applies to each step's suggestion (it can lower the 20 s step limit); the final polish always gets its own 45 s budget. A fast model keeps each step at a few seconds. If `prompt_studio` pins no provider or model, the task
-follows the main model. With no `reasoning_effort` and no level in Settings, the plugin asks for `low` (except on
-Gemini, where thinking stays off).
+- `timeout` applies to each step's suggestion (it can lower the 20 s step limit); the final polish always
+  gets its own 45 s budget. A fast model keeps each step at a few seconds.
+- If `prompt_studio` pins no provider or model, the task follows the main model.
+- **Default effort:** with no `reasoning_effort` and no level in Settings, the plugin asks for `low`
+  (except on Gemini, where thinking stays off).
+- **Effort-aware `max_tokens`:** `max_tokens` covers thinking plus text, so at medium effort a smaller cap is
+  raised to 4096, and at high effort and above to 8192. A larger cap is kept.
 
-## Session context
+The REST routes and their request and response shapes are in `docs/CONTRACT.md`.
 
-When F4 opens the Studio in a session that already has a conversation, the context model reads its last
-user and assistant turns (tool output and reasoning are left out, secrets are masked) and writes a short summary.
-The summary only helps the step suggestions; it never goes into the final prompt, because the main model already
-sees that conversation. Nothing is read in a new session, with the AI off, or with *Read this session's context
-when opening* turned off in Settings.
+## Privacy and security
 
-## Language
+- **Session context is limited and optional.** When F4 opens the Studio in a session that already has a
+  conversation, the context model reads its last user and assistant turns (tool output and reasoning are
+  left out, secrets are masked) and writes a short summary. The summary only helps the step suggestions;
+  it never goes into the final prompt, because the main model already sees that conversation. Nothing is
+  read in a new session, with the AI off, or with *Read this session's context when opening* turned off in
+  Settings.
+- **Pasted text is escaped** so it cannot close its tags, and it is marked as data, not instructions.
+- **No secrets stored.** The plugin keeps only its preferences (such as the Settings picks) in the plugin
+  storage, declares no environment variables, and never edits `config.yaml`. Provider error text is
+  not shown in the UI; errors surface as codes with localized tooltips.
+- **Nothing is sent for you.** The finished prompt is placed in the message field; you decide whether to
+  send it.
 
-The interface is in English and uses the Hermes Desktop plugin translation API (`ctx.i18n`). A
-Brazilian Portuguese bundle ships with the plugin. By default the Studio follows the Hermes language; Settings
-(F3) can fix it to Português or English, which also sets the language of the questions and of the AI's notes.
-The prompt itself follows the language of your request.
+## Built for Claude Opus 5.5 and GPT-6 Astra
+
+The two models need different prompts, and the engines follow each vendor's guidance:
+
+- **Claude Opus 5.5** (Anthropic, *Prompting Claude Opus 5.5* and the prompting best practices):
+  - Pasted material goes in `<pasted_content>` tags with the documented note; long material goes above the task.
+  - Autonomy is stated plainly, and "explore first" is added when the request gives little context.
+  - Scope stays to what was asked.
+  - No "double-check your work" lines: Opus verifies on its own, so the prompt asks for evidence instead,
+    such as the commands run and what they returned.
+- **GPT-6 Astra** (OpenAI, *Using GPT-6* and *Rethinking skills and prompts for GPT-6 Astra*):
+  - The request is stated to take precedence over skills and `AGENTS.md`.
+  - An action request is framed as work to finish, not a plan to propose.
+  - Only the official testing line is used, without extra verification lines.
+  - The plain-writing lines apply to text answers.
+  - Pasted material goes last, inside `<document>` tags.
+- **Both models:**
+  - An optional **subagents** step. "Team" splits the task into independent parts that run in parallel,
+    and names one reviewer who did not write any of the work and starts from a fresh context.
+  - Examples go in `<example>` tags.
+  - Pasted text is escaped so it cannot close its tags, and it is marked as data, not instructions.
+
+`docs/PROMPT-DOCS-REVIEW.md` lists every rule line with the quote it comes from.
 
 ## How it follows the Hermes plugin guidelines
 
@@ -173,7 +218,10 @@ The prompt itself follows the language of your request.
 - **No self-updating code:** updates come only from a new catalog pin.
 - **Validation:** `hermes plugins validate .` passes.
 
-## Develop
+## Development
+
+The source is in `desktop/src/` (engines, studio core, translations, Desktop UI). `desktop/plugin.js` is the
+single file Hermes Desktop loads, so the build generates it from those sources. Never edit it by hand.
 
 ```bash
 node scripts/build.mjs            # inline desktop/src/* into desktop/plugin.js
@@ -181,16 +229,33 @@ node scripts/build.mjs --check    # fails if plugin.js is out of date
 node --test tests/desktop/*.test.mjs
 uvx --with fastapi --with httpx --with pyyaml pytest -q tests
 hermes plugins validate .
+python3 scripts/docs_sources.py check --docs-dir <snapshot dir>   # every doc quote in PROMPT-DOCS-REVIEW.md
 ```
 
-The UI flow tests (`tests/desktop/studio-flow.test.mjs`) need react, react-dom, jsdom, nanostores,
-@nanostores/react and esbuild. They are taken from `PROMPT_STUDIO_NODE_MODULES`, the repo's `node_modules` or the
-Hermes install; without them the tests are skipped with the reason printed, and with `CI=1` they fail instead.
+- The UI flow tests (`tests/desktop/studio-flow.test.mjs`) need react, react-dom, jsdom, nanostores,
+  @nanostores/react and esbuild. They are taken from `PROMPT_STUDIO_NODE_MODULES`, the repo's `node_modules`
+  or the Hermes install; without them the tests are skipped with the reason printed, and with `CI=1` they
+  fail instead.
+- The official doc snapshots used by `docs_sources.py` live outside the repository; see `docs/sources/README.md`.
+- Secret scanning: run `gitleaks` over the full history. `.gitleaksignore` lists the only accepted findings,
+  fake secrets in the redaction tests of one early commit; later test fixtures are marked inline with
+  `gitleaks:allow`.
 
-The source is in `desktop/src/` (engines, studio core, translations, Desktop UI). `desktop/plugin.js` is the single
-file Hermes Desktop loads, so the build generates it from those sources. Developer notes are in
-`docs/DESKTOP-DEV.md`, the REST contract is in `docs/CONTRACT.md`, and the reason for each step is in
-`docs/STEPS-REVIEW.md`.
+More notes: `docs/DESKTOP-DEV.md` (developer notes and workflow), `docs/CONTRACT.md` (REST contract),
+`docs/STEPS-REVIEW.md` (the reason for each step), `docs/PROMPT-DOCS-REVIEW.md` (each rule line and its
+doc quote). Release history is in `CHANGELOG.md`.
+
+## Repository layout
+
+```
+plugin.yaml, __init__.py   manifest and agent half (registers the prompt_studio auxiliary task)
+dashboard/                 backend REST routes, LLM adapter and session-context reader
+desktop/                   Desktop half: src/ sources and the generated plugin.js
+docs/                      contract, developer notes, step and doc-quote reviews, doc sources
+scripts/                   build, install validation and doc-quote check
+tests/                     Python tests and tests/desktop/ Node tests
+install.sh                 installer for a Hermes home or profile
+```
 
 ## Credits
 

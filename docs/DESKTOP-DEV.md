@@ -108,3 +108,9 @@ Use the left Alt: on some layouts the right Alt is AltGr. Alt+digits follow the 
 The AI model used by the studio is the auxiliary task `prompt_studio` in the Hermes config
 (`auxiliary.prompt_studio`) unless a model is picked in Settings (F3); picks live in the plugin storage
 (`helperModel`, `contextModel`, `readContext`, `language`) and the plugin never edits the config.
+
+## Workflow
+
+- Each fix starts with a failing test. The test is committed together with the fix or before it.
+- The commit message names the test that failed first.
+- An independent reviewer, who did not write the change, checks each release.
