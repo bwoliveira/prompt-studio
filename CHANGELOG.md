@@ -11,6 +11,8 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   generic "AI unavailable".
 - Billing refusals (402, no credits or quota) and bad requests (400) also get their own messages
   (`provider_payment`, `provider_bad_request`).
+- The Desktop half loads again on Hermes 0.20.0 to 0.21.4: it no longer imports `ListRow`/`ToggleRow`
+  by name (added to the SDK in 0.21.5) and falls back to its own settings rows when they are missing.
 
 ## 1.6.1
 

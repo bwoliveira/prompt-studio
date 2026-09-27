@@ -31,6 +31,8 @@ The two prompt engines were written for this plugin from the official Anthropic 
 ## Requirements
 
 - Hermes 0.20.0 or later (`requires_hermes: ">=0.20.0"` in `plugin.yaml`), with Hermes Desktop.
+  Checked against the Desktop SDK exports of 0.20.0 through 0.21.5 (run for real on 0.21.5 only); on Desktops
+  before 0.21.5, whose SDK lacks `ListRow`/`ToggleRow`, the Settings dialog uses built-in fallback rows.
 - The `hermes` CLI on `PATH`, or its path in `HERMES_BIN`.
 - Python 3.12 or later for the installer (set `PYTHON_BIN` to pick an interpreter).
 - **Platforms:** tested only on Linux (Linux Mint, with Hermes Desktop). Windows and macOS are not tested.
