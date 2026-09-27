@@ -1,1 +1,1 @@
-{"name":"prompt-studio","label":"Prompt Studio","description":"Step-by-step prompt builder for Claude Opus 5.5 and GPT-6 Astra: per-step AI suggestions and an AI-written final prompt.","version":"1.5.4","api":"plugin_api.py"}
+{"name":"prompt-studio","label":"Prompt Studio","description":"Step-by-step prompt builder for Claude Opus 5.5 and GPT-6 Astra: per-step AI suggestions and an AI-written final prompt.","version":"1.5.5","api":"plugin_api.py"}

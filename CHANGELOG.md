@@ -2,6 +2,12 @@
 
 Versions come from the commit subjects (there are no git tags). Newest first.
 
+## 1.5.5
+
+- README: banner and example images (`docs/images/`), install with `hermes plugins install
+  bwoliveira/prompt-studio` as documented in the official plugin guide, `install.sh` kept as the
+  checkout option. No behaviour change.
+
 ## 1.5.4
 
 - Repository prepared for publishing: README rewritten, this CHANGELOG, workflow note in `docs/DESKTOP-DEV.md` (CT-11).

@@ -1,5 +1,7 @@
 # Prompt Studio
 
+![Prompt Studio banner: guided prompt builder for Hermes Desktop](docs/images/banner.png)
+
 Prompt Studio is a Hermes Desktop plugin that turns a rough request into a well-built prompt for
 **Claude Opus 5.5** or **GPT-6 Astra**. It asks the few questions that change the result, one step at a
 time, with a recommended answer on each step. Then it writes the prompt and places it in the message
@@ -34,7 +36,37 @@ The two prompt engines were written for this plugin from the official Anthropic 
 
 ## Install
 
-The repository is private, so Prompt Studio is installed from a checkout with `install.sh`:
+Install it with the Hermes plugin command, run on the machine where the Hermes backend runs:
+
+```bash
+hermes plugins install bwoliveira/prompt-studio --enable
+```
+
+Without `--enable`, Hermes asks `Enable 'prompt-studio' now? [y/N]`; `--no-enable` installs it disabled.
+For a reproducible install, pin a full 40-character commit SHA (tags, branches and short SHAs are not
+accepted):
+
+```bash
+hermes plugins install bwoliveira/prompt-studio --ref <40-character-commit-sha>
+```
+
+The repository is private for now. `hermes plugins install` never asks for a password: it uses
+`GITHUB_TOKEN` or `GH_TOKEN` from your `.env`, then your `gh auth login`, then your git credential helper.
+
+Update later with `hermes plugins update prompt-studio`. Then close and reopen Hermes Desktop so the
+backend mounts the plugin's routes and copies the desktop half out. **Capabilities → Plugins** should show
+*Prompt Studio* enabled.
+
+These commands come from the official plugin guide
+([Plugins](https://hermes-agent.nousresearch.com/docs/user-guide/features/plugins)).
+
+**Remote backend** (Desktop connected over SSH or a URL): run the install on the backend host, then copy
+`desktop/plugin.js` to `~/.hermes/desktop-plugins/prompt-studio/plugin.js` on the machine that runs
+the app.
+
+### Install from a checkout
+
+`install.sh` does the same from a local clone, and can target a profile or another Hermes home:
 
 ```bash
 git clone https://github.com/bwoliveira/prompt-studio.git
@@ -49,14 +81,9 @@ copies the package (with its desktop half) into `plugins/prompt-studio/`, and ch
 through the `hermes` CLI (`hermes plugins enable`, `hermes config set`). It is safe to re-run; run it again
 after `git pull` to update.
 
-Then close and reopen Hermes Desktop so the backend mounts the plugin's routes and copies the desktop half
-out. **Capabilities → Plugins** should show *Prompt Studio* enabled.
-
-**Remote backend** (Desktop connected over SSH or a URL): run `install.sh` on the backend host, then copy
-`desktop/plugin.js` to `~/.hermes/desktop-plugins/prompt-studio/plugin.js` on the machine that runs
-the app.
-
 ## Usage
+
+![Prompt Studio step with option cards, the AI-recommended choice and its reason, and a key on every control](docs/images/step-question.png)
 
 1. Write your request in the message field and press **F4**, or click **✨ Prompt Studio**, or run
    *Prompt Studio* from the command palette.
@@ -77,6 +104,8 @@ the app.
    Every step has a recommended choice. You can skip, go back, or edit any earlier answer.
 4. Generate. The preview shows the prompt; switch between the AI version and the version built without AI,
    then **Use this prompt** to place it in the message field.
+
+![The final prompt preview with the step answers and the Use this prompt, See the version without AI, Back and Cancel buttons](docs/images/step-preview.png)
 
 The AI mode (Auto, On request, Off) decides when step suggestions are requested.
 
@@ -136,6 +165,8 @@ Open **Settings** (the gear in the Studio, or F3) to pick:
 - one model for reading the session context (a fast model keeps F4 quick);
 - whether to read this session's context when opening;
 - the Studio language.
+
+![Prompt Studio settings opened with F3: questions model, context model, reading context on open, and language](docs/images/step-settings.png)
 
 Each model pick has its provider, model and reasoning level. The picks live in the plugin storage; the
 plugin never edits `config.yaml`.
@@ -215,7 +246,9 @@ The two models need different prompts, and the engines follow each vendor's guid
 - **Host-tracked resources:** the key listener goes through `ctx.addEventListener`, preferences through
   `ctx.storage`, text through `ctx.i18n`, and colours through theme variables.
 - **Declared capabilities match reality:** no tools, hooks, middleware or environment variables.
-- **No self-updating code:** updates come only from a new catalog pin.
+- **No self-updating code:** updates come only through `hermes plugins update` or a new catalog pin.
+- **Installed with the Hermes CLI:** `hermes plugins install bwoliveira/prompt-studio`; `install.sh` changes
+  configuration only through `hermes plugins enable` and `hermes config set`.
 - **Validation:** `hermes plugins validate .` passes.
 
 ## Development
@@ -264,8 +297,9 @@ The idea for Prompt Studio came from:
 - the [grill-tab](https://github.com/thanhan-a17/grill-tab) repository by thanhan-a17, which asks one
   decision at a time and turns the answers into a brief;
 - two prompt-builder sites for specific models: a Claude Opus 5.5 prompt builder
-  (<https://dreamy-mudra-cj75.here.now/>) and a GPT-6 Astra prompt builder
-  (<https://sable-valley-eyrb.here.now/>, MIT source at <https://github.com/Eddienews/astra-prompt-builder>).
+  ([dreamy-mudra-cj75.here.now](https://dreamy-mudra-cj75.here.now/)) and a GPT-6 Astra prompt builder
+  ([sable-valley-eyrb.here.now](https://sable-valley-eyrb.here.now/), MIT source at
+  [Eddienews/astra-prompt-builder](https://github.com/Eddienews/astra-prompt-builder)).
 
 Prompt Studio's prompt engines were written from scratch from the official Anthropic and OpenAI
 documentation and contain no code from those sites. Parts of the packaging and backend scaffolding are
