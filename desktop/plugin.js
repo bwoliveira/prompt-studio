@@ -2094,6 +2094,9 @@ function askNext() {
   refreshSuggestion()
 }
 
+// Session focused when the Studio opened; F9 sends only there (see sendPreview).
+let openedSessionId = null
+
 function startFromComposer() {
   const state = $studio.get()
   if (state.status !== 'idle') return
@@ -2116,6 +2119,8 @@ function startFromComposer() {
   $helpOpen.set(false)
   // Settings are read from storage on every opening (storage is the source of truth).
   loadSettings()
+  // F9 sends only into the session the Studio was opened in (see sendPreview).
+  openedSessionId = host.state?.focusedSessionId?.get?.() ?? null
   update({ type: 'START', attachments, intent })
   startContextRead()
   askNext()
@@ -2339,9 +2344,10 @@ function usePreview() {
   update({ type: 'RESET' })
 }
 
-// F9 on the preview: send as if the user pressed Enter, in the session the Studio is bound to.
+// F9 on the preview: send as if the user pressed Enter, in the session the Studio was opened in.
 // host.composer.submit is fail-closed (false = not sent, e.g. a turn is running): then the prompt
-// is placed in the composer with a short note, so it is never lost.
+// is placed in the composer with a short note, so it is never lost. If the focused session changed
+// since opening, it is not sent either (it would land in another conversation).
 function sendPreview() {
   const state = $studio.get()
   if (state.status !== 'preview' || !state.preview) return
@@ -2350,7 +2356,7 @@ function sendPreview() {
   composerAdapter.forwardAttachments(state.attachments)
   let sent = false
   try {
-    sent = typeof host.composer?.submit === 'function' && host.composer.submit(sessionId, text) === true
+    sent = sessionId === openedSessionId && typeof host.composer?.submit === 'function' && host.composer.submit(sessionId, text) === true
   } catch {
     sent = false
   }

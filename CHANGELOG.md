@@ -1,6 +1,14 @@
 # Changelog
 
-Versions come from the commit subjects (there are no git tags). Newest first.
+Versions come from the commit subjects; releases from 1.6.0 on are also git tags. Newest first.
+
+## 1.6.1
+
+- F9 sends only into the session the Studio was opened in. If the focused session changed since
+  opening, the prompt is placed in the composer with the short note instead of being sent into the
+  other conversation.
+- Tests: focus assertions compare DOM nodes with a boolean, so a failing assertion cannot make Node
+  format the whole jsdom tree (the cause of the multi-gigabyte test runs).
 
 ## 1.6.0
 

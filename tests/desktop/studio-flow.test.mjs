@@ -783,22 +783,22 @@ test('U1: focus lands on the first logical target after every step and status ch
   $('[data-slot="composer-rich-input"]').focus()
   await press('F4')
   await waitFor(() => $('[data-studio-paste-open]'))
-  assert.equal(active(), $('[data-studio-paste-open]'), 'paste step: "+ Paste text"')
+  assert.ok(active() === ($('[data-studio-paste-open]')), 'paste step: "+ Paste text"')
   await press('Alt+C')
-  assert.equal(active(), $('[data-studio-answer-input]'), 'paste field opened: textarea')
+  assert.ok(active() === ($('[data-studio-answer-input]')), 'paste field opened: textarea')
   await press('F10')
   await openStudio(INTENT, 'manual')
   await press('F6')
-  assert.equal(active(), $('[data-studio-answer-input]'), 'text step: textarea')
+  assert.ok(active() === ($('[data-studio-answer-input]')), 'text step: textarea')
   for (let i = 0; i < 10 && !$('[data-studio-options]'); i += 1) await press($('[data-studio-skip]') ? 'F6' : 'F5')
   assert.ok($('[data-studio-options]'))
-  assert.equal(active(), $('[data-studio-recommend]') || $('[data-studio-option]'), 'choice step: recommended option')
+  assert.ok(active() === ($('[data-studio-recommend]') || $('[data-studio-option]')), 'choice step: recommended option')
   const beforeAsk = suggestFields().length
   await press('Alt+S'); await waitFor(() => suggestFields().length > beforeAsk && notLoading())
   await press('Alt+D'); await waitFor(() => !$('[data-studio-ai-discard]'))
   assert.ok(inStrip(), `after Discard focus stays in the studio (${active()?.tagName})`)
   await press('F9'); await waitFor(() => $('[data-studio-send-prompt]'))
-  assert.equal(active(), $('[data-studio-send-prompt]'), 'preview: "Send now"')
+  assert.ok(active() === ($('[data-studio-send-prompt]')), 'preview: "Send now"')
   await press('F8'); await waitFor(() => !$('[data-studio-preview]'))
   assert.ok(inStrip(), 'back to steps keeps focus in the studio')
 })
@@ -1474,6 +1474,20 @@ test('FIN-1: F9 on the preview sends the prompt through host.composer.submit for
   assert.deepEqual(composer().submits, [{ sessionId: 'sess-live', text: prompt }])
   assert.ok($('[data-studio-strip]') === null, 'studio closed')
   assert.equal(draft(), '', 'composer not left with a copy')
+})
+
+test('FIN-1: F9 does not send into another session when the focus moved after opening; it places with the note', { skip }, async () => {
+  await toPreview()
+  const prompt = $('[data-studio-preview-text]').textContent
+  ui.host.state.focusedSessionId.set('sess-other')
+  try {
+    await press('F9')
+    assert.equal(composer().submits.length, 0, 'not sent to the other session')
+    assert.equal(draft(), prompt, 'prompt never lost')
+    assert.ok(ui.notifications.some(n => n.message === ui.i18n.bundles.en.notify.placedNotSent), 'placed-not-sent note')
+  } finally {
+    ui.host.state.focusedSessionId.set('sess-live')
+  }
 })
 
 test('FIN-1: when submit is refused (turn running) the prompt is placed in the composer with a short note', { skip }, async () => {
