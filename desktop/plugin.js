@@ -429,13 +429,18 @@ const READ_ONLY_LINE = 'For requests to answer, explain, review, diagnose, or pl
 // gpt6-using.md, adapted from system prompt to this request (PROMPT-DOCS-REVIEW E7): "treat these as
 // instructions to do the work and take action. Do not stop at acknowledging capability (e.g. "Yes…"),
 // proposing a plan, or offering to continue. Do not settle for a partial or "helpful enough" solution
-// that does not fully satisfy the user's task to save time, effort or tokens."
-const ACTION_LINE = 'Treat this request as an instruction to do the work and take action. Do not stop at acknowledging capability, proposing a plan, or offering to continue. Do not settle for a partial or "helpful enough" solution that does not fully satisfy the task to save time, effort or tokens.'
+// that does not fully satisfy the user's task to save time, effort or tokens. If a task requires sustained
+// work, complete all the necessary work until the intended outcome is fulfilled."
+const ACTION_LINE = 'Treat this request as an instruction to do the work and take action. Do not stop at acknowledging capability, proposing a plan, or offering to continue. Do not settle for a partial or "helpful enough" solution that does not fully satisfy the task to save time, effort or tokens. If a task requires sustained work, complete all the necessary work until the intended outcome is fulfilled.'
+// gpt6-using.md (verbatim), autonomous-work paragraph; proactive action deliverables only. It carries its own
+// stop rule, so CONFIRM_LINE is dropped there (gpt56-prompt-guidance.md: conflicting rules; state each rule once).
+const AUTONOMOUS_LINE = "When the user expresses intent to perform new work or fix an existing issue, persist until the user's intended goal is complete. Progress autonomously towards the user's goal (e.g. creating isolated worktrees / checkouts if needed, resolving merge conflicts, read-only actions, creating draft PRs etc.) unless they are clearly destructive or irreversible."
 // gpt6-using.md (verbatim). The backend REQUIRED_LINES guard protects this line.
 const NO_HYPOTHETICAL_LINE = 'Do not introduce unsolicited warnings, disclaimers, approval flows, or safety/compliance checklists due to hypothetical risk.'
 // gpt6-using.md: "When instructions leave room for interpretation, it uses the context it has to fill
-// in routine gaps and asks focused questions when the answer could change the outcome."
-const GUIDED_LINE = 'Before acting, ask focused questions about anything whose answer could change the outcome; fill routine gaps from context and state the assumptions you made.'
+// in routine gaps and asks focused questions when the answer could change the outcome." (adapted; asked after
+// AUTHORIZED_LINE: "Prompt the model to ask for approval only after preparing a concrete, reviewable result.")
+const GUIDED_LINE = 'Ask focused questions when the answer could change the outcome; fill routine gaps from context and state the assumptions you made.'
 
 // Frontend (vendor, previous family; the GPT-6 guide is silent on frontend).
 // frontend-prompt.md, adapted to the imperative: "You build feature-complete controls, states, and views
@@ -462,8 +467,8 @@ const UI_APP = /\b(apps?|aplicativos?)\b/
 // gpt6-rethinking-prompts.md: "If the task includes getting the implementation running, inspecting the
 // result, and fixing what fails, make that part of the request."
 const PERSIST_LINE = 'Carry the task through to a working result: get it running, inspect the result and fix what fails before reporting back.'
-// gpt6-using.md (verbatim).
-const TEST_LINE = 'Do not write tests for reversible, low-impact changes that mirror the implementation. If you do choose to verify your work with tests, make sure that the tests are meaningful and necessary to verify implementation.'
+// gpt6-using.md (verbatim, both paragraphs of the testing prompt).
+const TEST_LINE = 'Do not write tests for reversible, low-impact changes that mirror the implementation. If you do choose to verify your work with tests, make sure that the tests are meaningful and necessary to verify implementation.\nRun tests appropriate to the change and complete required checks. Once those pass, broaden or repeat testing only when new changes, failures, or unresolved concerns justify it; otherwise, continue toward completing the task.'
 // gpt6-rethinking-prompts.md: "This is where it helps to define completion before starting."
 const STATE_LINE = 'When you stop, say whether the task is fully done; if it is not, name what is left and what it waits on.'
 // gpt6-rethinking-prompts.md: "say what you want explored and where it should stop." Stop rule from
@@ -629,7 +634,7 @@ function buildSafe(brief) {
   const autonomy = pick(b.autonomy, AUTONOMIES, 'balanced')
   const format = pick(b.format, FORMATS, 'auto')
   const length = pick(b.length, LENGTHS, 'balanced')
-  const subagents = pick(b.subagents, SUBAGENTS, ['text', 'answer'].includes(deliverable) ? 'auto' : 'team')
+  const subagents = pick(b.subagents, SUBAGENTS, recommend())
   const notes = []
   const sections = []
   const add = (id, title, lines) => {
@@ -649,17 +654,25 @@ function buildSafe(brief) {
     : !making && ui && UI_EDIT.test(goalText) ? [FRONTEND_CHANGE_LINES] : []
   add('requirements', 'REQUIREMENTS', [b.requirements, ...frontend])
   if (b.examples.trim()) add('examples', 'EXAMPLES', [b.examples, EXAMPLES_LINE])
-  add('precedence', 'PRECEDENCE', [PRIORITY_LINE, TRANSPARENCY_LINE])
+  // Answers and texts: no skill/approval process lines (gpt56-prompt-guidance.md: remove process
+  // instructions for behavior the model already performs reliably; repeated ask-first rules).
+  const light = ['text', 'answer'].includes(deliverable)
+  if (!light) add('precedence', 'PRECEDENCE', [PRIORITY_LINE, TRANSPARENCY_LINE])
 
-  if (autonomy === 'guided') {
-    add('autonomy', 'AUTONOMY', [GUIDED_LINE, READ_ONLY.includes(deliverable) ? READ_ONLY_LINE : '', CONFIRM_LINE])
+  const readOnly = READ_ONLY.includes(deliverable) ? READ_ONLY_LINE : ''
+  const autonomous = autonomy === 'proactive' && acts
+  if (light) {
+    add('autonomy', 'AUTONOMY', [readOnly, autonomy === 'guided' ? GUIDED_LINE : '', autonomy === 'proactive' ? NO_HYPOTHETICAL_LINE : ''])
+  } else if (autonomy === 'guided') {
+    add('autonomy', 'AUTONOMY', [AUTHORIZED_LINE, GUIDED_LINE, readOnly, CONFIRM_LINE])
   } else {
     add('autonomy', 'AUTONOMY', [
-      acts ? ACTION_LINE : READ_ONLY.includes(deliverable) ? READ_ONLY_LINE : '',
+      acts ? ACTION_LINE : readOnly,
+      autonomous ? AUTONOMOUS_LINE : '',
       AUTHORIZED_LINE,
       APPROVAL_LINE,
       NO_PERMISSION_LINE,
-      CONFIRM_LINE,
+      autonomous ? '' : CONFIRM_LINE,
       autonomy === 'proactive' ? NO_HYPOTHETICAL_LINE : ''
     ])
   }
@@ -675,13 +688,15 @@ function buildSafe(brief) {
 
   add('done', 'DONE WHEN', [
     b.success.trim() ? b.success : DONE_LINES[deliverable],
-    EXPLORING.includes(deliverable) ? EXPLORE_STOP_LINE : '',
-    acts && autonomy !== 'guided' ? PERSIST_LINE : '',
+    // JSON output leaves no room for prose (gpt56-prompt-guidance.md: conflicting rules).
+    EXPLORING.includes(deliverable) && format !== 'json' ? EXPLORE_STOP_LINE : '',
+    acts ? PERSIST_LINE : '',
     deliverable === 'implementation' ? TEST_LINE : '',
-    acts || EXPLORING.includes(deliverable) ? STATE_LINE : ''
+    (acts || EXPLORING.includes(deliverable)) && format !== 'json' ? STATE_LINE : ''
   ])
 
   if (subagents === 'team') add('subagents', 'SUBAGENTS', [DELEGATE_LINE, SPLIT_LINE, REVIEWER_LINE, LEGIBLE_LINE, REAL_LINE])
+  else if (subagents === 'auto' && !light) add('subagents', 'SUBAGENTS', [DELEGATE_LINE, LEGIBLE_LINE])
   else if (subagents === 'direct') add('subagents', 'SUBAGENTS', [DIRECT_LINE])
 
   if (b.thirdPartyText.trim()) {
@@ -693,6 +708,12 @@ function buildSafe(brief) {
     notes.push(`Conflict: ${field} "${values.join('", "')}" contradicts what the draft asks for.`)
   }
   return { prompt: sections.map(s => `${s.title}\n${s.body}`).join('\n\n'), sections, notes }
+}
+
+// gpt6-using.md: "Specify when and how much it should use subagents for parallel work." The doc's own
+// tuning prompt (DELEGATE_LINE) is conditional; a team (split + reviewer) only when the user picks it.
+function recommend() {
+  return 'auto'
 }
 
 function build(brief) {
@@ -708,7 +729,8 @@ const ENGINE = {
   options: { deliverable: DELIVERABLES, autonomy: AUTONOMIES, format: FORMATS, length: LENGTHS, subagents: SUBAGENTS },
   defaults: { deliverable: 'auto', autonomy: 'balanced', format: 'auto', length: 'balanced', subagents: null },
   analyze,
-  build
+  build,
+  recommend
 }
 return ENGINE
 })()
