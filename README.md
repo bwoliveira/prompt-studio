@@ -197,8 +197,8 @@ like any other side model:
   without AI (Off mode).
 - **Command Code:**
   - For Claude models use the provider `commandcode-anthropic` (alias `commandcode-claude`), not `commandcode`.
-    Hermes sends `commandcode` through chat completions, and Command Code answers 400 ("must be called via
-    /provider/v1/messages") for Claude models.
+    Hermes sends `commandcode` through chat completions, and a tester saw Command Code answer 400 for Claude
+    models there, asking for the `/provider/v1/messages` endpoint.
   - Pick the model explicitly: in Settings (F3), e.g. `claude-opus-5-5` on `commandcode-anthropic`, or with
     `auxiliary.prompt_studio.provider` and `model` in `config.yaml`. The Studio then passes that provider and model
     to Hermes as given.
