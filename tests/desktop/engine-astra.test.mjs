@@ -322,3 +322,14 @@ test('AS-9 guard: no sentence is repeated in the Astra prompt, so the writer has
     }
   }
 })
+
+test('AS-10: plain-language line appears once for writing, code, review and workflow drafts', () => {
+  const PLAIN = 'Use plain, simple language: familiar words, concrete examples, and precise verbs. Prefer active voice and direct statements.'
+  const count = (brief) => ENGINE.build(brief).prompt.split(PLAIN).length - 1
+  for (const deliverable of ['implementation', 'review', 'workflow', 'text', 'answer', 'analysis']) {
+    assert.equal(count({ goal: 'Fix the login bug in the React app', deliverable }), 1, deliverable)
+  }
+  for (const deliverable of ['plan', 'data']) {
+    assert.equal(count({ goal: 'Fix the login bug in the React app', deliverable }), 0, deliverable)
+  }
+})
