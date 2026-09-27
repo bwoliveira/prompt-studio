@@ -307,7 +307,10 @@ test('AS-7: implementation test block is the full doc block', () => {
   assert.ok(!ENGINE.build({ goal: 'Automatize o deploy', deliverable: 'workflow' }).prompt.includes(TEST_2))
 })
 
-test('AS-9: no sentence is repeated in the Astra prompt, so the writer has nothing to merge', () => {
+// AS-9 guard (passes before and after the fix): the Astra writer is told to state each rule once and no
+// longer to "merge" repeated rules, which is only safe while the baseline repeats nothing.
+// The regression test for the fix itself is in tests/test_suggest_engine.py.
+test('AS-9 guard: no sentence is repeated in the Astra prompt, so the writer has nothing to merge', () => {
   const drafts = ['Fix the login bug in the React app and deploy it', 'Crie um script de backup diario para as fotos da familia',
     'Write a short email to the team about the release', 'Analise os logs do servidor e resuma os erros']
   for (const goal of drafts) {
