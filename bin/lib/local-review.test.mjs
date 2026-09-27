@@ -191,6 +191,8 @@ test('bin/pr pushes exactly the reviewed commit and stops if the branch moved', 
   assert.match(pr, /REVIEWED="\$\(git rev-parse HEAD\)"/);
   assert.match(pr, /\[\[ "\$\(git rev-parse HEAD\)" == "\$REVIEWED" \]\]/);
   assert.match(pr, /git push --quiet origin "\$REVIEWED:refs\/heads\/\$BRANCH"/);
+  assert.match(pr, /gh pr merge "\$BRANCH" --squash --match-head-commit "\$REVIEWED"/, 'merges only the reviewed commit');
+  assert.ok(pr.indexOf('bin/review --base') < pr.indexOf('gh pr merge'), 'the review runs before the merge');
 });
 
 // Fake git on PATH: passes everything to the real git, but on the first --git-common-dir query (right after the
@@ -224,7 +226,8 @@ test('AGENTS.md asks Bruno for /review before the Codex review and sends fixes t
   const agents = readFileSync(new URL('../../AGENTS.md', import.meta.url), 'utf8');
   assert.match(agents, /ask Bruno to type `\/review`/);
   assert.match(agents, /does not replace it with a subagent review/);
-  assert.match(agents, /never a\s+plain `git push`/);
+  assert.match(agents, /never\s+a plain `git push`/);
+  assert.match(agents, /merges it \(squash, only the reviewed commit\) without\s+waiting for Bruno/);
   const pr = readFileSync(new URL('../pr', import.meta.url), 'utf8');
   assert.match(pr, /bin\/review --base origin\/main/);
 });

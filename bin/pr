@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Pushes the current branch and opens its pull request. Before the push it runs the local Codex review (bin/review):
-# P0, P1 or P2 block it. There is no CI review on GitHub here; the Hermes /review comes first (AGENTS.md).
+# Pushes the current branch, opens its pull request and merges it (squash). Before the push it runs the local Codex
+# review (bin/review): P0, P1 or P2 block it. There is no CI review on GitHub here; the Hermes /review comes first
+# (AGENTS.md).
 # Usage: bin/pr [--skip-review] ["title"]   (--skip-review only with Bruno's authorization; default title: last commit)
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
@@ -27,5 +28,8 @@ git branch --quiet --set-upstream-to="origin/$BRANCH"
 if ! gh pr view "$BRANCH" >/dev/null 2>&1; then
   gh pr create --base main --head "$BRANCH" --title "${1:-$(git log -1 --format=%s)}" --fill >/dev/null
 fi
-gh pr view "$BRANCH" --json url,state -q '.url + " (" + .state + ")"'
-echo "Fixes after the PR is open: commit and run bin/pr again (never a plain git push)."
+gh pr view "$BRANCH" --json url -q .url
+# Merge only the reviewed commit; the remote branch goes away, the local one stays until you delete it.
+gh pr merge "$BRANCH" --squash --match-head-commit "$REVIEWED"
+gh api -X DELETE "repos/{owner}/{repo}/git/refs/heads/$BRANCH" >/dev/null 2>&1 || true
+gh pr view "$BRANCH" --json state,mergeCommit -q '.state + " " + (.mergeCommit.oid // "")'

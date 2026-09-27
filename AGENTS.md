@@ -28,5 +28,6 @@ Work on a branch (`<type>/<subject>`), one subject per PR. There is no CI review
 2. **Local Codex review (`bin/review`).** It runs by itself inside `bin/pr` with the Codex CLI; P0, P1 or P2 block the
    push. Fix, commit and run `bin/pr` again.
 
-Fixes after the PR is open do not repeat `/review` unless Bruno asks; they always go up through `bin/pr`, never a
-plain `git push`. `bin/pr --skip-review` only with Bruno's authorization. Merging the PR is Bruno's call.
+When the Codex review approves, `bin/pr` pushes, opens the PR and merges it (squash, only the reviewed commit) without
+waiting for Bruno. Fixes after `/review` do not repeat it unless Bruno asks; they always go up through `bin/pr`, never
+a plain `git push`. `bin/pr --skip-review` only with Bruno's authorization.
