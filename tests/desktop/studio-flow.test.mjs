@@ -125,7 +125,15 @@ export const $locale = nanoAtom('en')
 export const usePluginI18n = () => { useStore($locale); return translate }
 export const notifications = []
 export const host = {
-  state: { cwd: nanoAtom('/root'), profile: nanoAtom('default'), model: nanoAtom('claude-opus-5-5'), focusedStoredSessionId: nanoAtom(null), focusedSessionProfile: nanoAtom('default') },
+  state: { cwd: nanoAtom('/root'), profile: nanoAtom('default'), model: nanoAtom('claude-opus-5-5'), focusedStoredSessionId: nanoAtom(null), focusedSessionId: nanoAtom('sess-live'), focusedSessionProfile: nanoAtom('default') },
+  // host.composer (desktop-plugin-sdk.md): submit is synchronous and fail-closed (false = not sent).
+  composer: {
+    submits: [],
+    focuses: [],
+    submitResult: true,
+    submit(sessionId, text) { this.submits.push({ sessionId, text }); return this.submitResult },
+    focus(sessionId) { this.focuses.push(sessionId) }
+  },
   notify: n => { notifications.push(n) },
   notifyError: (_e, message) => { notifications.push({ kind: 'error', message }) }
 }
@@ -605,15 +613,17 @@ test('keys F5–F9 press the step buttons, also with the cursor in the answer fi
   assert.notEqual(currentText(), question)
   // Modifiers are not ours (Cinnamon uses Alt+F5/F7/F8).
   assert.equal((await press('F5', document.body, { altKey: true })).defaultPrevented, false)
-  // F9 = Generate now, then F9 = Use this prompt, F8 in the preview = Back to steps.
+  // F9 = Generate now, then F9 = Send now, F8 in the preview = Back to steps.
   await press('F9')
   assert.ok($('[data-studio-preview]'))
   await press('F8')
   assert.equal($('[data-studio-preview]'), null)
+  ui.host.composer.submits.length = 0
   await press('F9')
   await press('F9')
-  assert.equal($('[data-studio-strip]'), null, 'studio closed after using the prompt')
-  assert.ok(draft().length > 50, 'prompt placed in the composer')
+  assert.equal($('[data-studio-strip]'), null, 'studio closed after sending the prompt')
+  assert.equal(ui.host.composer.submits.length, 1, 'prompt sent')
+  assert.ok(ui.host.composer.submits[0].text.length > 50, 'the whole prompt was sent')
   assert.equal((await press('F9')).defaultPrevented, false, 'listener removed when closed')
 })
 
@@ -785,8 +795,8 @@ test('U1: focus lands on the first logical target after every step and status ch
   await press('Alt+S'); await waitFor(() => suggestFields().length > beforeAsk && notLoading())
   await press('Alt+D'); await waitFor(() => !$('[data-studio-ai-discard]'))
   assert.ok(inStrip(), `after Discard focus stays in the studio (${active()?.tagName})`)
-  await press('F9'); await waitFor(() => $('[data-studio-use-prompt]'))
-  assert.equal(active(), $('[data-studio-use-prompt]'), 'preview: "Use this prompt"')
+  await press('F9'); await waitFor(() => $('[data-studio-send-prompt]'))
+  assert.equal(active(), $('[data-studio-send-prompt]'), 'preview: "Send now"')
   await press('F8'); await waitFor(() => !$('[data-studio-preview]'))
   assert.ok(inStrip(), 'back to steps keeps focus in the studio')
 })
@@ -953,16 +963,16 @@ async function toEnumStep(mode) {
 }
 const optionLabels = () => [...document.querySelectorAll('[data-studio-option]')].map(el => el.getAttribute('data-studio-option'))
 
-test('Auto, choice step: while the AI loads no option is recommended; the local pick is a plain option with its Alt key', { skip }, async () => {
+test('Auto, choice step: while the AI loads no option card is shown (they depend on it)', { skip }, async () => {
   const pending = holdSuggest()
-  const local = await toEnumStep('auto')
+  await toEnumStep('auto')
   assert.ok(pending.length >= 1, 'AI asked automatically')
   assert.ok($('[data-studio-ai-loading]'), 'AI row loading')
   assert.equal(recommends().length, 0, 'no recommended button while loading')
   assert.equal(stars().length, 0, 'no star while loading')
-  assert.ok(optionLabels().includes(local), 'local pick listed as a normal option')
-  assert.match($(`[data-studio-option="${local}"] [data-studio-key]`).textContent, /^Alt\+\d$/)
+  assert.equal(optionLabels().length, 0, 'no option cards while loading')
   assertEverythingHasAKey()
+  const local = pending.at(-1).body.field.recommended
   pending.at(-1).resolve({ ok: true, value: local, reason: 'x' })
   await waitFor(notLoading)
 })
@@ -970,7 +980,7 @@ test('Auto, choice step: while the AI loads no option is recommended; the local 
 test('Auto, choice step: the AI pick is the single recommended button (F5); no F7; AI agreeing gives one button too', { skip }, async () => {
   const pending = holdSuggest()
   const local = await toEnumStep('auto')
-  const other = optionLabels().find(o => o !== local)
+  const other = pending.at(-1).body.field.options.find(o => o !== local)
   pending.at(-1).resolve({ ok: true, value: other, reason: 'porque sim' })
   await waitFor(notLoading)
   assert.equal(recommends().length, 1)
@@ -1331,13 +1341,12 @@ test('CX-1: an Auto suggestion waits for a pending context read and then carries
   backend.calls.length = 0
   $('[data-slot="composer-rich-input"]').textContent = INTENT
   await click('[data-studio-open]')
-  assert.match($('[data-studio-context-status]').textContent, /Reading/)
-  await pasteStep('')
+  assert.match($('[data-studio-context-loading]').textContent, /Reading/)
   await settle() // intentional: proves no /suggest before the context read ends
   assert.equal(suggestCalls().length, 0, 'waits for the context read')
-  // Manual actions are not blocked meanwhile.
-  assert.ok($('[data-studio-back]') && !$('[data-studio-back]').disabled)
   release()
+  await waitFor(() => $('[data-studio-skip]'))
+  await pasteStep('')
   await waitFor(() => suggestCalls().length >= 1)
   assert.equal(suggestCalls().length, 1)
   assert.equal(suggestCalls()[0].body.session_context, 'RESUMO LENTO')
@@ -1363,9 +1372,10 @@ test('CX-1: a failed or timed-out context read shows a short note and the sugges
     backend.calls.length = 0
     $('[data-slot="composer-rich-input"]').textContent = INTENT
     await click('[data-studio-open]')
-    await pasteStep('')
     // The 20 ms client deadline elapses in real time; wait for its outcome instead of a fixed sleep.
-    await waitFor(() => $('[data-studio-context-status]')?.textContent.includes(ui.i18n.bundles.en.errors.timeout) && suggestCalls().length >= 1)
+    await waitFor(() => $('[data-studio-context-status]')?.textContent.includes(ui.i18n.bundles.en.errors.timeout))
+    await pasteStep('')
+    await waitFor(() => suggestCalls().length >= 1)
     assert.equal($('[data-studio-context-status]').textContent.includes(ui.i18n.bundles.en.errors.timeout), true)
     assert.equal(suggestCalls().length, 1, 'suggestion went on')
     assert.equal('session_context' in suggestCalls()[0].body, false)
@@ -1419,4 +1429,186 @@ test('CX-1: language "pt" with Hermes in English shows Portuguese strings and qu
   ui.i18n.locale = 'en'
   await ui.act(async () => { ui.$locale.set('en') })
   await freshSettings(null)
+})
+
+
+// ---------------------------------------------------------------- final step: send now (F9) or edit first (Alt+E)
+const composer = () => ui.host.composer
+function resetComposer() { composer().submits.length = 0; composer().focuses.length = 0; composer().submitResult = true }
+async function toPreview() {
+  resetComposer()
+  await freshSettings(null)
+  await openStudio()
+  await click('[data-studio-generate]')
+  await waitFor(() => $('[data-studio-preview]'))
+}
+
+test('FIN-1: the preview offers Send now (F9) and Put in composer to edit (Alt+E); both keys shown and listed', { skip }, async () => {
+  await toPreview()
+  const send = $('[data-studio-send-prompt]')
+  const edit = $('[data-studio-use-prompt]')
+  assert.ok(send && edit, 'both final actions')
+  assert.equal(send.querySelector('[data-studio-key]').textContent, 'F9')
+  assert.equal(edit.querySelector('[data-studio-key]').textContent, 'Alt+E')
+  assert.match(send.textContent, /^Send now/)
+  assert.match(edit.textContent, /^Put in composer to edit/)
+  assert.ok($('[data-studio-back-to-steps]') && $('[data-studio-cancel]'), 'other preview buttons kept')
+  assert.equal(document.activeElement, send, 'focus on Send now')
+  assertEverythingHasAKey()
+  await press('F1')
+  assert.ok($('[data-studio-shortcuts-list] [data-studio-shortcut-row="Alt+E"]'), 'Alt+E in the F1 list')
+  await press('F1')
+  for (const locale of ['en', 'pt']) {
+    const b = ui.i18n.bundles[locale]
+    assert.ok(b.preview.send && b.preview.edit && b.shortcuts.editPrompt, `labels in ${locale}`)
+  }
+  assert.equal(ui.i18n.bundles.pt.preview.send, 'Enviar agora')
+})
+
+test('FIN-1: F9 on the preview sends the prompt through host.composer.submit for the bound session and closes', { skip }, async () => {
+  await toPreview()
+  const prompt = $('[data-studio-preview-text]').textContent
+  await press('F9')
+  assert.deepEqual(composer().submits, [{ sessionId: 'sess-live', text: prompt }])
+  assert.equal($('[data-studio-strip]'), null, 'studio closed')
+  assert.equal(draft(), '', 'composer not left with a copy')
+})
+
+test('FIN-1: when submit is refused (turn running) the prompt is placed in the composer with a short note', { skip }, async () => {
+  await toPreview()
+  composer().submitResult = false
+  const prompt = $('[data-studio-preview-text]').textContent
+  await click('[data-studio-send-prompt]')
+  assert.equal(composer().submits.length, 1)
+  assert.equal(draft(), prompt, 'prompt never lost')
+  assert.ok(ui.notifications.some(n => n.message === ui.i18n.bundles.en.notify.placedNotSent), 'placed-not-sent note')
+  assert.equal($('[data-studio-strip]'), null)
+})
+
+test('FIN-1: Alt+E puts the prompt in the composer to edit, never sends', { skip }, async () => {
+  await toPreview()
+  const prompt = $('[data-studio-preview-text]').textContent
+  await press('Alt+E', document.activeElement, { code: 'KeyE' })
+  assert.equal(composer().submits.length, 0, 'not sent')
+  assert.equal(draft(), prompt)
+  assert.equal($('[data-studio-strip]'), null)
+})
+
+test('LOAD-1: while the session context is read only a loading state and Cancel (F10) show; options come after', { skip }, async () => {
+  await freshSettings('sess-1')
+  await openStudio(INTENT, 'auto')
+  await click('[data-studio-cancel]')
+  let release
+  backend.context = () => new Promise(resolve => { release = () => resolve({ ok: true, summary: 'RESUMO', model: 'm', ms: 10 }) })
+  backend.calls.length = 0
+  $('[data-slot="composer-rich-input"]').textContent = INTENT
+  await click('[data-studio-open]')
+  assert.ok($('[data-studio-context-loading]'), 'loading state')
+  assert.match($('[data-studio-context-loading]').textContent, /Reading this session/)
+  for (const sel of ['[data-studio-paste-open]', '[data-studio-skip]', '[data-studio-options]', '[data-studio-ai-row]', '[data-studio-actions]', '[data-studio-generate]', '[data-studio-current-question]']) {
+    assert.equal($(sel), null, `${sel} hidden while reading`)
+  }
+  assert.ok($('[data-studio-cancel]'), 'Cancel stays')
+  assertEverythingHasAKey()
+  release()
+  await waitFor(() => $('[data-studio-paste-open]'))
+  assert.equal($('[data-studio-context-loading]'), null)
+  assert.ok($('[data-studio-actions]'))
+})
+
+test('LOAD-1: a context read that times out releases the options with a short note', { skip }, async () => {
+  await freshSettings('sess-1')
+  await openStudio(INTENT, 'auto')
+  await click('[data-studio-cancel]')
+  backend.context = () => new Promise(() => {})
+  globalThis.__promptStudioContextTimeoutMs = 20
+  try {
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    await click('[data-studio-open]')
+    assert.ok($('[data-studio-context-loading]'))
+    await waitFor(() => $('[data-studio-paste-open]'))
+    assert.ok($('[data-studio-context-status]').textContent.includes(ui.i18n.bundles.en.errors.timeout))
+  } finally {
+    delete globalThis.__promptStudioContextTimeoutMs
+  }
+})
+
+test('LOAD-1: F10 during the context read closes and returns the draft', { skip }, async () => {
+  await freshSettings('sess-1')
+  backend.context = () => new Promise(() => {})
+  $('[data-slot="composer-rich-input"]').textContent = INTENT
+  await click('[data-studio-open]')
+  assert.ok($('[data-studio-context-loading]'))
+  await press('F10')
+  assert.equal($('[data-studio-strip]'), null)
+  assert.equal(draft(), INTENT)
+})
+
+test('LOAD-2: Auto, while the step suggestion loads the choices it changes are hidden; they return on arrival or failure', { skip }, async () => {
+  let pending = holdSuggest()
+  await toEnumStep('auto')
+  assert.ok($('[data-studio-ai-loading]'))
+  assert.equal($('[data-studio-options]'), null, 'choice cards hidden while loading')
+  assert.ok($('[data-studio-ai-stop]'), 'Stop (Alt+D) still there')
+  assertEverythingHasAKey()
+  pending.at(-1).reject(new Error('boom'))
+  await waitFor(() => $('[data-studio-ai-error]'))
+  assert.ok($('[data-studio-options]'), 'options back after a failure')
+  assert.equal(recommends().length, 1, 'local recommendation back')
+  // Text step with a default: the recommended/skip row waits for the suggestion too.
+  await freshSettings(null)
+  pending = holdSuggest()
+  await openStudio(INTENT, 'auto')
+  await pasteStep('')
+  for (let i = 0; i < 12 && !($('[data-studio-answer-input]') && $('[data-studio-ai-loading]') && pending.at(-1)?.body.field.recommended); i += 1) {
+    if (pending.length) pending.at(-1).resolve({ ok: true, value: '', reason: 'x' })
+    await settle()
+    if ($('[data-studio-ai-loading]') && $('[data-studio-answer-input]') && pending.at(-1)?.body.field.recommended) break
+    await answerStep()
+    await settle()
+  }
+  if ($('[data-studio-answer-input]') && $('[data-studio-ai-loading]') && pending.at(-1)?.body.field.recommended) {
+    assert.equal($('[data-studio-recommend]'), null, 'recommended hidden while loading')
+    assert.ok($('[data-studio-answer-input]'), 'the field itself stays')
+    pending.at(-1).resolve({ ok: true, value: 'TEXTO DA IA', reason: 'x' })
+    await waitFor(() => $('[data-studio-recommend]'))
+  }
+})
+
+test('LOAD-3: while the AI writes the prompt, only Cancel and the mode switch remain', { skip }, async () => {
+  await freshSettings(null)
+  let release
+  backend.compose = () => new Promise(resolve => { release = () => resolve({ ok: true, prompt: 'P', notes: '' }) })
+  await openStudio()
+  await click('[data-studio-generate]')
+  assert.equal($('[data-studio-generate]'), null, 'Generate hidden while writing')
+  assert.equal($('[data-studio-back]'), null, 'Back hidden while writing')
+  assert.ok($('[data-studio-cancel]'))
+  assert.ok($('[data-studio-ai-mode-option="off"]'))
+  release()
+  await waitFor(() => $('[data-studio-send-prompt]'))
+})
+
+test('SET-1: read-context switch off: no /context and no loading state, persisted; on again: it reads', { skip }, async () => {
+  await freshSettings('sess-1')
+  await openStudio(INTENT, 'auto')
+  await openSettings()
+  const sw = () => $('[data-studio-read-context] [role="switch"]')
+  assert.ok(sw(), 'switch shown in Settings')
+  await click('[data-studio-read-context] [role="switch"]')
+  assert.equal(ui.storage.get('readContext'), false, 'persisted in ctx.storage')
+  await closeSettings()
+  await openFresh()
+  assert.equal(contextCalls().length, 0)
+  assert.equal($('[data-studio-context-loading]'), null)
+  assert.equal($('[data-studio-context-status]'), null)
+  assert.ok($('[data-studio-paste-open]'), 'options shown at once')
+  await openSettings()
+  assert.equal(sw().getAttribute('aria-checked'), 'false', 'reads back off after reopening')
+  await click('[data-studio-read-context] [role="switch"]')
+  assert.equal(ui.storage.get('readContext'), true)
+  await closeSettings()
+  await openFresh()
+  await waitFor(() => contextCalls().length === 1 && $('[data-studio-context-status]'))
+  assert.equal(contextCalls().length, 1, 'on: it reads')
 })
