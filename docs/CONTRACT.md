@@ -84,5 +84,7 @@ back to `error` when the code is unknown or absent.
 or crashes, 422 over the size limits) have no `code`.
 
 In /compose, any third-party framing the model writes itself (a `THIRD-PARTY MATERIAL` header line, `<pasted_content …>`
-or `<document>` spans) is removed; the final prompt carries only the Studio's own restored block, if any. The v1 routes
+or `<document>` spans) is removed; the final prompt carries only the Studio's own restored block, if any. A kind the
+user wrote in their own text (draft, answers or the baseline outside the pasted block; never the pasted text) is
+content, not framing, and stays: "Convert the `<document>` tags in my XML" survives the rewrite. The v1 routes
 `/interrogate` and `/brief` no longer exist.

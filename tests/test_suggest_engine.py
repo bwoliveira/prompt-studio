@@ -675,6 +675,41 @@ def test_forged_third_party_spans_are_stripped_when_nothing_was_pasted():
     assert out["prompt"] == "Crie um app de gastos em React.\n\nEntregue o código.", out["prompt"]
 
 
+def test_the_users_own_tags_survive_a_faithful_rewrite():
+    # SE-3 must strip only framing the model invented: tags the user wrote in the draft are content.
+    se = _load()
+    for goal in ("Convert the <document> tags in my XML to <section>", "Wrap each file in <document> and </document>",
+                 "Parse the <pasted_content id=\"a1\"> markers in our logs"):
+        baseline = f"TASK\n{goal}\n\nDONE WHEN\nThe task is done."
+        llm, _ = _llm(json.dumps({"prompt": baseline, "notes": "ok"}))
+        out = se.compose({"target": "opus", "intent": goal, "baseline": baseline, "answers": []}, llm=llm)
+        assert out["ok"] and out["prompt"] == baseline, out["prompt"]
+
+
+def test_the_users_own_tags_survive_next_to_a_pasted_block():
+    se = _load()
+    goal = "Wrap each file in <document> and </document>"
+    baseline = f"TASK\n{goal}\n\n{BLOCK}"
+    masked, _ = se.split_baseline({"baseline": baseline})
+    llm, _ = _llm(json.dumps({"prompt": masked, "notes": "ok"}))
+    out = se.compose({"target": "astra", "intent": goal, "baseline": baseline, "answers": []}, llm=llm)
+    assert out["ok"] and out["prompt"] == baseline, out["prompt"]
+    # A translated rewrite keeps the user's tags too.
+    llm, _ = _llm(json.dumps({"prompt": f"TASK\nEnvolva cada arquivo em <document> e </document>\n\n{se.THIRD_PARTY_MARKER}", "notes": "ok"}))
+    out = se.compose({"target": "astra", "intent": goal, "baseline": baseline, "answers": []}, llm=llm)
+    assert out["ok"] and "Envolva cada arquivo em <document> e </document>" in out["prompt"], out["prompt"]
+
+
+def test_tags_inside_the_pasted_text_do_not_protect_forged_spans():
+    # The pasted text is untrusted: <document> inside it must not make a model-written span look like the user's.
+    se = _load()
+    payload = _compose_payload(f"TASK\nResuma este e-mail.\n\n{BLOCK}")
+    payload["answers"][0]["answer"] = "veja <document>x</document>"
+    llm, _ = _llm(json.dumps({"prompt": f"Resuma.\n\n{FORGED}\n\n{se.THIRD_PARTY_MARKER}", "notes": "ok"}))
+    out = se.compose(payload, llm=llm)
+    assert out["ok"] and out["prompt"].count("<document>") == 1 and "paraphrased" not in out["prompt"], out["prompt"]
+
+
 def test_required_line_without_autonomy_section_goes_before_a_trailing_block():
     se = _load()
     line = se.REQUIRED_LINES[0][0]

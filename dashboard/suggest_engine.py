@@ -334,23 +334,34 @@ def split_baseline(payload: Mapping[str, Any]) -> tuple[str, str]:
 
 
 # Third-party framing the model wrote itself (a forged header or pasted_content/document tags, e.g.
-# a paraphrase of injected pasted text): only the Studio's own restored block may carry it.
-_FORGED_SPAN_RE = re.compile(r"<pasted_content\b[^>]*>.*?</pasted_content\b[^>]*>|<document>.*?</document>", re.S | re.I)
-_FORGED_TAG_RE = re.compile(r"</?pasted_content\b[^>]*>|</?document>", re.I)
+# a paraphrase of injected pasted text): only the Studio's own restored block may carry it. A kind
+# the user wrote in their own text (draft, answers; never the pasted text) is content, not framing,
+# and is kept: "Convert the <document> tags in my XML" must survive the rewrite.
+_FORGED_KINDS = (
+    ("<document", re.compile(r"<document>.*?</document>", re.S | re.I), re.compile(r"</?document>", re.I)),
+    ("<pasted_content", re.compile(r"<pasted_content\b[^>]*>.*?</pasted_content\b[^>]*>", re.S | re.I),
+     re.compile(r"</?pasted_content\b[^>]*>", re.I)),
+)
 _FORGED_HEADER_RE = re.compile(r"^[ \t]*THIRD-PARTY MATERIAL[ \t]*$\n?", re.M | re.I)
 
 
-def strip_forged_third_party(prompt: str) -> str:
-    """Drop model-written third-party headers and tagged spans (run before the real block goes back)."""
-    text = _FORGED_TAG_RE.sub("", _FORGED_SPAN_RE.sub("", prompt))
-    text = _FORGED_HEADER_RE.sub("", text)
-    return re.sub(r"\n{3,}", "\n\n", text).strip()
+def strip_forged_third_party(prompt: str, owned: str = "") -> str:
+    """Drop model-written third-party headers and tagged spans (run before the real block goes back).
+    ``owned`` is the user's own text: a tag or header kind that appears there is left alone."""
+    owned = owned.lower()
+    text = prompt
+    for kind, span_re, tag_re in _FORGED_KINDS:
+        if kind not in owned:
+            text = tag_re.sub("", span_re.sub("", text))
+    if "third-party material" not in owned:
+        text = _FORGED_HEADER_RE.sub("", text)
+    return text if text == prompt else re.sub(r"\n{3,}", "\n\n", text).strip()
 
 
-def restore_third_party(prompt: str, block: str, first: bool) -> str:
+def restore_third_party(prompt: str, block: str, first: bool, owned: str = "") -> str:
     """Put the exact pasted block back; if the model dropped the marker, add the block itself.
     Any third-party framing the model wrote is stripped first, so only the Studio's block remains."""
-    prompt = strip_forged_third_party(prompt)
+    prompt = strip_forged_third_party(prompt, owned).strip()
     if not block:
         return prompt.replace(THIRD_PARTY_MARKER, "").strip()
     if THIRD_PARTY_MARKER in prompt:
@@ -470,7 +481,11 @@ def compose(payload: Mapping[str, Any], llm: Callable[..., Any] | None = None, d
     masked, block = split_baseline(payload)
     first = bool(block) and masked.startswith(THIRD_PARTY_MARKER)
     baseline = masked.replace(THIRD_PARTY_MARKER, block, 1) if block else masked
-    final = restore_third_party(prompt.strip()[:COMPOSE_LIMIT], block, first=first)
+    # The user's own text: draft, the masked baseline (goal + Studio lines) and every answer but the pasted one.
+    owned = "\n".join([_clean(payload.get("intent")), masked] + [
+        str(a.get("answer") or "") for a in (payload.get("answers") or [])
+        if isinstance(a, Mapping) and a.get("id") != "thirdPartyText"])
+    final = restore_third_party(prompt.strip()[:COMPOSE_LIMIT], block, first=first, owned=owned)
     final, restored = keep_required_lines(final, baseline)
     notes = _clean(data.get("notes"), REASON_LIMIT)
     if restored:
