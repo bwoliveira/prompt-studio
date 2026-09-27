@@ -191,7 +191,7 @@ test('bin/pr pushes exactly the reviewed commit and stops if the branch moved', 
   assert.match(pr, /REVIEWED="\$\(git rev-parse HEAD\)"/);
   assert.match(pr, /\[\[ "\$\(git rev-parse HEAD\)" == "\$REVIEWED" \]\]/);
   assert.match(pr, /git push --quiet origin "\$REVIEWED:refs\/heads\/\$BRANCH"/);
-  assert.match(pr, /gh pr merge "\$BRANCH" --squash --match-head-commit "\$REVIEWED"/, 'merges only the reviewed commit');
+  assert.match(pr, /gh pr merge "\$PR" --squash --match-head-commit "\$REVIEWED"/, 'merges only the reviewed commit');
   assert.ok(pr.indexOf('bin/review --base') < pr.indexOf('gh pr merge'), 'the review runs before the merge');
 });
 
@@ -254,4 +254,66 @@ test('entry: a commit without the review controls is not approved (update the br
   assert.equal(r.status, 2, r.stderr + r.stdout);
   assert.match(r.stderr, /review-prompt\.md/);
   assert.equal(r.calls.length, 0);
+});
+
+
+// ---- bin/pr with a fake gh and a fake bin/review: which pull request gets merged ----
+
+function prRepo() {
+  const origin = mkdtempSync(join(tmpdir(), 'ps-origin-'));
+  git(origin, 'init', '-q', '--bare', '-b', 'main');
+  const dir = mkdtempSync(join(tmpdir(), 'ps-pr-'));
+  git(dir, 'init', '-q', '-b', 'main');
+  git(dir, 'config', 'user.email', 't@t');
+  git(dir, 'config', 'user.name', 't');
+  mkdirSync(join(dir, 'bin'), { recursive: true });
+  writeFileSync(join(dir, 'bin', 'pr'), readFileSync(new URL('../pr', import.meta.url)));
+  writeFileSync(join(dir, 'bin', 'review'), '#!/bin/sh\nexit 0\n');
+  chmodSync(join(dir, 'bin', 'pr'), 0o755);
+  chmodSync(join(dir, 'bin', 'review'), 0o755);
+  writeFileSync(join(dir, 'a.txt'), 'one\n');
+  git(dir, 'add', '.');
+  git(dir, 'commit', '-qm', 'base');
+  git(dir, 'remote', 'add', 'origin', origin);
+  git(dir, 'push', '-q', 'origin', 'main');
+  git(dir, 'fetch', '-q', 'origin');
+  git(dir, 'switch', '-qc', 'fix/x');
+  writeFileSync(join(dir, 'a.txt'), 'one\ntwo\n');
+  git(dir, 'commit', '-qam', 'change');
+  return { dir, origin };
+}
+
+// Fake gh: logs every call; `pr list` answers FAKE_OPEN_PR (empty = no open PR), `pr create` answers PR #8,
+// and `pr view <anything>` succeeds, as the real gh does for an old merged PR of a reused branch name.
+function fakeGh() {
+  const bin = mkdtempSync(join(tmpdir(), 'ps-gh-'));
+  writeFileSync(join(bin, 'gh'), `#!/bin/sh
+echo "$*" >> "${bin}/log"
+case "$1 $2" in
+  "pr list") printf '%s\\n' "$FAKE_OPEN_PR" ;;
+  "pr create") echo "https://github.com/o/r/pull/8" ;;
+  "pr view") echo "https://github.com/o/r/pull/1" ;;
+esac
+exit 0
+`);
+  chmodSync(join(bin, 'gh'), 0o755);
+  return bin;
+}
+
+test('bin/pr merges the OPEN pull request of the branch, never an old merged one with the same name', () => {
+  for (const [open, number, creates] of [['', '8', true], ['7', '7', false]]) {
+    const { dir, origin } = prRepo();
+    const gh = fakeGh();
+    const head = git(dir, 'rev-parse', 'HEAD');
+    const r = spawnSync('bash', ['bin/pr'], {
+      cwd: dir, encoding: 'utf8', env: { ...process.env, PATH: `${gh}:${process.env.PATH}`, FAKE_OPEN_PR: open },
+    });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    const log = readFileSync(join(gh, 'log'), 'utf8');
+    assert.match(log, /pr list --head fix\/x --base main --state open/, log);
+    assert.equal(/^pr create/m.test(log), creates, log);
+    assert.match(log, new RegExp(`^pr merge ${number} --squash --match-head-commit ${head}$`, 'm'), log);
+    assert.doesNotMatch(log, /^pr merge fix\/x/m, 'never merge by branch name');
+    for (const d of [dir, origin, gh]) rmSync(d, { recursive: true, force: true });
+  }
 });

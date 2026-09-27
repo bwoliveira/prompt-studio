@@ -25,11 +25,16 @@ fi
 
 git push --quiet origin "$REVIEWED:refs/heads/$BRANCH"
 git branch --quiet --set-upstream-to="origin/$BRANCH"
-if ! gh pr view "$BRANCH" >/dev/null 2>&1; then
-  gh pr create --base main --head "$BRANCH" --title "${1:-$(git log -1 --format=%s)}" --fill >/dev/null
+# Only an OPEN pull request of this branch into main counts: `gh pr view <branch>` also finds an old merged
+# PR when a branch name is reused, and merging that one would report success with nothing reaching main.
+PR="$(gh pr list --head "$BRANCH" --base main --state open --json number -q '.[0].number')"
+if [[ -z "$PR" ]]; then
+  PR="$(gh pr create --base main --head "$BRANCH" --title "${1:-$(git log -1 --format=%s)}" --fill)"
+  PR="${PR##*/}"
 fi
-gh pr view "$BRANCH" --json url -q .url
+[[ "$PR" =~ ^[0-9]+$ ]] || { echo "Could not find or open the pull request (got '$PR')." >&2; exit 1; }
+gh pr view "$PR" --json url -q .url
 # Merge only the reviewed commit; the remote branch goes away, the local one stays until you delete it.
-gh pr merge "$BRANCH" --squash --match-head-commit "$REVIEWED"
+gh pr merge "$PR" --squash --match-head-commit "$REVIEWED"
 gh api -X DELETE "repos/{owner}/{repo}/git/refs/heads/$BRANCH" >/dev/null 2>&1 || true
-gh pr view "$BRANCH" --json state,mergeCommit -q '.state + " " + (.mergeCommit.oid // "")'
+gh pr view "$PR" --json state,mergeCommit -q '.state + " " + (.mergeCommit.oid // "")'
