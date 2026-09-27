@@ -2,6 +2,11 @@
 
 Versions come from the commit subjects; releases from 1.6.0 on are also git tags. Newest first.
 
+## Unreleased
+
+- The plugin no longer sends a temperature: sampling stays as Hermes configures it for each model
+  (Claude Opus 5.5, for example, rejects any non-default temperature).
+
 ## 1.6.1
 
 - F9 sends only into the session the Studio was opened in. If the focused session changed since

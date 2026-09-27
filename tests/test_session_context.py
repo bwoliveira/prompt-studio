@@ -53,7 +53,7 @@ def msg(role, content, **kw):
 def _llm(reply="{\"summary\": \"Working on repo foo.\"}"):
     calls = []
 
-    def llm(messages, temperature, max_tokens, timeout, is_json=False):
+    def llm(messages, max_tokens, timeout, is_json=False):
         calls.append({"messages": messages, "max_tokens": max_tokens, "timeout": timeout, "is_json": is_json})
         return reply, "stub/ctx"
 
@@ -153,7 +153,7 @@ def test_transcript_cannot_close_its_block():
 def test_timeout_is_a_hard_deadline():
     sc = _load()
 
-    def slow(messages, temperature, max_tokens, timeout, is_json=False):
+    def slow(messages, max_tokens, timeout, is_json=False):
         time.sleep(1.5)
         return "{\"summary\": \"late\"}", "stub/slow"
 

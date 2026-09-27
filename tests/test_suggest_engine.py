@@ -21,7 +21,7 @@ BASE = {"target": "opus", "intent": "Crie um dashboard de gastos da casa", "ladd
 def _llm(payload_text):
     calls = []
 
-    def llm(messages, temperature, max_tokens, timeout, is_json=False):
+    def llm(messages, max_tokens, timeout, is_json=False):
         calls.append({"messages": messages, "max_tokens": max_tokens, "is_json": is_json})
         return payload_text, "stub/model"
 
@@ -76,7 +76,7 @@ def test_wall_clock_deadline_is_a_real_ceiling():
     import time as _t
     se = _load()
 
-    def slow(messages, temperature, max_tokens, timeout, is_json=False):
+    def slow(messages, max_tokens, timeout, is_json=False):
         _t.sleep(1.5)
         return json.dumps({"value": "Equilibrada", "reason": "tarde"}), "stub/slow"
 
@@ -134,7 +134,7 @@ def test_compose_rejects_empty_or_bad_output_and_times_out():
     llm, _ = _llm(json.dumps({"prompt": "curto"}))
     assert se.compose(COMPOSE, llm=llm)["ok"] is False
 
-    def slow(messages, temperature, max_tokens, timeout, is_json=False):
+    def slow(messages, max_tokens, timeout, is_json=False):
         _t.sleep(1.0)
         return json.dumps({"prompt": "x" * 50}), "stub"
 
@@ -160,7 +160,7 @@ def test_compose_uses_its_own_pool_and_does_not_starve_suggestions():
     import time as _t
     se = _load()
 
-    def slow(messages, temperature, max_tokens, timeout, is_json=False):
+    def slow(messages, max_tokens, timeout, is_json=False):
         _t.sleep(2.0)
         return json.dumps({"prompt": "x" * 50}), "stub"
 
@@ -176,7 +176,7 @@ def test_provider_timeout_is_capped_at_the_deadline():
     se = _load()
     seen = {}
 
-    def spy(messages, temperature, max_tokens, timeout, is_json=False):
+    def spy(messages, max_tokens, timeout, is_json=False):
         seen["timeout"] = timeout
         return json.dumps({"value": "Equilibrada", "reason": "ok"}), "stub"
 
@@ -394,7 +394,7 @@ def test_provider_timeout_equals_the_deadline_and_no_second_constant():
     assert not hasattr(se, "SUGGEST_TIMEOUT")
     seen = {}
 
-    def spy(messages, temperature, max_tokens, timeout, is_json=False):
+    def spy(messages, max_tokens, timeout, is_json=False):
         seen["timeout"] = timeout
         return json.dumps({"value": "Equilibrada", "reason": "ok"}), "stub"
 
@@ -497,7 +497,7 @@ def test_a_long_baseline_never_leaks_or_loses_the_pasted_block():
 def _sequence(*replies):
     calls = []
 
-    def llm(messages, temperature, max_tokens, timeout, is_json=False):
+    def llm(messages, max_tokens, timeout, is_json=False):
         calls.append(timeout)
         return replies[min(len(calls), len(replies)) - 1], "stub/model"
 
@@ -595,7 +595,7 @@ def _failing(exc):
 def _slow(seconds, reply):
     import time as _t
 
-    def llm(messages, temperature, max_tokens, timeout, is_json=False):
+    def llm(messages, max_tokens, timeout, is_json=False):
         _t.sleep(seconds)
         return reply, "stub/slow"
     return llm
@@ -804,7 +804,7 @@ def _replies_with_finish(*pairs):
     se = _load()
     calls = []
 
-    def llm(messages, temperature, max_tokens, timeout, is_json=False):
+    def llm(messages, max_tokens, timeout, is_json=False):
         calls.append(timeout)
         text, finish = pairs[min(len(calls), len(pairs)) - 1]
         return se._llm.Reply(text, "stub/model", finish)
