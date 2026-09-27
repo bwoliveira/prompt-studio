@@ -65,6 +65,7 @@ Every control shows its key next to its label. Keys work with the cursor in the 
 |---|---|
 | F4 | Open Prompt Studio (from the message field) |
 | F1 | Show or hide the list of shortcuts |
+| F3 | Settings: models, session context, language |
 | F5 | Accept the recommended choice, or confirm what you typed |
 | F6 | Skip / I don't have one |
 | F7 | Use the AI suggestion (it goes into the field; F5 then confirms it) |

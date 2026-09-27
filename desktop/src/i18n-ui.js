@@ -134,7 +134,34 @@ export const UI_MESSAGES = {
       empty_reply: 'The model returned an empty reply; a provider filter may have blocked it.',
       bad_request: 'The request was incomplete.',
       nothing_to_improve: 'There is no text of yours to improve here.',
-      invalid_prompt: 'The model reply was not a usable prompt.'
+      invalid_prompt: 'The model reply was not a usable prompt.',
+      no_session: 'This session was not found.',
+      empty_session: 'This session has no conversation yet.',
+      invalid_summary: 'The model did not return a usable summary.'
+    },
+    context: {
+      reading: 'Reading this session…',
+      used: (model, seconds) => `Session context read (${model}, ${seconds} s)`,
+      failed: reason => `Session context not available: ${reason}`
+    },
+    settings: {
+      button: 'Settings',
+      title: 'Prompt Studio settings',
+      helper: 'Questions model',
+      helperDescription: 'Suggests answers and writes the final prompt.',
+      helperInherit: 'Hermes default',
+      context: 'Context model',
+      contextDescription: 'Reads this session when the studio opens. A fast model keeps it quick.',
+      contextInherit: 'Same as the questions',
+      contextInheritDefault: 'Same as the questions (Hermes default)',
+      clear: 'Clear',
+      readContext: "Read this session's context when opening",
+      readContextDescription: 'Only for sessions that already have a conversation, and never with AI off.',
+      language: 'Language',
+      languageAuto: 'Follow Hermes',
+      languagePt: 'Português',
+      languageEn: 'English',
+      close: 'Close'
     },
     preview: {
       ai: '✨ Prompt written by the AI',
@@ -154,6 +181,7 @@ export const UI_MESSAGES = {
       title: 'Keyboard shortcuts',
       open: 'Open Prompt Studio (from the message field)',
       help: 'Show or hide this list',
+      settings: 'Settings: models, session context, language',
       accept: 'Accept the recommended choice (in Auto mode, the AI pick) or confirm what you typed',
       skip: "Skip, I don't have one, or use the default",
       useAi: 'Use the AI text or the recommended one it offers',
@@ -304,7 +332,34 @@ export const UI_MESSAGES = {
       empty_reply: 'O modelo devolveu uma resposta vazia; um filtro do provedor pode tê-la barrado.',
       bad_request: 'O pedido estava incompleto.',
       nothing_to_improve: 'Não há texto seu para melhorar aqui.',
-      invalid_prompt: 'A resposta do modelo não era um prompt utilizável.'
+      invalid_prompt: 'A resposta do modelo não era um prompt utilizável.',
+      no_session: 'Esta sessão não foi encontrada.',
+      empty_session: 'Esta sessão ainda não tem conversa.',
+      invalid_summary: 'O modelo não devolveu um resumo utilizável.'
+    },
+    context: {
+      reading: 'Lendo esta sessão…',
+      used: (model, seconds) => `Contexto da sessão lido (${model}, ${seconds} s)`,
+      failed: reason => `Contexto da sessão indisponível: ${reason}`
+    },
+    settings: {
+      button: 'Configurações',
+      title: 'Configurações do Prompt Studio',
+      helper: 'Modelo das perguntas',
+      helperDescription: 'Sugere respostas e escreve o prompt final.',
+      helperInherit: 'Padrão do Hermes',
+      context: 'Modelo de contexto',
+      contextDescription: 'Lê esta sessão quando o studio abre. Um modelo rápido deixa a leitura ágil.',
+      contextInherit: 'Mesmo das perguntas',
+      contextInheritDefault: 'Mesmo das perguntas (padrão do Hermes)',
+      clear: 'Limpar',
+      readContext: 'Ler o contexto desta sessão ao abrir',
+      readContextDescription: 'Só em sessões que já têm conversa, e nunca com a IA desligada.',
+      language: 'Idioma',
+      languageAuto: 'Seguir o Hermes',
+      languagePt: 'Português',
+      languageEn: 'English',
+      close: 'Fechar'
     },
     preview: {
       ai: '✨ Prompt escrito pela IA',
@@ -324,6 +379,7 @@ export const UI_MESSAGES = {
       title: 'Atalhos de teclado',
       open: 'Abrir o Prompt Studio (a partir do campo de mensagem)',
       help: 'Mostrar ou esconder esta lista',
+      settings: 'Configurações: modelos, contexto da sessão, idioma',
       accept: 'Aceitar o recomendado (no modo Auto, a escolha da IA) ou confirmar o que você digitou',
       skip: 'Pular, Não tenho, ou usar o padrão',
       useAi: 'Usar o texto da IA ou o recomendado que ela oferece',

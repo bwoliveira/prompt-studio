@@ -32,7 +32,8 @@ let tmp
 const backend = {
   calls: [],
   suggest: body => ({ ok: true, value: body.field.kind === 'enum' ? body.field.recommended : `sugestão para ${body.field.id}`, reason: 'teste' }),
-  compose: body => ({ ok: true, prompt: `PROMPT DA IA (${body.answers.length} respostas)`, notes: 'ok' })
+  compose: body => ({ ok: true, prompt: `PROMPT DA IA (${body.answers.length} respostas)`, notes: 'ok' }),
+  context: () => ({ ok: true, summary: 'RESUMO DA SESSAO', model: 'anthropic/claude-haiku-5', turns: 8, ms: 1432 })
 }
 
 before(async () => {
@@ -64,8 +65,31 @@ before(async () => {
   writeFileSync(join(tmp, 'sdk.js'), `
 import { atom as nanoAtom } from 'nanostores'
 import { useStore } from '@nanostores/react'
-import { jsx } from 'react/jsx-runtime'
+import { jsx, jsxs } from 'react/jsx-runtime'
+import { createContext, useContext } from 'react'
 export const atom = nanoAtom
+// Settings dialog stubs (CX-1): just enough of the SDK components to drive them from tests.
+export const Codicon = ({ name }) => jsx('span', { 'data-codicon': name })
+export const Dialog = ({ open, children }) => (open ? jsx('div', { 'data-sdk-dialog': true, children }) : null)
+export const DialogContent = ({ children, className, ...props }) => jsx('div', { ...props, children })
+export const DialogHeader = ({ children }) => jsx('div', { children })
+export const DialogFooter = ({ children }) => jsx('div', { children })
+export const DialogTitle = ({ children }) => jsx('h2', { children })
+export const ListRow = ({ title, description, action }) => jsxs('div', { 'data-sdk-list-row': true, children: [jsx('span', { children: title }), description ? jsx('span', { children: description }) : null, action] })
+export const ToggleRow = ({ checked, label, onChange }) => jsx('button', { role: 'switch', 'aria-checked': String(checked), 'data-sdk-toggle': true, onClick: () => onChange(!checked), children: label })
+const SelectCtx = createContext(null)
+export const Select = ({ value, onValueChange, children }) => jsx(SelectCtx.Provider, { value: { onValueChange }, children: jsx('div', { 'data-sdk-select': value, children }) })
+export const SelectTrigger = ({ children }) => jsx('div', { children })
+export const SelectValue = () => null
+export const SelectContent = ({ children }) => jsx('div', { children })
+export const SelectItem = ({ value, children }) => { const c = useContext(SelectCtx); return jsx('button', { 'data-sdk-select-item': value, onClick: () => c.onValueChange(value), children }) }
+export const DropdownMenu = ({ children }) => jsx('div', { children })
+export const DropdownMenuTrigger = ({ children }) => children
+export const DropdownMenuContent = ({ children }) => jsx('div', { children })
+export const ModelMenuCloseContext = createContext(() => {})
+// The catalog menu exposes its controller so a test can play select / setOptions.
+export const ModelCatalogMenu = ({ controller }) => { if (globalThis.__promptStudioBreakCatalog) throw new Error('catalog failed'); return jsx('div', { 'data-model-menu': true, ref: el => { if (el) el.__controller = controller } }) }
+export const reasoningEffortLabel = effort => 'effort ' + effort
 export const useValue = useStore
 export const COMPOSER_AREAS = { top: 'top', middleware: 'middleware', actions: 'actions' }
 export const PALETTE_AREA = 'palette'
@@ -88,14 +112,14 @@ export const $locale = nanoAtom('en')
 export const usePluginI18n = () => { useStore($locale); return translate }
 export const notifications = []
 export const host = {
-  state: { cwd: nanoAtom('/root'), profile: nanoAtom('default'), model: nanoAtom('claude-opus-5-5') },
+  state: { cwd: nanoAtom('/root'), profile: nanoAtom('default'), model: nanoAtom('claude-opus-5-5'), focusedStoredSessionId: nanoAtom(null), focusedSessionProfile: nanoAtom('default') },
   notify: n => { notifications.push(n) },
   notifyError: (_e, message) => { notifications.push({ kind: 'error', message }) }
 }
 `)
   writeFileSync(join(tmp, 'entry.js'), `
 export { default as plugin } from ${JSON.stringify(process.env.PROMPT_STUDIO_PLUGIN || join(repo, 'desktop', 'plugin.js'))}
-export { notifications, i18n, translate, $locale } from './sdk.js'
+export { notifications, i18n, translate, $locale, host } from './sdk.js'
 export { createRoot } from 'react-dom/client'
 export { act } from 'react'
 export { jsx } from 'react/jsx-runtime'
@@ -149,7 +173,7 @@ export { jsx } from 'react/jsx-runtime'
     registerMany(items) { for (const item of items) slots[item.area] = item },
     async rest(path, { body }) {
       backend.calls.push({ path, body })
-      const handler = path === '/suggest' ? backend.suggest : path === '/compose' ? backend.compose : null
+      const handler = path === '/suggest' ? backend.suggest : path === '/compose' ? backend.compose : path === '/context' ? backend.context : null
       if (!handler) throw new Error(`HTTP 404 ${path}`)
       return handler(body)
     }
@@ -246,6 +270,7 @@ beforeEach(async () => {
   ui.notifications.length = 0
   backend.suggest = body => ({ ok: true, value: body.field.kind === 'enum' ? body.field.recommended : `sugestão para ${body.field.id}`, reason: 'teste' })
   backend.compose = body => ({ ok: true, prompt: `PROMPT DA IA (${body.answers.length} respostas)`, notes: 'ok' })
+  backend.context = () => ({ ok: true, summary: 'RESUMO DA SESSAO', model: 'anthropic/claude-haiku-5', turns: 8, ms: 1432 })
   localStorage.clear()
   $('[data-slot="composer-rich-input"]').textContent = ''
 })
@@ -1097,4 +1122,247 @@ test('RG-1: switching the AI off while /compose is in flight drops the late AI p
   assert.ok($('[data-studio-preview]'), 'preview shown')
   assert.doesNotMatch($('[data-studio-preview-text]').textContent, /PROMPT TARDIO/, 'late AI prompt not applied')
   assert.equal($('[data-studio-switch-version]'), null)
+})
+
+
+// ---------------------------------------------------------------- CX-1: settings + session context
+const SETTING_KEYS = ['helperModel', 'contextModel', 'readContext', 'language']
+const contextCalls = () => backend.calls.filter(c => c.path === '/context')
+const suggestCalls = () => backend.calls.filter(c => c.path === '/suggest')
+async function freshSettings(sessionId = null) {
+  if ($('[data-studio-cancel]')) await click('[data-studio-cancel]')
+  for (const key of SETTING_KEYS) ui.storage.remove(key)
+  ui.host.state.focusedStoredSessionId.set(sessionId)
+  ui.host.state.focusedSessionProfile.set('work')
+  backend.calls.length = 0
+}
+async function openSettings() {
+  if (!$('[data-studio-settings-dialog]')) await click('[data-studio-settings]')
+  assert.ok($('[data-studio-settings-dialog]'), 'settings dialog open')
+}
+async function pickModel(which, model, provider, effort) {
+  await openSettings()
+  const menu = $(`[data-studio-model-picker="${which}"] [data-model-menu]`)
+  assert.ok(menu, `${which} catalog menu`)
+  await ui.act(async () => { menu.__controller.select(model, provider) })
+  await flush()
+  if (effort !== undefined) {
+    const next = $(`[data-studio-model-picker="${which}"] [data-model-menu]`).__controller
+    await ui.act(async () => { next.setOptions({ effort }, { model, provider }) })
+    await flush()
+  }
+}
+async function closeSettings() {
+  if ($('[data-studio-settings-close]')) await click('[data-studio-settings-close]')
+}
+// Open in auto mode, then reopen so the counted calls belong to one clean opening.
+async function openFresh(intent = INTENT, mode = 'auto') {
+  if ($('[data-studio-cancel]')) await click('[data-studio-cancel]')
+  await openStudio(intent, mode)
+  await click('[data-studio-cancel]')
+  backend.calls.length = 0
+  $('[data-slot="composer-rich-input"]').textContent = intent
+  await click('[data-studio-open]')
+}
+
+test('CX-1: the gear button shows F3, F3 and a click open the settings dialog, F1 lists F3', { skip }, async () => {
+  await freshSettings()
+  await openStudio(INTENT, 'off')
+  const gear = $('[data-studio-settings]')
+  assert.ok(gear, 'gear button in the studio header')
+  assert.ok(gear.querySelector('[data-codicon="settings-gear"]'), 'gear icon')
+  assert.equal(gear.querySelector('[data-studio-key]')?.textContent, 'F3', 'F3 printed on it')
+  assertEverythingHasAKey()
+  await press('F3')
+  assert.ok($('[data-studio-settings-dialog]'), 'F3 opened the dialog')
+  await closeSettings()
+  assert.equal($('[data-studio-settings-dialog]'), null)
+  await click('[data-studio-settings]')
+  assert.ok($('[data-studio-settings-dialog]'), 'click opened it')
+  await closeSettings()
+  await press('F1')
+  assert.ok($('[data-studio-shortcuts-list] [data-studio-shortcut-row="F3"]'), 'F3 in the F1 list')
+  await press('F1')
+})
+
+test('CX-1: helper/context pickers persist and ride as model_choice; clearing falls back', { skip }, async () => {
+  await freshSettings('sess-1')
+  await openStudio(INTENT, 'auto')
+  await pickModel('helper', 'claude-haiku-5', 'anthropic', 'low')
+  assert.deepEqual(ui.storage.get('helperModel'), { provider: 'anthropic', model: 'claude-haiku-5', effort: 'low' })
+  await pickModel('context', 'gpt-6-mini', 'openai')
+  assert.deepEqual(ui.storage.get('contextModel'), { provider: 'openai', model: 'gpt-6-mini', effort: '' })
+  await closeSettings()
+  await openFresh()
+  assert.deepEqual(contextCalls().map(c => c.body.model_choice), [{ provider: 'openai', model: 'gpt-6-mini', effort: '' }])
+  await pasteStep('')
+  await flush()
+  assert.ok(suggestCalls().length >= 1, 'auto suggestion asked')
+  assert.deepEqual(suggestCalls()[0].body.model_choice, { provider: 'anthropic', model: 'claude-haiku-5', effort: 'low' })
+  await click('[data-studio-generate]')
+  await flush()
+  const compose = backend.calls.find(c => c.path === '/compose')
+  assert.deepEqual(compose.body.model_choice, { provider: 'anthropic', model: 'claude-haiku-5', effort: 'low' })
+  assert.equal('session_context' in compose.body, false, 'no session_context on /compose')
+  await click('[data-studio-cancel]')
+  // Clear the context model: /context uses the helper's choice.
+  await openStudio(INTENT, 'auto')
+  await openSettings()
+  await click('[data-studio-model-picker="context"] [data-studio-model-clear]')
+  assert.match($('[data-studio-model-picker="context"]').textContent, /Same as the questions/)
+  await closeSettings()
+  await openFresh()
+  assert.deepEqual(contextCalls().at(-1).body.model_choice, { provider: 'anthropic', model: 'claude-haiku-5', effort: 'low' })
+  // Clear the helper model: no model_choice at all (Hermes config).
+  await openSettings()
+  await click('[data-studio-model-picker="helper"] [data-studio-model-clear]')
+  assert.match($('[data-studio-model-picker="helper"]').textContent, /Hermes default/)
+  await closeSettings()
+  await openFresh()
+  assert.equal('model_choice' in contextCalls().at(-1).body, false)
+  await pasteStep('')
+  await flush()
+  assert.equal('model_choice' in suggestCalls().at(-1).body, false)
+})
+
+test('CX-1: F4 on a stored session with AI on reads the context once; fresh draft, AI off or switch off read nothing', { skip }, async () => {
+  await freshSettings('sess-1')
+  await openFresh()
+  await flush()
+  assert.equal(contextCalls().length, 1, 'exactly one /context')
+  assert.deepEqual(contextCalls()[0].body, { session_id: 'sess-1', profile: 'work', locale: 'en' })
+  assert.match($('[data-studio-context-status]').textContent, /claude-haiku-5/)
+  await pasteStep('')
+  await flush()
+  assert.equal(contextCalls().length, 1, 'still one after moving on')
+  // Default: the switch is on.
+  await openSettings()
+  assert.equal($('[data-studio-read-context] [role="switch"]').getAttribute('aria-checked'), 'true')
+  await closeSettings()
+  // Fresh draft: nothing read.
+  await freshSettings(null)
+  await openFresh()
+  assert.equal(contextCalls().length, 0, 'fresh draft')
+  assert.equal($('[data-studio-context-status]'), null)
+  // AI off: nothing read.
+  await freshSettings('sess-1')
+  await openFresh(INTENT, 'off')
+  assert.equal(contextCalls().length, 0, 'AI off')
+  // Switch off: nothing read, and it is remembered.
+  await freshSettings('sess-1')
+  await openStudio(INTENT, 'auto')
+  await openSettings()
+  await click('[data-studio-read-context] [role="switch"]')
+  assert.equal(ui.storage.get('readContext'), false)
+  await closeSettings()
+  await openFresh()
+  assert.equal(contextCalls().length, 0, 'readContext off')
+  // Nothing configured: pickers read the Hermes default, and the context one says it follows the questions.
+  await freshSettings(null)
+  await openStudio(INTENT, 'auto')
+  await openSettings()
+  assert.match($('[data-studio-model-picker="helper"]').textContent, /Hermes default/)
+  assert.match($('[data-studio-model-picker="context"]').textContent, /Same as the questions \(Hermes default\)/)
+  await closeSettings()
+})
+
+test('CX-1: a model catalog that fails to load leaves the Studio working and the pickers on the default', { skip }, async () => {
+  await freshSettings(null)
+  await openStudio(INTENT, 'off')
+  globalThis.__promptStudioBreakCatalog = true
+  const quiet = console.error
+  console.error = () => {}
+  try {
+    await openSettings()
+    assert.match($('[data-studio-model-picker="helper"]').textContent, /Hermes default/)
+    await closeSettings()
+    assert.ok($('[data-studio-strip]'), 'studio still on screen')
+  } finally {
+    delete globalThis.__promptStudioBreakCatalog
+    console.error = quiet
+  }
+})
+
+test('CX-1: an Auto suggestion waits for a pending context read and then carries session_context', { skip }, async () => {
+  await freshSettings('sess-1')
+  await openStudio(INTENT, 'auto')
+  await click('[data-studio-cancel]')
+  let release
+  backend.context = () => new Promise(resolve => { release = () => resolve({ ok: true, summary: 'RESUMO LENTO', model: 'openai/gpt-6-mini', turns: 3, ms: 900 }) })
+  backend.calls.length = 0
+  $('[data-slot="composer-rich-input"]').textContent = INTENT
+  await click('[data-studio-open]')
+  assert.match($('[data-studio-context-status]').textContent, /Reading/)
+  await pasteStep('')
+  await flush()
+  assert.equal(suggestCalls().length, 0, 'waits for the context read')
+  // Manual actions are not blocked meanwhile.
+  assert.ok($('[data-studio-back]') && !$('[data-studio-back]').disabled)
+  release()
+  await flush(8)
+  assert.equal(suggestCalls().length, 1)
+  assert.equal(suggestCalls()[0].body.session_context, 'RESUMO LENTO')
+})
+
+test('CX-1: a failed or timed-out context read shows a short note and the suggestion goes on without it', { skip }, async () => {
+  await freshSettings('sess-1')
+  backend.context = () => ({ ok: false, code: 'no_session', error: 'Session not found' })
+  await openFresh()
+  await flush()
+  assert.equal($('[data-studio-context-status]').textContent.includes(ui.i18n.bundles.en.errors.no_session), true)
+  await pasteStep('')
+  await flush()
+  assert.equal(suggestCalls().length, 1)
+  assert.equal('session_context' in suggestCalls()[0].body, false)
+  // Client-side deadline: a hung transport counts as a timeout.
+  await freshSettings('sess-1')
+  await openStudio(INTENT, 'auto')
+  await click('[data-studio-cancel]')
+  backend.context = () => new Promise(() => {})
+  globalThis.__promptStudioContextTimeoutMs = 20
+  try {
+    backend.calls.length = 0
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    await click('[data-studio-open]')
+    await pasteStep('')
+    await new Promise(resolve => setTimeout(resolve, 40))
+    await flush(8)
+    assert.equal($('[data-studio-context-status]').textContent.includes(ui.i18n.bundles.en.errors.timeout), true)
+    assert.equal(suggestCalls().length, 1, 'suggestion went on')
+    assert.equal('session_context' in suggestCalls()[0].body, false)
+  } finally {
+    delete globalThis.__promptStudioContextTimeoutMs
+  }
+  for (const code of ['no_session', 'empty_session', 'invalid_summary']) {
+    assert.ok(ui.i18n.bundles.en.errors[code] && ui.i18n.bundles.pt.errors[code], `errors.${code} in en and pt`)
+  }
+})
+
+test('CX-1: language "pt" with Hermes in English shows Portuguese strings and questions and sends locale pt; "auto" follows Hermes', { skip }, async () => {
+  await freshSettings('sess-1')
+  await openStudio(INTENT, 'auto')
+  await openSettings()
+  assert.equal($('[data-studio-language] [data-sdk-select]').getAttribute('data-sdk-select'), 'auto', 'default follows Hermes')
+  await click('[data-studio-language] [data-sdk-select-item="pt"]')
+  assert.equal(ui.storage.get('language'), 'pt')
+  await closeSettings()
+  assert.match($('[data-studio-cancel]').textContent, /^Cancelar/)
+  await openFresh()
+  assert.equal(contextCalls()[0].body.locale, 'pt')
+  assert.match(currentText(), /colar|referência/i, 'question in Portuguese')
+  // Back to auto: English again (Hermes is in English).
+  await openSettings()
+  await click('[data-studio-language] [data-sdk-select-item="auto"]')
+  await closeSettings()
+  assert.match($('[data-studio-cancel]').textContent, /^Cancel(?!ar)/)
+  await openFresh()
+  assert.equal(contextCalls()[0].body.locale, 'en')
+  // 'auto' keeps following Hermes when Hermes switches to pt.
+  ui.i18n.locale = 'pt'
+  await ui.act(async () => { ui.$locale.set('pt') })
+  await flush()
+  assert.match($('[data-studio-cancel]').textContent, /^Cancelar/)
+  ui.i18n.locale = 'en'
+  await ui.act(async () => { ui.$locale.set('en') })
+  await freshSettings(null)
 })
