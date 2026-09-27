@@ -47,6 +47,8 @@ before(async () => {
     Object.defineProperty(g, key, { configurable: true, writable: true, value: dom.window[key] })
   }
   g.IS_REACT_ACT_ENVIRONMENT = true
+  // Auto-mode suggestion debounce (SP-2): 0 ms keeps the other tests fast; the SP-2 test sets the real delay.
+  g.__promptStudioAutoSuggestDelayMs = 0
   // React's scheduler and act() queue work on MessageChannel ports, which keep node:test from
   // exiting. Track every port so after() can close them.
   const RealChannel = globalThis.MessageChannel
@@ -1004,4 +1006,95 @@ test('Auto walk: never more than one recommended button or star on screen at any
     assertEverythingHasAKey()
     await answerStep()
   }
+})
+
+// ---------------------------------------------------------------- fix round 3
+test('CT-01: an error code from the backend shows a localized tooltip; unknown or missing code keeps the raw detail', { skip }, async () => {
+  backend.suggest = () => ({ ok: false, code: 'timeout', error: 'no model reply within 20 s' })
+  backend.compose = () => ({ ok: false, code: 'invalid_prompt', error: 'model reply is not a valid prompt' })
+  await openStudio()
+  await pasteStep('')
+  await flush()
+  const error = $('[data-studio-ai-error]')
+  assert.match(error.textContent, /Could not reach the AI/, 'top-level text unchanged')
+  assert.equal(error.getAttribute('title'), ui.translate('errors.timeout'))
+  assert.match(error.getAttribute('title'), /did not answer in time/)
+  await click('[data-studio-generate]')
+  await flush()
+  const note = $('[data-studio-preview-note]')
+  assert.match(note.textContent, /did not write a prompt/, 'preview.empty note unchanged')
+  assert.equal(note.getAttribute('title'), ui.translate('errors.invalid_prompt'))
+  await click('[data-studio-cancel]')
+  // pt tooltip for the same code.
+  ui.i18n.locale = 'pt'
+  await ui.act(async () => { ui.$locale.set('pt') })
+  backend.suggest = () => ({ ok: false, empty: true, code: 'empty_reply', error: 'empty model reply' })
+  await openStudio()
+  await pasteStep('')
+  await flush()
+  assert.equal($('[data-studio-ai-error]').getAttribute('title'), ui.i18n.bundles.pt.errors.empty_reply)
+  await click('[data-studio-cancel]')
+  ui.i18n.locale = 'en'
+  await ui.act(async () => { ui.$locale.set('en') })
+  // Older backend / unknown code: the raw detail, as before.
+  backend.suggest = () => ({ ok: false, code: 'brand_new_code', error: 'raw detail 1' })
+  await openStudio()
+  await pasteStep('')
+  await flush()
+  assert.equal($('[data-studio-ai-error]').getAttribute('title'), 'raw detail 1')
+})
+
+test('SP-2: in Auto, clicking through steps fast sends one /suggest, for the step the user stops on, after the delay', { skip }, async () => {
+  globalThis.__promptStudioAutoSuggestDelayMs = 400
+  try {
+    await openStudio()
+    await pasteStep('')
+    await click('[data-studio-skip]')
+    await click('[data-studio-skip]')
+    await click('[data-studio-skip]')
+    assert.equal(suggestFields().length, 0, 'nothing sent while the user is still moving')
+    const stoppedOn = field()
+    await new Promise(resolve => setTimeout(resolve, 450))
+    await flush()
+    assert.deepEqual(suggestFields(), [stoppedOn], 'one request, for the step the user stayed on')
+    assert.ok($('[data-studio-ai-use]'), 'the suggestion is shown after the delay')
+    // Manual asks stay immediate.
+    await setMode('manual')
+    await answerStep()
+    const before = suggestFields().length
+    await click('[data-studio-ai-suggest]')
+    assert.equal(suggestFields().length, before + 1, 'manual request sent at once')
+  } finally {
+    globalThis.__promptStudioAutoSuggestDelayMs = 0
+  }
+})
+
+test('RG-1: switching the AI off while a suggestion is in flight drops the late answer', { skip }, async () => {
+  let release
+  backend.suggest = () => new Promise(resolve => { release = () => resolve({ ok: true, value: 'TARDE', reason: 'x' }) })
+  await openStudio(INTENT, 'manual')
+  await pasteStep('')
+  await click('[data-studio-ai-suggest]')
+  assert.ok($('[data-studio-ai-loading]'))
+  await setMode('off')
+  release()
+  await flush()
+  assert.equal(aiMode(), 'off')
+  assert.equal($('[data-studio-ai-row]'), null, 'no suggestion row')
+  assert.equal($('[data-studio-ai-use]'), null)
+  assert.equal($('[data-studio-answer-input]').value, '', 'answer unchanged')
+})
+
+test('RG-1: switching the AI off while /compose is in flight drops the late AI prompt', { skip }, async () => {
+  let release
+  backend.compose = () => new Promise(resolve => { release = () => resolve({ ok: true, prompt: 'PROMPT TARDIO DA IA', notes: 'ok' }) })
+  await openStudio()
+  await click('[data-studio-generate]')
+  assert.ok($('[data-studio-ai-mode-option="off"]'), 'mode selector reachable while the prompt is written')
+  await setMode('off')
+  release()
+  await flush()
+  assert.ok($('[data-studio-preview]'), 'preview shown')
+  assert.doesNotMatch($('[data-studio-preview-text]').textContent, /PROMPT TARDIO/, 'late AI prompt not applied')
+  assert.equal($('[data-studio-switch-version]'), null)
 })

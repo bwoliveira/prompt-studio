@@ -126,6 +126,16 @@ export const UI_MESSAGES = {
       writing: 'Generating the prompt…',
       writingAi: 'The AI is writing the prompt from your answers…'
     },
+    errors: {
+      invalid_suggestion: 'The model reply was not a usable suggestion.',
+      unknown_option: 'The model picked an option that is not in the list.',
+      timeout: 'The model did not answer in time.',
+      unavailable: 'The model could not be reached (details in the Hermes log).',
+      empty_reply: 'The model returned an empty reply; a provider filter may have blocked it.',
+      bad_request: 'The request was incomplete.',
+      nothing_to_improve: 'There is no text of yours to improve here.',
+      invalid_prompt: 'The model reply was not a usable prompt.'
+    },
     preview: {
       ai: '✨ Prompt written by the AI',
       engine: 'Prompt built without AI',
@@ -285,6 +295,16 @@ export const UI_MESSAGES = {
       asking: 'Preparando a próxima pergunta…',
       writing: 'Gerando o prompt…',
       writingAi: 'A IA está escrevendo o prompt com as suas respostas…'
+    },
+    errors: {
+      invalid_suggestion: 'A resposta do modelo não era uma sugestão utilizável.',
+      unknown_option: 'O modelo escolheu uma opção que não está na lista.',
+      timeout: 'O modelo não respondeu a tempo.',
+      unavailable: 'Não foi possível falar com o modelo (detalhes no log do Hermes).',
+      empty_reply: 'O modelo devolveu uma resposta vazia; um filtro do provedor pode tê-la barrado.',
+      bad_request: 'O pedido estava incompleto.',
+      nothing_to_improve: 'Não há texto seu para melhorar aqui.',
+      invalid_prompt: 'A resposta do modelo não era um prompt utilizável.'
     },
     preview: {
       ai: '✨ Prompt escrito pela IA',

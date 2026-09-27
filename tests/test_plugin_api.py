@@ -192,3 +192,35 @@ def test_every_request_string_and_list_has_a_max_length():
             if name in ("field", "isDefault"):
                 continue
             assert any(getattr(m, "max_length", None) for m in f.metadata), f"{model.__name__}.{name}"
+
+
+# ---- fix round 3 (CT-08): loader fallback and engine-unavailable branches ----
+def test_loader_falls_back_to_the_file_when_the_package_import_fails(monkeypatch):
+    monkeypatch.setattr(plugin_api, "__package__", "fakepkg")
+
+    def no_package(*a, **k):
+        raise ImportError("no package")
+
+    monkeypatch.setattr(plugin_api.importlib, "import_module", no_package)
+    assert hasattr(plugin_api._load("suggest_engine", "compose"), "compose")
+
+
+def test_loader_reports_a_missing_sibling_file(monkeypatch):
+    monkeypatch.setattr(plugin_api, "__package__", None)
+    monkeypatch.setattr(plugin_api.importlib.util, "spec_from_file_location", lambda *a, **k: None)
+    with pytest.raises(RuntimeError, match="nope could not be loaded"):
+        plugin_api._load("nope", "x")
+
+
+def test_compose_route_reports_engine_crash_as_documented_500(monkeypatch, caplog):
+    api = _broken_client(monkeypatch)
+    with caplog.at_level(logging.ERROR):
+        response = api.post("/compose", json={"intent": "Crie um app"})
+    assert response.status_code == 500
+    assert response.json() == {"ok": False, "error": "compose engine unavailable"}
+    assert any("compose" in r.getMessage() for r in caplog.records)
+
+
+def test_suggest_route_engine_crash_body_is_the_documented_500(monkeypatch):
+    response = _broken_client(monkeypatch).post("/suggest", json={"intent": "Crie um app", "field": FIELD})
+    assert response.status_code == 500 and response.json() == {"ok": False, "error": "suggest engine unavailable"}
