@@ -163,6 +163,7 @@ function fold(text) {
   return text.slice(0, 4000).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 }
 
+// Languages: Portuguese (unaccented) + English; tested on normalize()/fold() output (lower-cased, NFD diacritics stripped).
 const CATEGORY_RULES = [
   ['agent', /\b(automati[sz]\w*|automate\w*|agentes?|agents?|workflows?|cron\w*|pipelines?|bots?)\b/],
   ['code', /\b(react|vue|angular|svelte|api|rest|codigo|code|bugs?|func(ao|oes)|functions?|scripts?|dashboards?|apps?|aplicativos?|frontend|front-end|backend|css|html|typescript|javascript|python|node|repos?|repositorio|pull request|pr|sites?|website|landing|pagina|page|componentes?|components?|login|deploy|endpoints?|refator\w*|refactor\w*)\b/],
@@ -173,6 +174,7 @@ const CATEGORY_RULES = [
 ]
 
 // Verb signals: an explicit request in the draft. Order matters.
+// Languages: Portuguese (unaccented) + English; tested on normalize()/fold() output (lower-cased, NFD diacritics stripped).
 const DELIVERABLE_RULES = [
   ['review', /\b(revise|revisar|revisao|review|reviews|audite|auditar|audit)\b/],
   ['workflow', /\b(automati[sz]\w*|automate\w*|agende|schedule|workflows?|pipelines?|cron)\b/],
@@ -182,9 +184,13 @@ const DELIVERABLE_RULES = [
   ['analysis', /\b(pesquise|pesquisar|research|compare|comparar|analise|analisar|analyze|analyse|investigue|investigate|avalie|evaluate)\b/],
   ['plan', /\b(plano|planeje|planejar|plan|roadmap|cronograma|estrategia|strategy)\b/]
 ]
+// Languages: Portuguese (unaccented) + English.
 const MAKE_VERB = /\b(crie|criar|escreva|escrever|write|create|build|construa|desenvolva|develop|implemente|implement|programe)\b/
+// Languages: Portuguese (unaccented) + English.
 const CODE_ARTIFACT = /\b(scripts?|func(ao|oes)|functions?|apis?|endpoints?|cli|clis|apps?|aplicativos?|modul[oe]s?|class(e|es)?|programas?|programs?|bots?)\b/
+// Languages: Portuguese (unaccented) + English.
 const TEXT_ARTIFACT = /(\be-?mails?\b|\b(posts?|artigos?|articles?|blog|carta|letter|newsletter|texto|essay|ensaio|roteiro|mensagem|message)\b)/
+// Languages: Portuguese (unaccented) + English.
 const QUESTION_START = /^(qual|quais|como|o que|por que|porque|quando|onde|quem|quanto|what|how|why|which|who|when|where|is|are|does|do|can)\b/
 
 const CATEGORY_DEFAULT = { code: 'implementation', research: 'analysis', writing: 'text', data: 'data', agent: 'workflow', business: 'plan', general: 'answer' }
@@ -192,10 +198,14 @@ const CATEGORY_DEFAULT = { code: 'implementation', research: 'analysis', writing
 const GROUP = { implementation: 'do', workflow: 'do', data: 'do', analysis: 'think', review: 'think', plan: 'think', answer: 'think', text: 'write' }
 
 // [opus55] the design guidance is about frontend work being created: only with a create/redesign verb, never for fixes.
+// Languages: Portuguese (unaccented) + English.
 const REDESIGN_VERB = /\b(redesign|redesenhe|redesenhar|restyle)\b/
+// Languages: Portuguese (unaccented) + English.
 const FIX_VERB = /\b(fix|corrija|corrigir|conserte|debug|depure|refactor|refatore|refatorar)\b/
 // Running or shipping a site is not frontend work ("Crie um script de deploy do site").
+// Languages: Portuguese (unaccented) + English.
 const OPS_TERM = /\b(deploys?|deployment|pipelines?|ci|cd|backups?|servidor|servers?|cron|infra|docker|kubernetes|dns|nginx)\b/
+// Languages: Portuguese (unaccented) + English.
 const INTERFACE = /\b(dashboards?|sites?|website|landing|pages?|pagina|telas?|screens?|interfaces?|ui|ux|frontend|front-end|layout|componentes?|components?|apps?|aplicativos?|html|css|react|vue|svelte)\b/
 
 function detect(b) {
@@ -439,12 +449,18 @@ const FRONTEND_CHANGE_LINES = [
   '- preserve responsive behavior and expected states;',
   '- render and inspect the result before finalizing.'
 ].join('\n')
+// Languages: Portuguese (unaccented) + English; tested on fold()ed draft text (NFD, diacritics stripped, lower-cased).
 const UI_TERM = /\b(dashboards?|landing|telas?|screens?|interfaces?|ui|ux|frontend|front-end|layout|componentes?|components?|botao|botoes|buttons?|html|css|react|vue|svelte)\b/
 // Site/page words mean frontend only when the draft is not about running or shipping the site.
+// Languages: Portuguese (unaccented) + English.
 const WEB_TERM = /\b(sites?|website|pages?|pagina)\b/
+// Languages: Portuguese (unaccented) + English.
 const OPS_TERM = /\b(deploys?|deployment|pipelines?|ci|cd|backups?|servidor|servers?|cron|infra|docker|kubernetes|dns|nginx)\b/
+// Languages: Portuguese (unaccented) + English.
 const UI_MAKE = /\b(crie|criar|construa|desenvolva|build|create|develop|make|implemente|implement)\b/
+// Languages: Portuguese (unaccented) + English.
 const UI_EDIT = /\b(ajuste|ajustar|altere|alterar|mude|mudar|corrija|corrigir|conserte|fix|change|update|atualize|adjust|tweak|melhore|improve|estilize|style|redesign|redesenhe|reorganize|mova|move|adicione|add|remova|remove)\b/
+// Languages: Portuguese (unaccented) + English.
 const UI_APP = /\b(apps?|aplicativos?)\b/
 
 // gpt6-rethinking-prompts.md: "If the task includes getting the implementation running, inspecting the
@@ -529,6 +545,7 @@ function read(brief) {
 }
 
 // Verb groups (pt + en). The earliest match in the draft decides the deliverable.
+// Languages: Portuguese (unaccented) + English; runs on fold(goal) text (NFD, diacritics stripped, lower-cased). 'answer' also anchors on PT/EN question words.
 const VERBS = [
   ['review', /\b(revise|revisar|revisao|review|audite|auditar|audit|diagnostique|diagnosticar|diagnose|critique)\b/],
   ['analysis', /\b(pesquise|pesquisar|pesquisa|compare|comparar|research|investigue|investigar|investigate|avalie|avaliar|evaluate|analise|analisar|analyze|analyse|levante)\b/],
@@ -538,11 +555,17 @@ const VERBS = [
   ['implementation', /\b(build|create|implement|develop|fix|make|add|refactor|code|programe|implemente|implementar|crie|criar|desenvolva|desenvolver|construa|construir|corrija|corrigir|conserte|adicione|refatore)\b/],
   ['answer', /(^|\s)(o que|qual|quais|como|por que|porque|explique|what|which|how|why|explain|who|quem)\b/]
 ]
+// Languages: Portuguese (unaccented) + English.
 const MAKE_VERB = /\b(write|escreva|escrever|create|crie|criar|build|construa|develop|desenvolva|implement|implemente|programe)\b/
+// Languages: Portuguese (unaccented) + English.
 const CODE_ARTIFACT = /\b(scripts?|funcao|funcoes|functions?|apis?|endpoints?|cli|clis|apps?|aplicativos?|modulos?|modules?|classes?|programas?|programs?|bots?)\b/
+// Languages: Portuguese (unaccented) + English.
 const TEXT_ARTIFACT = /(\be-?mails?\b|\b(posts?|artigos?|articles?|blog|carta|letter|newsletter|texto|essay|ensaio|roteiro|mensagem|message)\b)/
+// Languages: Portuguese (unaccented) + English.
 const DATA_NOUN = /\b(planilha|csv|xlsx|spreadsheet|dataset|dados|data|sql|tabela de vendas|metricas|metrics)\b/
+// Languages: Portuguese (unaccented) + English.
 const CODE_NOUN = /\b(codigo|code|app|api|script|funcao|function|bug|pull request|pr|repo|repositorio|cli|site|dashboard|react|python|backend|frontend)\b/
+// Languages: Portuguese (unaccented) + English.
 const TEXT_NOUN = /\b(e-?mail|post|artigo|article|texto|text|carta|letter|blog)\b/
 const CATEGORY = { implementation: 'code', analysis: 'research', review: 'code', plan: 'business', text: 'writing', data: 'data', workflow: 'agent', answer: 'general' }
 // Explicit deliverables that still fit a draft whose verb says otherwise.
@@ -567,9 +590,13 @@ function detect(goal) {
   return { detected: kind, resolved: kind ?? fallback, text }
 }
 
+// Languages: Portuguese + English phrases (matched on fold()ed text; 'pe[cç]a' also tolerates the cedilla).
 const ASK_FIRST = /\b(pergunte antes|confirme antes|pe[cç]a (confirmacao|aprovacao)|ask (me )?(first|before)|confirm (with me )?before|check with me)\b/
+// Languages: Portuguese + English phrases (matched on fold()ed text; 'pe[cç]a' also tolerates the cedilla).
 const NO_SUBAGENTS = /\b(sem subagentes?|nao use subagentes?|without subagents?|no subagents?|do not use subagents?|don't use subagents?)\b/
+// Languages: Portuguese + English phrases (matched on fold()ed text; 'pe[cç]a' also tolerates the cedilla).
 const WANT_SUBAGENTS = /\b(use subagentes?|com subagentes?|use subagents?|with subagents?)\b/
+// Languages: Portuguese (unaccented) + English; 'json' is language-neutral.
 const FORMAT_HINTS = [['json', /\bjson\b/], ['table', /\b(tabela|table)\b/], ['steps', /\b(passo a passo|step by step|numbered steps|passos)\b/]]
 
 function analyzeSafe(b) {
