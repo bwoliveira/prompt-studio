@@ -13,6 +13,9 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   (`provider_payment`, `provider_bad_request`).
 - The Desktop half loads again on Hermes 0.20.0 to 0.21.4: it no longer imports `ListRow`/`ToggleRow`
   by name (added to the SDK in 0.21.5) and falls back to its own settings rows when they are missing.
+- README: Troubleshooting section for "F4 does nothing" (check Capabilities → Plugins for the failed badge and error).
+- README: Apple keyboard notes (fn with F-keys, Alt is Option; Alt shortcuts match the physical key).
+- README: the "not a recognized config key" warning for `auxiliary.prompt_studio.*` is harmless; the value is used.
 
 ## 1.6.1
 

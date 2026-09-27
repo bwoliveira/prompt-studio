@@ -20,6 +20,7 @@ The two prompt engines were written for this plugin from the official Anthropic 
 - [Usage](#usage)
 - [Keyboard](#keyboard)
 - [Configuration](#configuration)
+- [Troubleshooting](#troubleshooting)
 - [Privacy and security](#privacy-and-security)
 - [Built for Claude Opus 5.5 and GPT-6 Astra](#built-for-claude-opus-55-and-gpt-6-astra)
 - [How it follows the Hermes plugin guidelines](#how-it-follows-the-hermes-plugin-guidelines)
@@ -152,6 +153,9 @@ Keys and scope:
   Inside the studio's own answer field, keys stay in that field (Enter makes a new line), so typing an
   answer never triggers the app's composer.
 - **Alt:** use the left Alt. Alt+digits follow the physical number row, whatever the keyboard layout.
+- **Apple keyboards:** press fn with the F-keys (F4 is fn+F4) unless *Use F1, F2, etc. keys as standard
+  function keys* is on in macOS Keyboard settings. Alt is the Option (⌥) key. Alt shortcuts follow the
+  physical key, so ⌥E still means Alt+E even though macOS would type a dead key there.
 - **Conflicts checked:** these keys were checked against Hermes Desktop's own bindings and the Linux Mint
   (Cinnamon) desktop, which uses only Alt with the F-keys.
 
@@ -213,7 +217,18 @@ like any other side model:
 - **Effort-aware `max_tokens`:** `max_tokens` covers thinking plus text, so at medium effort a smaller cap is
   raised to 4096, and at high effort and above to 8192. A larger cap is kept.
 
+- `hermes config set auxiliary.prompt_studio.<field> …` prints *"not a recognized config key — it was saved
+  anyway"*. The warning is harmless: the CLI checks keys against Hermes's built-in list only, which does not
+  include auxiliary tasks registered by plugins. The value is saved and the plugin reads it.
+
 The REST routes and their request and response shapes are in `docs/CONTRACT.md`.
+
+## Troubleshooting
+
+- **F4 does nothing:** F4 is registered by the plugin's own Desktop code, so if that code did not load,
+  nothing listens for the key. Open **Capabilities → Plugins** and find Prompt Studio: a red **failed**
+  badge means the Desktop half did not load, and the error is shown under it. Hermes Desktop also shows a
+  *Plugin "…" failed to load* toast at startup. Usually the fix is updating Hermes Desktop.
 
 ## Privacy and security
 
