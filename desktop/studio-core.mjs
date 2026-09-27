@@ -390,6 +390,8 @@ const TRANSPARENCY_LINE = "If a skill or an instruction file such as AGENTS.md c
 // gpt6-using.md (verbatim): "Before asking the user clarifying questions, you should complete the work
 // that is already authorized from context and necessary to make the proposed action concrete and reviewable."
 const AUTHORIZED_LINE = 'Before asking the user clarifying questions, you should complete the work that is already authorized from context and necessary to make the proposed action concrete and reviewable.'
+// gpt6-using.md (verbatim, the sentences between AUTHORIZED_LINE and NO_PERMISSION_LINE in the same paragraph).
+const APPROVAL_LINE = 'The user should be approving a concrete, reviewable result. For example, before deploying a change, writing to an external application, merging a PR or publishing a site, do all the required work first so that user approval is the final step.'
 // gpt6-using.md (verbatim).
 const NO_PERMISSION_LINE = "You don't need user permission for reversible tasks, read-only actions, reviews or fixes, or anything for which authorization is provided earlier in the session or strongly implied from the task instruction."
 // gpt56-prompt-guidance.md (verbatim): "Require confirmation for external writes, destructive actions,
@@ -409,6 +411,24 @@ const NO_HYPOTHETICAL_LINE = 'Do not introduce unsolicited warnings, disclaimers
 // gpt6-using.md: "When instructions leave room for interpretation, it uses the context it has to fill
 // in routine gaps and asks focused questions when the answer could change the outcome."
 const GUIDED_LINE = 'Before acting, ask focused questions about anything whose answer could change the outcome; fill routine gaps from context and state the assumptions you made.'
+
+// Frontend (vendor, previous family; the GPT-6 guide is silent on frontend).
+// frontend-prompt.md, adapted to the imperative: "You build feature-complete controls, states, and views
+// that a target user would naturally expect from the application."
+const FEATURE_COMPLETE_LINE = 'Build feature-complete controls, states, and views that a target user would naturally expect from the application.'
+// gpt56-prompt-guidance.md (verbatim): "render and inspect the result before finalizing."
+const RENDER_LINE = 'Render and inspect the result before finalizing.'
+// gpt56-prompt-guidance.md (verbatim bullets under "For incremental frontend changes:").
+const FRONTEND_CHANGE_LINES = [
+  'For this frontend change:',
+  '- inspect and preserve existing design tokens, components, and patterns;',
+  '- do not add extra features or decorative UI unless requested;',
+  '- preserve responsive behavior and expected states;',
+  '- render and inspect the result before finalizing.'
+].join('\n')
+const UI_TERM = /\b(dashboards?|sites?|website|landing|pages?|pagina|telas?|screens?|interfaces?|ui|ux|frontend|front-end|layout|componentes?|components?|html|css|react|vue|svelte)\b/
+const UI_MAKE = /\b(crie|criar|construa|desenvolva|build|create|develop|make|implemente|implement)\b/
+const UI_APP = /\b(apps?|aplicativos?)\b/
 
 // gpt6-rethinking-prompts.md: "If the task includes getting the implementation running, inspecting the
 // result, and fixing what fails, make that part of the request."
@@ -590,17 +610,23 @@ function buildSafe(brief) {
 
   add('task', 'TASK', [b.goal.trim() ? b.goal : 'No task was given. Ask the user what they need.'])
   add('context', 'CONTEXT', [b.context])
-  add('requirements', 'REQUIREMENTS', [b.requirements])
+  const acts = ACTION.includes(deliverable)
+  const goalText = fold(b.goal)
+  const making = UI_MAKE.test(goalText)
+  const frontend = !acts ? [] : making && (UI_TERM.test(goalText) || UI_APP.test(goalText))
+    ? [FEATURE_COMPLETE_LINE, RENDER_LINE]
+    : !making && UI_TERM.test(goalText) ? [FRONTEND_CHANGE_LINES] : []
+  add('requirements', 'REQUIREMENTS', [b.requirements, ...frontend])
   if (b.examples.trim()) add('examples', 'EXAMPLES', [b.examples, EXAMPLES_LINE])
   add('precedence', 'PRECEDENCE', [PRIORITY_LINE, TRANSPARENCY_LINE])
 
-  const acts = ACTION.includes(deliverable)
   if (autonomy === 'guided') {
     add('autonomy', 'AUTONOMY', [GUIDED_LINE, READ_ONLY.includes(deliverable) ? READ_ONLY_LINE : '', CONFIRM_LINE])
   } else {
     add('autonomy', 'AUTONOMY', [
       acts ? ACTION_LINE : READ_ONLY.includes(deliverable) ? READ_ONLY_LINE : '',
       AUTHORIZED_LINE,
+      APPROVAL_LINE,
       NO_PERMISSION_LINE,
       CONFIRM_LINE,
       autonomy === 'proactive' ? NO_HYPOTHETICAL_LINE : ''

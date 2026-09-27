@@ -192,3 +192,28 @@ test('section names: PRECEDENCE and DONE WHEN (none of the old site-engine names
   assert.ok(titles.includes('PRECEDENCE') && titles.includes('DONE WHEN'), titles.join(','))
   for (const old of ['INSTRUCTION PRIORITY', 'COMPLETION']) assert.ok(!prompt.includes(old), old)
 })
+
+test('AS-2: balanced autonomy reproduces the approval paragraph in order, then confirmation', () => {
+  const p = ENGINE.build({ goal: 'Fix the timeout bug in the billing API' }).prompt
+  const approval = 'The user should be approving a concrete, reviewable result. For example, before deploying a change, writing to an external application, merging a PR or publishing a site, do all the required work first so that user approval is the final step.'
+  const noPerm = "You don't need user permission"
+  const confirm = 'Require confirmation for external writes'
+  assert.ok(p.includes(`${AUTHORIZED}\n${approval}\n${noPerm}`))
+  assert.ok(p.indexOf(confirm) > p.indexOf(noPerm))
+  const g = ENGINE.build({ goal: 'Fix the timeout bug in the billing API', autonomy: 'guided' }).prompt
+  assert.equal(g.includes('user approval is the final step'), false)
+})
+
+test('AS-1: frontend guidance for new builds and incremental UI changes only', () => {
+  const build = ENGINE.build({ goal: 'Build a landing page for my bakery' }).prompt
+  assert.ok(build.includes('Build feature-complete controls, states, and views that a target user would naturally expect from the application.'))
+  assert.ok(build.includes('Render and inspect the result before finalizing.'))
+  assert.equal(build.includes('For this frontend change:'), false)
+  const change = ENGINE.build({ goal: 'Ajuste o layout da tela de login no React' }).prompt
+  assert.ok(change.includes('For this frontend change:'))
+  assert.ok(change.includes('inspect and preserve existing design tokens, components, and patterns'))
+  assert.ok(change.includes('render and inspect the result before finalizing.'))
+  assert.equal(change.includes('feature-complete'), false)
+  const backend = ENGINE.build({ goal: 'Fix the timeout bug in the billing API' }).prompt
+  for (const s of ['feature-complete controls', 'Render and inspect', 'For this frontend change:']) assert.equal(backend.includes(s), false)
+})
