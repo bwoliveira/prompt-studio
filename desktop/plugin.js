@@ -1,16 +1,35 @@
 import {
   atom,
+  Codicon,
   COMPOSER_AREAS,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
   GlyphSpinner,
   host,
   Kbd,
+  ListRow,
+  ModelCatalogMenu,
+  ModelMenuCloseContext,
   PALETTE_AREA,
+  reasoningEffortLabel,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Tip,
+  ToggleRow,
   usePluginI18n,
   useValue
 } from '@hermes/plugin-sdk'
 import { jsx, jsxs } from 'react/jsx-runtime'
-import { Fragment, useEffect, useState } from 'react'
+import { Component, Fragment, useEffect, useState } from 'react'
 
 const ID = 'prompt-studio'
 
@@ -1300,7 +1319,34 @@ const UI_MESSAGES = {
       empty_reply: 'The model returned an empty reply; a provider filter may have blocked it.',
       bad_request: 'The request was incomplete.',
       nothing_to_improve: 'There is no text of yours to improve here.',
-      invalid_prompt: 'The model reply was not a usable prompt.'
+      invalid_prompt: 'The model reply was not a usable prompt.',
+      no_session: 'This session was not found.',
+      empty_session: 'This session has no conversation yet.',
+      invalid_summary: 'The model did not return a usable summary.'
+    },
+    context: {
+      reading: 'Reading this session…',
+      used: (model, seconds) => `Session context read (${model}, ${seconds} s)`,
+      failed: reason => `Session context not available: ${reason}`
+    },
+    settings: {
+      button: 'Settings',
+      title: 'Prompt Studio settings',
+      helper: 'Questions model',
+      helperDescription: 'Suggests answers and writes the final prompt.',
+      helperInherit: 'Hermes default',
+      context: 'Context model',
+      contextDescription: 'Reads this session when the studio opens. A fast model keeps it quick.',
+      contextInherit: 'Same as the questions',
+      contextInheritDefault: 'Same as the questions (Hermes default)',
+      clear: 'Clear',
+      readContext: "Read this session's context when opening",
+      readContextDescription: 'Only for sessions that already have a conversation, and never with AI off.',
+      language: 'Language',
+      languageAuto: 'Follow Hermes',
+      languagePt: 'Português',
+      languageEn: 'English',
+      close: 'Close'
     },
     preview: {
       ai: '✨ Prompt written by the AI',
@@ -1320,6 +1366,7 @@ const UI_MESSAGES = {
       title: 'Keyboard shortcuts',
       open: 'Open Prompt Studio (from the message field)',
       help: 'Show or hide this list',
+      settings: 'Settings: models, session context, language',
       accept: 'Accept the recommended choice (in Auto mode, the AI pick) or confirm what you typed',
       skip: "Skip, I don't have one, or use the default",
       useAi: 'Use the AI text or the recommended one it offers',
@@ -1470,7 +1517,34 @@ const UI_MESSAGES = {
       empty_reply: 'O modelo devolveu uma resposta vazia; um filtro do provedor pode tê-la barrado.',
       bad_request: 'O pedido estava incompleto.',
       nothing_to_improve: 'Não há texto seu para melhorar aqui.',
-      invalid_prompt: 'A resposta do modelo não era um prompt utilizável.'
+      invalid_prompt: 'A resposta do modelo não era um prompt utilizável.',
+      no_session: 'Esta sessão não foi encontrada.',
+      empty_session: 'Esta sessão ainda não tem conversa.',
+      invalid_summary: 'O modelo não devolveu um resumo utilizável.'
+    },
+    context: {
+      reading: 'Lendo esta sessão…',
+      used: (model, seconds) => `Contexto da sessão lido (${model}, ${seconds} s)`,
+      failed: reason => `Contexto da sessão indisponível: ${reason}`
+    },
+    settings: {
+      button: 'Configurações',
+      title: 'Configurações do Prompt Studio',
+      helper: 'Modelo das perguntas',
+      helperDescription: 'Sugere respostas e escreve o prompt final.',
+      helperInherit: 'Padrão do Hermes',
+      context: 'Modelo de contexto',
+      contextDescription: 'Lê esta sessão quando o studio abre. Um modelo rápido deixa a leitura ágil.',
+      contextInherit: 'Mesmo das perguntas',
+      contextInheritDefault: 'Mesmo das perguntas (padrão do Hermes)',
+      clear: 'Limpar',
+      readContext: 'Ler o contexto desta sessão ao abrir',
+      readContextDescription: 'Só em sessões que já têm conversa, e nunca com a IA desligada.',
+      language: 'Idioma',
+      languageAuto: 'Seguir o Hermes',
+      languagePt: 'Português',
+      languageEn: 'English',
+      close: 'Fechar'
     },
     preview: {
       ai: '✨ Prompt escrito pela IA',
@@ -1490,6 +1564,7 @@ const UI_MESSAGES = {
       title: 'Atalhos de teclado',
       open: 'Abrir o Prompt Studio (a partir do campo de mensagem)',
       help: 'Mostrar ou esconder esta lista',
+      settings: 'Configurações: modelos, contexto da sessão, idioma',
       accept: 'Aceitar o recomendado (no modo Auto, a escolha da IA) ou confirmar o que você digitou',
       skip: 'Pular, Não tenho, ou usar o padrão',
       useAi: 'Usar o texto da IA ou o recomendado que ela oferece',
@@ -1661,10 +1736,28 @@ function resolveMessage(bundle, key, args) {
   return typeof value === 'string' ? value : null
 }
 
+// Studio language (settings): 'auto' follows Hermes; 'pt' / 'en' use that bundle for every Studio string,
+// the questions (through localeOf) and the `locale` sent to the backend.
+const LANGUAGES = ['auto', 'pt', 'en']
+const $language = atom('auto')
+
+function fixedT(language) {
+  return (key, ...args) => resolveMessage(UI_MESSAGES[language], key, args) ?? resolveMessage(UI_MESSAGES.en, key, args) ?? key
+}
+
 function tr(key, ...args) {
+  const language = $language.get()
+  if (language !== 'auto') return fixedT(language)(key, ...args)
   const t = pluginContext?.i18n?.t
   if (t) return t(key, ...args)
   return resolveMessage(UI_MESSAGES.en, key, args) ?? key
+}
+
+// usePluginI18n(ID), overridden by the Studio language when it is not 'auto'.
+function useT() {
+  const hermesT = usePluginI18n(ID)
+  const language = useValue($language)
+  return language === 'auto' ? hermesT : fixedT(language)
 }
 
 // The app decides the language; the bundle tells which one resolved ('en' is the fallback).
@@ -1774,6 +1867,20 @@ function update(action) {
 // ---------------------------------------------------------------------------
 const PREF_TARGET = 'target'
 const PREF_AI_MODE = 'aiMode'
+// Settings (CX-1): model choices are {provider, model, effort}; an empty model means "use the Hermes config".
+const PREF_HELPER_MODEL = 'helperModel'
+const PREF_CONTEXT_MODEL = 'contextModel'
+const PREF_READ_CONTEXT = 'readContext'
+const PREF_LANGUAGE = 'language'
+const EMPTY_CHOICE = { provider: '', model: '', effort: '' }
+const $helperModel = atom(EMPTY_CHOICE)
+const $contextModel = atom(EMPTY_CHOICE)
+const $readContext = atom(true)
+const $settingsOpen = atom(false)
+// Session context read on opening: null | { status: 'reading'|'ready'|'error', summary, model, ms, reason }
+const $context = atom(null)
+let contextPromise = null
+let contextSerial = 0
 // AI help mode: 'off' | 'manual' (button per question) | 'auto' (asks on every question).
 const AI_MODES = ['auto', 'manual', 'off']
 const $target = atom(null)
@@ -1799,6 +1906,45 @@ function readAiMode() {
   const raw = readPref(PREF_AI_MODE, 'auto')
   return AI_MODES.includes(raw) ? raw : 'auto'
 }
+
+function readChoice(key) {
+  const raw = readPref(key, null)
+  if (!raw || typeof raw !== 'object') return EMPTY_CHOICE
+  return { provider: String(raw.provider || ''), model: String(raw.model || ''), effort: String(raw.effort || '') }
+}
+
+function loadSettings() {
+  $helperModel.set(readChoice(PREF_HELPER_MODEL))
+  $contextModel.set(readChoice(PREF_CONTEXT_MODEL))
+  $readContext.set(readPref(PREF_READ_CONTEXT, true) !== false)
+  const language = readPref(PREF_LANGUAGE, 'auto')
+  $language.set(LANGUAGES.includes(language) ? language : 'auto')
+}
+
+function setChoice(which, value) {
+  const choice = { provider: String(value?.provider || ''), model: String(value?.model || ''), effort: String(value?.effort || '') }
+  ;(which === 'helper' ? $helperModel : $contextModel).set(choice)
+  writePref(which === 'helper' ? PREF_HELPER_MODEL : PREF_CONTEXT_MODEL, choice)
+}
+
+function setReadContext(on) {
+  $readContext.set(Boolean(on))
+  writePref(PREF_READ_CONTEXT, Boolean(on))
+}
+
+function setLanguage(language) {
+  if (!LANGUAGES.includes(language)) return
+  $language.set(language)
+  writePref(PREF_LANGUAGE, language)
+}
+
+// model_choice for the backend, or null when nothing is chosen (Hermes config).
+function choiceOf(value) {
+  return value?.model?.trim() ? { provider: value.provider, model: value.model, effort: value.effort } : null
+}
+const helperChoice = () => choiceOf($helperModel.get())
+// Empty context model = the helper's choice (which may itself be empty = config).
+const contextChoice = () => choiceOf($contextModel.get()) || helperChoice()
 
 function currentTarget() {
   let target = $target.get()
@@ -1839,10 +1985,13 @@ function scheduleAutoSuggestion() {
   cancelAutoSuggestion()
   const key = questionKey($studio.get())
   const delay = globalThis.__promptStudioAutoSuggestDelayMs ?? AUTO_SUGGEST_DELAY_MS
-  autoSuggestTimer = setTimeout(() => {
+  const serial = suggestSerial
+  autoSuggestTimer = setTimeout(async () => {
     autoSuggestTimer = null
+    // A pending session context read comes first (it has its own deadline); manual asks never wait.
+    if (contextPromise) await contextPromise
     const state = $studio.get()
-    if ($aiMode.get() !== 'auto' || state.status !== 'active' || questionKey(state) !== key) return
+    if (serial !== suggestSerial || $aiMode.get() !== 'auto' || state.status !== 'active' || questionKey(state) !== key) return
     requestSuggestion()
   }, delay)
 }
@@ -1924,7 +2073,10 @@ function startFromComposer() {
   }
   suggestionCache.clear()
   $helpOpen.set(false)
+  // Settings are read from storage on every opening (storage is the source of truth).
+  loadSettings()
   update({ type: 'START', attachments, intent })
+  startContextRead()
   askNext()
 }
 
@@ -1992,6 +2144,7 @@ function cancelStudio() {
   if (state.status === 'idle') return
   clearSuggestion()
   composeSerial += 1
+  stopContextRead()
   $helpOpen.set(false)
   const intent = state.intent
   update({ type: 'RESET' })
@@ -2005,6 +2158,8 @@ function cancelStudio() {
 // is told so in plain words (the technical detail stays in the note's tooltip).
 let composeSerial = 0
 const COMPOSE_CLIENT_TIMEOUT_MS = 50_000
+// A bit above the backend's 15 s hard deadline for /context.
+const CONTEXT_CLIENT_TIMEOUT_MS = 17_000
 const SUGGEST_CLIENT_TIMEOUT_MS = 25_000
 const TIMEOUT_MESSAGE = 'client timeout'
 const MISSING_ROUTE = /404|405|not found|method not allowed/i
@@ -2032,6 +2187,42 @@ function errorDetail(response) {
   const key = `errors.${code}`
   const text = code ? tr(key) : null
   return text && text !== key ? text : String(response?.error || '')
+}
+
+function stopContextRead() {
+  contextSerial += 1
+  contextPromise = null
+  $context.set(null)
+}
+
+// Once per opening, in the background: only with AI on, the switch on and a stored session id (a fresh
+// draft has none). Never blocks the form; a failure leaves a short note and the Studio goes on without it.
+function startContextRead() {
+  stopContextRead()
+  const sessionId = host.state?.focusedStoredSessionId?.get?.()
+  if (!pluginContext || $aiMode.get() === 'off' || !$readContext.get() || !sessionId) return
+  const serial = contextSerial
+  const profile = host.state?.focusedSessionProfile?.get?.()
+  const choice = contextChoice()
+  const body = { session_id: sessionId, ...(profile ? { profile } : {}), locale: activeLocale(), ...(choice ? { model_choice: choice } : {}) }
+  $context.set({ status: 'reading' })
+  const fail = code => {
+    const key = `errors.${code}`
+    const text = tr(key)
+    return { status: 'error', reason: text && text !== key ? text : tr('errors.unavailable') }
+  }
+  contextPromise = withTimeout(pluginContext.rest('/context', { method: 'POST', body }), globalThis.__promptStudioContextTimeoutMs ?? CONTEXT_CLIENT_TIMEOUT_MS)
+    .then(
+      response => (response?.ok && typeof response.summary === 'string' && response.summary.trim()
+        ? { status: 'ready', summary: response.summary, model: response.model || '', ms: Number(response.ms) || 0 }
+        : fail(response?.ok ? 'invalid_summary' : typeof response?.code === 'string' ? response.code : 'unavailable')),
+      error => fail(String(error?.message || error) === TIMEOUT_MESSAGE ? 'timeout' : 'unavailable')
+    )
+    .then(next => {
+      if (serial !== contextSerial) return
+      contextPromise = null
+      $context.set(next)
+    })
 }
 
 async function generatePrompt() {
@@ -2069,7 +2260,7 @@ async function generatePrompt() {
       // to the local engine instead of leaving the studio stuck on "writing".
       const response = await withTimeout(pluginContext.rest('/compose', {
         method: 'POST',
-        body: { target, intent: requestState.intent, answers: studioAnswers(target, requestState.intent, ladder, locale), baseline: engineResult.prompt }
+        body: { target, intent: requestState.intent, answers: studioAnswers(target, requestState.intent, ladder, locale), baseline: engineResult.prompt, ...(helperChoice() ? { model_choice: helperChoice() } : {}) }
       }), COMPOSE_CLIENT_TIMEOUT_MS)
       if (serial !== composeSerial || $studio.get().status !== 'briefing') return // cancelled meanwhile
       if ($aiMode.get() === 'off') {
@@ -2102,6 +2293,7 @@ function usePreview() {
     return
   }
   composerAdapter.forwardAttachments(state.attachments)
+  stopContextRead()
   $helpOpen.set(false)
   update({ type: 'RESET' })
 }
@@ -2134,7 +2326,9 @@ async function requestSuggestion(mode = 'suggest') {
           recommended: state.current.recommended || null,
           hint: state.current.hint || null,
           guide: state.current.guide || null
-        }
+        },
+        ...(helperChoice() ? { model_choice: helperChoice() } : {}),
+        ...($context.get()?.status === 'ready' ? { session_context: $context.get().summary.slice(0, 3000) } : {})
       }
     }), SUGGEST_CLIENT_TIMEOUT_MS)
     next = response?.ok
@@ -2192,9 +2386,11 @@ const QUESTION_HELP_ID = 'prompt-studio-question-help'
 // phase, so the keys also work with the cursor in the answer field.
 const OPEN_KEY = 'F4'
 const HELP_KEY = 'F1'
+const SETTINGS_KEY = 'F3'
 const SHORTCUT_MAP = [
   [OPEN_KEY, 'open'],
   [HELP_KEY, 'help'],
+  [SETTINGS_KEY, 'settings'],
   ['F5', 'accept'],
   ['F6', 'skip'],
   ['F7', 'useAi'],
@@ -2283,7 +2479,7 @@ function keyProps(t, keyHint, title) {
 }
 
 function Button({ children, onClick, variant = 'default', disabled = false, title, data, keyHint, reserveKey, ariaLabel }) {
-  const t = usePluginI18n(ID)
+  const t = useT()
   const primary = variant === 'primary'
   const accent = variant === 'accent'
   const live = keyHint && !disabled ? keyHint : undefined
@@ -2324,7 +2520,7 @@ function Button({ children, onClick, variant = 'default', disabled = false, titl
 }
 
 function Ladder({ ladder, canEdit, editing }) {
-  const t = usePluginI18n(ID)
+  const t = useT()
   if (!ladder.length && !editing) return null
   // Rows in display order; the step being edited keeps its place as a marker.
   const rows = ladder.map((rung, index) => ({ rung, index }))
@@ -2370,7 +2566,7 @@ function Ladder({ ladder, canEdit, editing }) {
 // The total can grow (a follow-up question appears after pasting), so it is shown as a bar,
 // not as "of N": a number that changes mid-way reads as a mistake.
 function Progress({ number, total }) {
-  const t = usePluginI18n(ID)
+  const t = useT()
   const done = Math.max(0, number - 1)
   const pct = Math.min(100, Math.round((done / Math.max(total, number, 1)) * 100))
   return jsxs('div', {
@@ -2409,7 +2605,7 @@ function mySuggestion(state, suggestion) {
 }
 
 function SuggestionRow({ state }) {
-  const t = usePluginI18n(ID)
+  const t = useT()
   const mode = useValue($aiMode)
   const suggestion = useValue($suggestion)
   // The paste step has nothing for the AI to guess: no AI row at all.
@@ -2504,7 +2700,7 @@ function enumRecommendation(current, mode, mine) {
 }
 
 function EnumAnswer({ state }) {
-  const t = usePluginI18n(ID)
+  const t = useT()
   const current = state.current
   const suggestion = useValue($suggestion)
   const mode = useValue($aiMode)
@@ -2532,7 +2728,7 @@ function EnumAnswer({ state }) {
 
 // Paste step: collapsed to two buttons until the user says they have something to paste.
 function PasteAnswer({ state }) {
-  const t = usePluginI18n(ID)
+  const t = useT()
   const [open, setOpen] = useState(Boolean(String(state.answer || '').trim()))
   if (open) return jsx(TextAnswer, { state, placeholder: t('answer.pastePlaceholder') })
   return jsxs('div', {
@@ -2545,7 +2741,7 @@ function PasteAnswer({ state }) {
 }
 
 function TextAnswer({ state, placeholder }) {
-  const t = usePluginI18n(ID)
+  const t = useT()
   const current = state.current
   // Opening the paste field moves the cursor into it.
   useEffect(() => { document.querySelector('[data-studio-answer-input]')?.focus({ preventScroll: true }) }, [])
@@ -2600,7 +2796,7 @@ function generateLabel(t, finished, mode) {
 }
 
 function ActionBar({ state }) {
-  const t = usePluginI18n(ID)
+  const t = useT()
   const busy = state.status === 'briefing'
   const mode = useValue($aiMode)
   // Before the last step, generating is a shortcut, not the next move: keep it secondary.
@@ -2631,7 +2827,7 @@ function ActionBar({ state }) {
 }
 
 function ImproveButton({ state }) {
-  const t = usePluginI18n(ID)
+  const t = useT()
   const mode = useValue($aiMode)
   const suggestion = useValue($suggestion)
   // Pasted text must stay byte for byte: no rewriting offered on the paste step.
@@ -2662,7 +2858,7 @@ const segmentStyle = selected => ({
 // Visible three-way choice instead of a button that cycles through hidden states. Alt+I belongs
 // to the group (aria-keyshortcuts); it moves to the next mode (Auto → On request → Off → Auto).
 function AiToggle() {
-  const t = usePluginI18n(ID)
+  const t = useT()
   const mode = useValue($aiMode)
   const next = AI_MODES[(AI_MODES.indexOf(mode) + 1) % AI_MODES.length]
   return jsxs('div', {
@@ -2691,7 +2887,7 @@ function AiToggle() {
 }
 
 function ActiveQuestion({ state }) {
-  const t = usePluginI18n(ID)
+  const t = useT()
   const current = state.current
   if (!current) return null
   return jsxs('div', {
@@ -2711,7 +2907,7 @@ function ActiveQuestion({ state }) {
 }
 
 function DoneRow() {
-  const t = usePluginI18n(ID)
+  const t = useT()
   const mode = useValue($aiMode)
   return jsx('div', {
     'data-studio': 'done',
@@ -2721,7 +2917,7 @@ function DoneRow() {
 }
 
 function PreviewPanel({ state }) {
-  const t = usePluginI18n(ID)
+  const t = useT()
   const { ai, engine, showing, note, noteDetail } = state.preview
   const prompt = state.preview[showing]
   const failed = !ai && Boolean(note)
@@ -2761,7 +2957,7 @@ function PreviewPanel({ state }) {
 }
 
 function LoadingRow({ children }) {
-  const t = usePluginI18n(ID)
+  const t = useT()
   return jsxs('div', {
     style: { alignItems: 'center', display: 'grid', gridTemplateColumns: '20px minmax(0, 1fr)', marginTop: '14px' },
     children: [
@@ -2788,7 +2984,7 @@ const TARGET_KEYS = { opus: 'Alt+O', astra: 'Alt+A' }
 
 // Exclusive choice: radiogroup + radio, like the AI mode selector.
 function TargetSwitch() {
-  const t = usePluginI18n(ID)
+  const t = useT()
   const target = useValue($target) || currentTarget()
   return jsxs('div', {
     'aria-label': t('target.group'),
@@ -2814,7 +3010,7 @@ function TargetSwitch() {
 
 // "Shortcuts" (F1): the whole key map in one place, with the layout notes.
 function ShortcutsButton() {
-  const t = usePluginI18n(ID)
+  const t = useT()
   const open = useValue($helpOpen)
   return jsx(Button, {
     data: { 'data-studio-shortcuts-help': true, 'aria-expanded': open, 'aria-controls': 'prompt-studio-shortcuts' },
@@ -2824,8 +3020,148 @@ function ShortcutsButton() {
   })
 }
 
+function SettingsButton() {
+  const t = useT()
+  return jsx(Button, {
+    ariaLabel: t('settings.button'),
+    data: { 'data-studio-settings': true, 'aria-haspopup': 'dialog' },
+    onClick: () => $settingsOpen.set(true),
+    keyHint: SETTINGS_KEY,
+    title: t('settings.button'),
+    children: jsx(Codicon, { name: 'settings-gear' })
+  })
+}
+
+function choiceLabel(value, inherit) {
+  if (!value.model.trim()) return inherit
+  const base = value.provider.trim() ? `${value.provider}: ${value.model}` : value.model
+  return value.effort.trim() ? `${base} · ${reasoningEffortLabel(value.effort)}` : base
+}
+
+// Detached model picker, the same controller pattern as the kanban task override: the SDK menu edits a
+// value held here, and Hermes' own presets are only read, never rewritten.
+// A model catalog that fails to render must not take the Studio down: the picker keeps its value.
+class CatalogBoundary extends Component {
+  constructor(props) { super(props); this.state = { failed: false } }
+  static getDerivedStateFromError() { return { failed: true } }
+  componentDidCatch() { /* the picker stays on its current value (default when empty) */ }
+  render() { return this.state.failed ? null : this.props.children }
+}
+
+function ModelPicker({ which, inherit }) {
+  const t = useT()
+  const value = useValue(which === 'helper' ? $helperModel : $contextModel)
+  const [open, setOpen] = useState(false)
+  const onChange = next => setChoice(which, next)
+  const controller = {
+    applyPreset: (preset, row) => onChange({ effort: preset.effort ?? '', model: row.model, provider: row.provider }),
+    current: { effort: value.effort, fast: false, model: value.model, provider: value.provider },
+    presetFor: () => ({}),
+    select: (model, provider) => onChange({ ...value, model, provider }),
+    setOptions: (patch, row) => {
+      if (patch.effort === undefined) return
+      onChange({ effort: patch.effort, model: row.model, provider: row.provider })
+    }
+  }
+  const set = Boolean(value.model.trim())
+  return jsxs('div', {
+    'data-studio-model-picker': which,
+    style: { alignItems: 'center', display: 'flex', gap: '6px', minWidth: 0 },
+    children: [
+      jsxs(DropdownMenu, {
+        onOpenChange: setOpen,
+        open,
+        children: [
+          jsx(DropdownMenuTrigger, {
+            asChild: true,
+            children: jsxs('button', {
+              style: { ...typeStyle, alignItems: 'center', background: 'transparent', border: '1px solid var(--ui-stroke-secondary)', borderRadius: '6px', color: set ? 'var(--ui-text-primary, inherit)' : 'var(--ui-text-secondary)', cursor: 'pointer', display: 'flex', flex: 1, fontSize: '12px', gap: '6px', justifyContent: 'space-between', minHeight: '28px', minWidth: 0, padding: '2px 8px' },
+              type: 'button',
+              children: [
+                jsx('span', { style: { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: choiceLabel(value, inherit) }),
+                jsx(Codicon, { name: 'chevron-down' })
+              ]
+            })
+          }),
+          jsx(DropdownMenuContent, {
+            align: 'start',
+            className: 'w-72 p-0',
+            children: jsx(CatalogBoundary, { children: jsx(ModelMenuCloseContext.Provider, { value: () => setOpen(false), children: jsx(ModelCatalogMenu, { controller }) }) })
+          })
+        ]
+      }),
+      set
+        ? jsx('button', {
+            'aria-label': t('settings.clear'),
+            'data-studio-model-clear': true,
+            onClick: () => onChange(EMPTY_CHOICE),
+            style: { ...typeStyle, background: 'transparent', border: '1px solid var(--ui-stroke-secondary)', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', minHeight: '28px', padding: '2px 8px' },
+            title: t('settings.clear'),
+            type: 'button',
+            children: jsx(Codicon, { name: 'close' })
+          })
+        : null
+    ]
+  })
+}
+
+function SettingsDialog() {
+  const t = useT()
+  const open = useValue($settingsOpen)
+  const readContext = useValue($readContext)
+  const language = useValue($language)
+  const helperSet = Boolean(useValue($helperModel).model.trim())
+  return jsx(Dialog, {
+    onOpenChange: next => $settingsOpen.set(Boolean(next)),
+    open,
+    children: jsxs(DialogContent, {
+      'data-studio-settings-dialog': true,
+      children: [
+        jsx(DialogHeader, { children: jsx(DialogTitle, { children: t('settings.title') }) }),
+        jsx(ListRow, { title: t('settings.helper'), description: t('settings.helperDescription'), action: jsx(ModelPicker, { which: 'helper', inherit: t('settings.helperInherit') }) }),
+        jsx(ListRow, { title: t('settings.context'), description: t('settings.contextDescription'), action: jsx(ModelPicker, { which: 'context', inherit: helperSet ? t('settings.contextInherit') : t('settings.contextInheritDefault') }) }),
+        jsx('div', { 'data-studio-read-context': true, children: jsx(ToggleRow, { checked: readContext, description: t('settings.readContextDescription'), label: t('settings.readContext'), onChange: setReadContext }) }),
+        jsx(ListRow, {
+          title: t('settings.language'),
+          action: jsx('div', {
+            'data-studio-language': true,
+            children: jsxs(Select, {
+              onValueChange: setLanguage,
+              value: language,
+              children: [
+                jsx(SelectTrigger, { children: jsx(SelectValue, {}) }),
+                jsxs(SelectContent, {
+                  children: [
+                    jsx(SelectItem, { value: 'auto', children: t('settings.languageAuto') }),
+                    jsx(SelectItem, { value: 'pt', children: t('settings.languagePt') }),
+                    jsx(SelectItem, { value: 'en', children: t('settings.languageEn') })
+                  ]
+                })
+              ]
+            })
+          })
+        }),
+        jsx(DialogFooter, { children: jsx(Button, { data: { 'data-studio-settings-close': true }, onClick: () => $settingsOpen.set(false), children: t('settings.close') }) })
+      ]
+    })
+  })
+}
+
+// Session context indicator: reading / used (model, seconds) / not available (short reason).
+function ContextStatus() {
+  const t = useT()
+  const context = useValue($context)
+  if (!context) return null
+  const text = context.status === 'reading'
+    ? t('context.reading')
+    : context.status === 'ready'
+      ? t('context.used', context.model || '-', (context.ms / 1000).toFixed(1))
+      : t('context.failed', context.reason)
+  return jsx('span', { 'aria-live': 'polite', 'data-studio-context-status': context.status, role: 'status', style: { ...typeStyle, display: 'block', fontSize: '11px', lineHeight: '16px', marginTop: '4px' }, children: text })
+}
+
 function ShortcutsList() {
-  const t = usePluginI18n(ID)
+  const t = useT()
   const open = useValue($helpOpen)
   if (!open) return null
   const note = text => jsx('li', { style: { ...typeStyle, fontSize: '12px', lineHeight: '16px' }, children: text })
@@ -2878,7 +3214,7 @@ function useStudioFocus(state) {
 }
 
 function StudioLadder() {
-  const t = usePluginI18n(ID)
+  const t = useT()
   const state = useValue($studio)
   useStudioFocus(state)
   if (state.status === 'idle') return null
@@ -2912,9 +3248,12 @@ function StudioLadder() {
         children: [
           jsx('span', { style: { ...typeStyle, flex: 'none', fontSize: '12px' }, children: t('studio.request') }),
           jsx('span', { style: { color: 'var(--ui-text-primary, inherit)', flex: 1, fontFamily: 'var(--dt-font-sans, inherit)', fontSize: '13px', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, title: state.intent, children: state.intent }),
-          jsx(ShortcutsButton, {})
+          jsx(ShortcutsButton, {}),
+          jsx(SettingsButton, {})
         ]
       }),
+      jsx(ContextStatus, {}),
+      jsx(SettingsDialog, {}),
       jsx(ShortcutsList, {}),
       jsx(TargetSwitch, {}),
       jsx(Ladder, { canEdit, editing: state.editing, ladder: state.ladder }),
@@ -2927,7 +3266,7 @@ function StudioLadder() {
 // Entry point inside the composer, before the model pill (composer.actions). Hidden while the
 // studio is open: closing lives in the studio's own Cancel; one close control, not two.
 function StudioButton() {
-  const t = usePluginI18n(ID)
+  const t = useT()
   const state = useValue($studio)
   if (state.status !== 'idle') return null
   return jsx('button', {
@@ -2976,9 +3315,12 @@ export default {
       $suggestion.set(null)
       $helpOpen.set(false)
       $target.set(null)
+      stopContextRead()
+      $settingsOpen.set(false)
     })
     ctx.i18n?.register(UI_MESSAGES)
     $aiMode.set(readAiMode())
+    loadSettings()
     // Tracked by the host: removed on dispose, hot reload or a failed register.
     installStudioKeys(ctx)
     ctx.registerMany([

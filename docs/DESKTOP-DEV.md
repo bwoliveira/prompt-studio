@@ -56,6 +56,7 @@ headers and rule lines stay English, and the user's text is copied as written.
 |---|---|
 | F4 | Open Prompt Studio |
 | F1 | Shortcut help |
+| F3 | Settings (models, session context, language) |
 | F5 | Confirm / use the recommendation |
 | F6 | Skip |
 | F7 | Use the AI suggestion |
@@ -99,4 +100,5 @@ Use the left Alt: on some layouts the right Alt is AltGr. Alt+digits follow the 
 6. With the backend route failing, **Generate** still places the engine's prompt with a warning.
 
 The AI model used by the studio is the auxiliary task `prompt_studio` in the Hermes config
-(`auxiliary.prompt_studio`); the plugin never edits the config.
+(`auxiliary.prompt_studio`) unless a model is picked in Settings (F3); picks live in the plugin storage
+(`helperModel`, `contextModel`, `readContext`, `language`) and the plugin never edits the config.
