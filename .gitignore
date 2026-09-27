@@ -20,6 +20,23 @@ auth.json
 .netrc
 .npmrc
 .pypirc
+*.env
+.envrc
+*service-account*.json
+*-key.json
+token.txt
+api_key*
+apikey*
+id_ecdsa*
+id_dsa*
+.docker/
+kubeconfig
+*.kubeconfig
+*.kdbx
+cookies.txt
+*.sql
+*.dump
+*.bak
 
 # --- Hermes runtime state (config, sessions, logs, installs) ---
 config.yaml

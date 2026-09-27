@@ -11,7 +11,7 @@ import importlib
 import importlib.util
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
@@ -22,33 +22,42 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+# Size limits (SE-4): generous enough for anything the desktop sends (a pasted third-party text can
+# be large), but every string and list is bounded. Over-limit requests get FastAPI's 422, which the
+# desktop treats like any other failure (no AI help, local prompt kept).
+BIG_TEXT = 250_000  # draft, answers, baseline
+MID_TEXT = 20_000  # questions, hints, field guidance
+SHORT_TEXT = 200  # ids, kinds, targets, modes, locales
+MAX_ITEMS = 50  # ladder rungs, answers, options
+
+
 class LadderRung(BaseModel):
-    question: str = ""
-    answer: str = ""
-    category: Optional[str] = None
+    question: str = Field("", max_length=MID_TEXT)
+    answer: str = Field("", max_length=BIG_TEXT)
+    category: Optional[str] = Field(None, max_length=SHORT_TEXT)
 
 
 class SuggestField(BaseModel):
-    id: str = ""
-    kind: str = "text"
-    question: str
-    options: list[str] = Field(default_factory=list)
-    recommended: Optional[str] = None
-    hint: Optional[str] = None
+    id: str = Field("", max_length=SHORT_TEXT)
+    kind: str = Field("text", max_length=SHORT_TEXT)
+    question: str = Field(max_length=MID_TEXT)
+    options: list[Annotated[str, Field(max_length=MID_TEXT)]] = Field(default_factory=list, max_length=MAX_ITEMS)
+    recommended: Optional[str] = Field(None, max_length=MID_TEXT)
+    hint: Optional[str] = Field(None, max_length=MID_TEXT)
     # Per-field instruction for the suggestion model (e.g. "never invent an example").
-    guide: Optional[str] = None
+    guide: Optional[str] = Field(None, max_length=MID_TEXT)
 
 
 class SuggestRequest(BaseModel):
-    target: str = "opus"
-    intent: str
-    ladder: list[LadderRung] = Field(default_factory=list)
+    target: str = Field("opus", max_length=SHORT_TEXT)
+    intent: str = Field(max_length=BIG_TEXT)
+    ladder: list[LadderRung] = Field(default_factory=list, max_length=MAX_ITEMS)
     field: SuggestField
     # "suggest": propose a value for the field; "improve": rewrite the user's own text answer.
-    mode: str = "suggest"
-    answer: str = ""
+    mode: str = Field("suggest", max_length=SHORT_TEXT)
+    answer: str = Field("", max_length=BIG_TEXT)
     # Language of the human-facing text the model returns ("reason"): "en" (default) or "pt".
-    locale: str = "en"
+    locale: str = Field("en", max_length=SHORT_TEXT)
 
 
 def _load(name: str, attr: str) -> Any:
@@ -93,21 +102,21 @@ async def suggest(request: SuggestRequest):
 
 
 class ComposeAnswer(BaseModel):
-    id: str = ""
+    id: str = Field("", max_length=SHORT_TEXT)
     # "enum" | "design" | "example" | "text": the writer tags settings, defaults and examples by it.
-    kind: str = "text"
-    question: str = ""
-    answer: str = ""
+    kind: str = Field("text", max_length=SHORT_TEXT)
+    question: str = Field("", max_length=MID_TEXT)
+    answer: str = Field("", max_length=BIG_TEXT)
     isDefault: Optional[bool] = None
 
 
 class ComposeRequest(BaseModel):
-    target: str = "opus"
-    intent: str
-    answers: list[ComposeAnswer] = Field(default_factory=list)
-    baseline: str = ""
+    target: str = Field("opus", max_length=SHORT_TEXT)
+    intent: str = Field(max_length=BIG_TEXT)
+    answers: list[ComposeAnswer] = Field(default_factory=list, max_length=MAX_ITEMS)
+    baseline: str = Field("", max_length=BIG_TEXT)
     # Language of the human-facing "notes": "en" (default) or "pt". The prompt follows the draft.
-    locale: str = "en"
+    locale: str = Field("en", max_length=SHORT_TEXT)
 
 
 @router.post("/compose")

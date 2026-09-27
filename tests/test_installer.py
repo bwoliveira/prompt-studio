@@ -99,7 +99,7 @@ class InstallerTests(unittest.TestCase):
             self.assertTrue((home / "plugins/prompt-studio/dashboard/plugin_api.py").is_file())
             config = load_config(home)
             self.assertIn("prompt-studio", config["plugins"]["enabled"])
-            self.assertEqual(config["auxiliary"]["prompt_studio"], {"provider": "auto", "timeout": 15})
+            self.assertEqual(config["auxiliary"]["prompt_studio"], {"provider": "auto", "timeout": 20})
             self.assertEqual(set(config["auxiliary"]), {"prompt_studio"})
 
     def test_desktop_half_ships_inside_package_without_marker(self) -> None:
@@ -165,7 +165,7 @@ class InstallerTests(unittest.TestCase):
                 "auxiliary:\n  vision:\n    provider: gemini\n    model: gemini-3.8-flash\n"
                 "display:\n  compact: false\n"))
             config = load_config(home)
-            self.assertEqual(config["auxiliary"]["prompt_studio"], {"provider": "auto", "timeout": 15})
+            self.assertEqual(config["auxiliary"]["prompt_studio"], {"provider": "auto", "timeout": 20})
             self.assertEqual(config["auxiliary"]["vision"]["model"], "gemini-3.8-flash")
             self.assertEqual(config["display"], {"compact": False})
 
@@ -196,6 +196,40 @@ class InstallerTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
             self.assertIn("Hermes CLI not found", result.stderr)
             self.assertFalse(home.exists())
+
+class InstallerArgumentTests(unittest.TestCase):
+    """Bad --home / --profile values are refused before anything is created or removed."""
+
+    def run_args(self, root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+        environment = os.environ.copy()
+        environment.update({"PYTHON_BIN": str(PYTHON), "HERMES_BIN": str(root / "no-such-hermes"), "HERMES_HOME": str(root / "base")})
+        return subprocess.run(["bash", str(REPO / "install.sh"), *args], cwd=root, env=environment, text=True, capture_output=True, check=False)
+
+    def test_bad_arguments_exit_2_before_touching_anything(self) -> None:
+        cases = [
+            ("--profile", "../.."), ("--profile", "a/b"), ("--profile", "Work"), ("--profile", ""), ("--profile", "-x"),
+            ("--profile", "a" * 65), ("--home", ""), ("--home", "relative/dir"),
+        ]
+        for args in cases:
+            with self.subTest(args=args), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                victim = root / "base" / "plugins" / "prompt-studio"
+                victim.mkdir(parents=True)
+                result = self.run_args(root, *args)
+                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                self.assertIn("[ERROR]", result.stderr)
+                self.assertTrue(victim.exists())
+                self.assertEqual(sorted(p.name for p in root.iterdir()), ["base"])
+
+    def test_home_and_profile_together_are_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            result = self.run_args(root, "--home", str(root / "h"), "--profile", "work")
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+            self.assertIn("[ERROR]", result.stderr)
+            self.assertIn("--home", result.stderr)
+            self.assertFalse((root / "h").exists())
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

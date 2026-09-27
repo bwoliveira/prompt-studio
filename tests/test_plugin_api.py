@@ -171,3 +171,24 @@ def test_locale_reaches_both_engines_and_defaults_to_en(monkeypatch):
     assert fake.calls[-1]["locale"] == "pt"
     api.post("/compose", json={"intent": "x"})
     assert fake.calls[-1]["locale"] == "en"
+
+
+def test_oversized_requests_are_rejected_before_the_engine(monkeypatch):
+    c, fake = client(monkeypatch)
+    big = "x" * 250_001
+    assert c.post("/compose", json={"intent": big}).status_code == 422
+    assert c.post("/compose", json={"intent": "ok", "answers": [{"answer": "a"}] * 51}).status_code == 422
+    assert c.post("/suggest", json={"intent": "ok", "field": {**FIELD, "options": ["o"] * 51}}).status_code == 422
+    assert c.post("/suggest", json={"intent": "ok", "field": FIELD, "ladder": [{"answer": "a"}] * 51}).status_code == 422
+    assert c.post("/suggest", json={"intent": "ok", "field": {**FIELD, "question": "q" * 20_001}}).status_code == 422
+    assert fake.calls == []
+    # Realistic big payloads still pass.
+    assert c.post("/compose", json={"intent": "y" * 100_000, "baseline": "z" * 200_000, "answers": [{"answer": "a" * 20_000}] * 50}).status_code == 200
+
+
+def test_every_request_string_and_list_has_a_max_length():
+    for model in (plugin_api.LadderRung, plugin_api.SuggestField, plugin_api.SuggestRequest, plugin_api.ComposeAnswer, plugin_api.ComposeRequest):
+        for name, f in model.model_fields.items():
+            if name in ("field", "isDefault"):
+                continue
+            assert any(getattr(m, "max_length", None) for m in f.metadata), f"{model.__name__}.{name}"

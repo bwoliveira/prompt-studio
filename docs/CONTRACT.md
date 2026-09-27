@@ -56,5 +56,10 @@ waits 50 s and then uses `baseline`.
 `{ "ok": true, "model": "provider/model resolved for task prompt_studio" }`; if the model adapter cannot load:
 `{ "ok": false, "error": "llm adapter unavailable" }` (logged server-side).
 
+Size limits on both routes: draft, answers and `baseline` up to 250 000 characters each, questions/hints/guidance
+20 000, ids/kinds/target/mode/locale 200; `ladder`, `answers` and `options` at most 50 items. Over the limit: FastAPI
+422 (the desktop treats it as "no AI"). The configured `auxiliary.prompt_studio.timeout` can lower the /suggest
+provider timeout; /compose always gets its full 45 s.
+
 Errors on every route: `ok: false` with `error`; nothing is ever replaced by a made-up answer. The v1 routes
 `/interrogate` and `/brief` no longer exist.
