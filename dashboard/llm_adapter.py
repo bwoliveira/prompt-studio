@@ -120,6 +120,19 @@ def _choice(model_choice: Mapping[str, Any] | None) -> tuple[str, str, str] | No
     return _clean_text(model_choice.get("provider")), model, _clean_text(model_choice.get("effort")).lower()
 
 
+def _effort_and_cap(effort: Any, provider_norm: str, max_tokens: int) -> tuple[Any, int]:
+    """Effort to send and the max_tokens to use with it.
+
+    No effort in the config or the Settings pick: ask for "low" instead of the provider default (medium on
+    Opus 5.5; docs: "Start at low effort and measure."). Gemini keeps its own branch, which turns thinking
+    off when no effort is set. max_tokens caps thinking plus text, so a small cap is raised at higher effort
+    (measured: effort max, cap 1024 -> 1023 reasoning tokens, finish_reason "length").
+    """
+    if not effort and provider_norm != "gemini":
+        effort = DEFAULT_EFFORT
+    return effort, max(max_tokens, EFFORT_MIN_TOKENS.get(str(effort or "").strip().lower(), 0))
+
+
 def _default_llm(
     *,
     messages: list[dict[str, str]],
@@ -159,16 +172,9 @@ def _default_llm(
             task = None
             task_config = {k: v for k, v in task_config.items() if k == "timeout"}
     provider_norm = (provider or "").strip().lower()
-    if not effort and provider_norm != "gemini":
-        # No effort in the config or the Settings pick: ask for "low" instead of the provider default
-        # (medium on Opus 5.5). Opus 5.5 docs: "Start at low effort and measure." Gemini keeps its own
-        # branch below, which turns thinking off when no effort is set.
-        effort = DEFAULT_EFFORT
+    effort, max_tokens = _effort_and_cap(effort, provider_norm, max_tokens)
 
     reasoning_config = parse_reasoning_effort(effort) if effort else None
-    # max_tokens caps thinking plus text; at higher effort a small cap can be spent on thinking alone
-    # (measured: effort max, cap 1024 -> 1023 reasoning tokens, finish_reason "length").
-    max_tokens = max(max_tokens, EFFORT_MIN_TOKENS.get(str(effort or "").strip().lower(), 0))
 
     extra_body: dict[str, Any] = {}
     configured_extra = task_config.get("extra_body")
