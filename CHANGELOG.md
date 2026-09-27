@@ -2,6 +2,21 @@
 
 Versions come from the commit subjects (there are no git tags). Newest first.
 
+## 1.6.0
+
+- Final preview has two actions: **Send now** (F9) places the prompt in the composer and sends it,
+  as if you pressed Enter; **Put in composer to edit** (Alt+E) places it without sending. If the
+  Desktop refuses the send (for example, a turn is still running), the prompt is placed in the
+  composer with a short note, so it is never lost.
+- While something the options depend on is in progress, those options are hidden: while the session
+  context is read only "Reading this session…" and Cancel (F10) show; in Auto mode the option cards
+  wait for the step suggestion; while the AI writes the prompt only Cancel and the AI mode remain.
+  A failure or timeout releases the options with a short note.
+- The existing Settings switch "Read this session's context when opening" is covered by tests: off
+  means no context request and no loading state.
+- Tests compare DOM nodes with `assert.ok(a === b)`: a failing `assert.equal(node, …)` made node
+  build a diff of the whole jsdom tree and use gigabytes of memory.
+
 ## 1.5.5
 
 - README: banner and example images (`docs/images/`), install with `hermes plugins install
