@@ -42,7 +42,7 @@ test('every enum value builds', () => {
     for (const value of values) {
       const out = ENGINE.build({ ...code, [field]: value })
       assert.ok(out.prompt.startsWith('TASK\n'), `${field}=${value}`)
-      assert.match(out.prompt, /\nAUTONOMY\n/)
+      if (!(field === 'deliverable' && value === 'text')) assert.match(out.prompt, /\nAUTONOMY\n/) // AS-5: text+balanced has none
     }
   }
 })
@@ -124,8 +124,8 @@ test('SUBAGENTS team/direct/auto and recommendation', () => {
   const body = team.sections.find(s => s.id === 'subagents').body
   assert.ok(body.startsWith(DELEGATE) && body.includes(LEGIBLE) && body.includes('Name one subagent as the reviewer.'))
   assert.equal(ENGINE.build({ ...code, subagents: 'direct' }).sections.find(s => s.id === 'subagents').body, DIRECT)
-  assert.ok(!ENGINE.build({ ...code, subagents: 'auto' }).prompt.includes('SUBAGENTS'))
-  assert.ok(ENGINE.build(code).prompt.includes('\nSUBAGENTS\n'))            // null -> team for code
+  assert.equal(ENGINE.build({ ...code, subagents: 'auto' }).sections.find(s => s.id === 'subagents').body, `${DELEGATE}\n${LEGIBLE}`)
+  assert.ok(!ENGINE.build(code).prompt.includes('Name one subagent as the reviewer.'))   // null -> auto (AS-8)
   assert.ok(!ENGINE.build({ goal: 'Write a short email to Ana' }).prompt.includes('SUBAGENTS')) // text -> auto
 })
 
@@ -138,7 +138,7 @@ test('AUTONOMY header and mode lines', () => {
   assert.ok(!bal.includes(NO_HYPO) && !gui.includes(NO_HYPO))
   assert.ok(bal.includes('Treat this request as an instruction to do the work and take action.'))
   assert.ok(!gui.includes('Treat this request as an instruction to do the work'))
-  assert.ok(!gui.includes('Carry the task through to a working result'))
+  assert.ok(gui.includes('Carry the task through to a working result'))   // AS-4: guided keeps PERSIST
   assert.ok(bal.includes('Carry the task through to a working result'))
   assert.ok(gui.includes('focused question'))
 })
@@ -225,4 +225,75 @@ test('AS-1: deploy and pipeline work on a site is not frontend work', () => {
   }
   // An incremental change needs an edit verb; a fix to a UI is still an incremental frontend change.
   assert.ok(ENGINE.build({ goal: 'Corrija o bug do botão de login na tela React' }).prompt.includes('For this frontend change:'))
+})
+
+const sec = (brief, id) => ENGINE.build(brief).sections.find(s => s.id === id)?.body ?? ''
+const REVIEWER = 'Name one subagent as the reviewer.'
+const CONFIRM_L = 'Require confirmation for external writes, destructive actions, purchases, or a material expansion of scope.'
+const APPROVAL_L = 'The user should be approving a concrete, reviewable result.'
+const NO_PERM_L = "You don't need user permission"
+const READ_ONLY_L = 'For requests to answer, explain, review, diagnose, or plan, inspect the relevant materials and report the result. Do not implement changes unless the request also asks for them.'
+const SUSTAINED = 'If a task requires sustained work, complete all the necessary work until the intended outcome is fulfilled.'
+const AUTONOMOUS = "When the user expresses intent to perform new work or fix an existing issue, persist until the user's intended goal is complete. Progress autonomously towards the user's goal (e.g. creating isolated worktrees / checkouts if needed, resolving merge conflicts, read-only actions, creating draft PRs etc.) unless they are clearly destructive or irreversible."
+const GUIDED_NEW = 'Ask focused questions when the answer could change the outcome; fill routine gaps from context and state the assumptions you made.'
+const PERSIST_L = 'Carry the task through to a working result'
+const TEST_2 = 'Run tests appropriate to the change and complete required checks. Once those pass, broaden or repeat testing only when new changes, failures, or unresolved concerns justify it; otherwise, continue toward completing the task.'
+const STATE_L = 'When you stop, say whether the task is fully done'
+const EXPLORE_L = 'Stop exploring once the core request'
+
+test('AS-8: default subagents is auto (delegate + legible), team only when chosen', () => {
+  assert.equal(ENGINE.recommend({ goal: 'Fix the login bug' }), 'auto')
+  const login = { goal: 'Fix the login bug' }
+  assert.equal(sec(login, 'subagents'), `${DELEGATE}\n${LEGIBLE}`)
+  for (const deliverable of ['implementation', 'workflow', 'data', 'review', 'analysis']) {
+    assert.equal(sec({ goal: 'Do it', deliverable }, 'subagents'), `${DELEGATE}\n${LEGIBLE}`, deliverable)
+    assert.equal(sec({ goal: 'Do it', deliverable, subagents: 'auto' }, 'subagents'), `${DELEGATE}\n${LEGIBLE}`, deliverable)
+  }
+  for (const deliverable of ['text', 'answer']) assert.equal(sec({ goal: 'Do it', deliverable }, 'subagents'), '', deliverable)
+  assert.ok(sec({ ...login, subagents: 'team' }, 'subagents').includes(REVIEWER))
+  assert.ok(!ENGINE.build(login).prompt.includes(REVIEWER))
+  assert.equal(sec({ ...login, subagents: 'direct' }, 'subagents'), DIRECT)
+})
+
+test('AS-3: ACTION line ends with the sustained-work sentence; proactive action adds the autonomous paragraph, drops CONFIRM', () => {
+  const bal = sec({ goal: 'Fix the login bug' }, 'autonomy')
+  assert.ok(bal.includes(`to save time, effort or tokens. ${SUSTAINED}`))
+  assert.ok(!bal.includes(AUTONOMOUS) && bal.includes(CONFIRM_L))
+  const pro = sec({ goal: 'Automatize o deploy do site toda sexta', autonomy: 'proactive' }, 'autonomy')
+  assert.ok(pro.includes(AUTONOMOUS) && pro.includes(APPROVAL_L) && !pro.includes(CONFIRM_L))
+  const proRead = sec({ goal: 'Revise este código', autonomy: 'proactive' }, 'autonomy')
+  assert.ok(!proRead.includes(AUTONOMOUS) && proRead.includes(CONFIRM_L))
+})
+
+test('AS-4: guided asks after the authorized work, keeps PERSIST for action', () => {
+  const g = { goal: 'Fix the login bug', autonomy: 'guided' }
+  const body = sec(g, 'autonomy')
+  assert.equal(body, [AUTHORIZED, GUIDED_NEW, CONFIRM_L].join('\n'))
+  assert.ok(!ENGINE.build(g).prompt.includes('Before acting'))
+  assert.ok(sec(g, 'done').includes(PERSIST_L))
+  assert.equal(sec({ goal: 'Revise este código', autonomy: 'guided' }, 'autonomy'), [AUTHORIZED, GUIDED_NEW, READ_ONLY_L, CONFIRM_L].join('\n'))
+})
+
+test('AS-5: answer and text get no PRECEDENCE and no approval lines', () => {
+  const q = ENGINE.build({ goal: 'O que é idempotência?' })
+  assert.ok(!q.sections.some(s => s.id === 'precedence'))
+  assert.equal(sec({ goal: 'O que é idempotência?' }, 'autonomy'), READ_ONLY_L)
+  assert.equal(sec({ goal: 'O que é idempotência?', autonomy: 'proactive' }, 'autonomy'), `${READ_ONLY_L}\n${NO_HYPO}`)
+  assert.equal(sec({ goal: 'O que é idempotência?', autonomy: 'guided' }, 'autonomy'), `${READ_ONLY_L}\n${GUIDED_NEW}`)
+  const t = ENGINE.build({ goal: 'Write a short email to Ana' })
+  assert.ok(!t.sections.some(s => s.id === 'precedence' || s.id === 'autonomy'))
+  assert.equal(sec({ goal: 'Write a short email to Ana', autonomy: 'proactive' }, 'autonomy'), NO_HYPO)
+  assert.ok(ENGINE.build({ goal: 'Fix the login bug' }).sections.some(s => s.id === 'precedence'))
+})
+
+test('AS-6: json format drops STATE and EXPLORE_STOP lines', () => {
+  const d = sec({ goal: 'Analise a planilha de vendas', deliverable: 'data', format: 'json' }, 'done')
+  assert.ok(!d.includes(STATE_L) && !d.includes(EXPLORE_L), d)
+  const p = sec({ goal: 'Analise a planilha de vendas', deliverable: 'data' }, 'done')
+  assert.ok(p.includes(STATE_L) && p.includes(EXPLORE_L))
+})
+
+test('AS-7: implementation test block is the full doc block', () => {
+  assert.ok(sec({ goal: 'Fix the login bug' }, 'done').includes(`${TEST_LINE}\n${TEST_2}`))
+  assert.ok(!ENGINE.build({ goal: 'Automatize o deploy', deliverable: 'workflow' }).prompt.includes(TEST_2))
 })
