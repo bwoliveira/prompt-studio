@@ -11,7 +11,7 @@ import importlib
 import importlib.util
 import logging
 from pathlib import Path
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any, Literal, Optional
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
@@ -29,6 +29,16 @@ BIG_TEXT = 250_000  # draft, answers, baseline
 MID_TEXT = 20_000  # questions, hints, field guidance
 SHORT_TEXT = 200  # ids, kinds, targets, modes, locales
 MAX_ITEMS = 50  # ladder rungs, answers, options
+SESSION_CONTEXT_TEXT = 3000  # the /context summary sent back with /suggest
+
+
+class ModelChoice(BaseModel):
+    """Per-task model (CX-1). Empty model = the ``auxiliary.prompt_studio`` config, as before.
+    effort: '' = config/provider default, 'none' = thinking off, else a Hermes reasoning effort;
+    anything else is a 422."""
+    provider: str = Field("", max_length=80)
+    model: str = Field("", max_length=200)
+    effort: Literal["", "none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"] = Field("", max_length=16)
 
 
 class LadderRung(BaseModel):
@@ -58,6 +68,9 @@ class SuggestRequest(BaseModel):
     answer: str = Field("", max_length=BIG_TEXT)
     # Language of the human-facing text the model returns ("reason"): "en" (default) or "pt".
     locale: str = Field("en", max_length=SHORT_TEXT)
+    model_choice: Optional[ModelChoice] = None
+    # Summary from /context: untrusted background for the suggestion model only.
+    session_context: str = Field("", max_length=SESSION_CONTEXT_TEXT)
 
 
 def _load(name: str, attr: str) -> Any:
@@ -117,6 +130,7 @@ class ComposeRequest(BaseModel):
     baseline: str = Field("", max_length=BIG_TEXT)
     # Language of the human-facing "notes": "en" (default) or "pt". The prompt follows the draft.
     locale: str = Field("en", max_length=SHORT_TEXT)
+    model_choice: Optional[ModelChoice] = None
 
 
 @router.post("/compose")
@@ -128,6 +142,22 @@ async def compose(request: ComposeRequest):
     except Exception:
         logger.exception("Prompt Studio compose error:")
         return JSONResponse(status_code=500, content={"ok": False, "error": "compose engine unavailable"})
+
+
+class ContextRequest(BaseModel):
+    session_id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$")
+    profile: str = Field("", max_length=64, pattern=r"^[A-Za-z0-9_-]*$")
+    locale: str = Field("en", max_length=SHORT_TEXT)
+    model_choice: Optional[ModelChoice] = None
+
+
+@router.post("/context")
+async def context(request: ContextRequest):
+    try:
+        return await asyncio.to_thread(_load("session_context", "context").context, _payload(request))
+    except Exception:
+        logger.exception("Prompt Studio context error:")
+        return {"ok": False, "code": "unavailable", "error": "context reader unavailable"}
 
 
 @router.get("/health")

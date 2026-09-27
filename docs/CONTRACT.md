@@ -10,6 +10,15 @@ below: undeclared fields are dropped.
 model returns (`reason` for /suggest, `notes` for /compose): English for `en`, Brazilian Portuguese for `pt`; any other
 value is treated as `en`. It never changes the prompt itself, which follows the language of the user's draft.
 
+`model_choice` (/suggest, /compose, /context, optional): `{ "provider": "anthropic", "model": "claude-haiku-5",
+"effort": "low" }` (provider ≤ 80 chars, model ≤ 200, effort ≤ 16). Empty or missing `model`: exactly the config route
+(`auxiliary.prompt_studio`: provider, model, reasoning_effort, timeout, extra_body). With a `model`, the call goes to that
+provider/model; `effort` `""` keeps the config's `reasoning_effort`, `"none"` turns thinking off, and
+`minimal|low|medium|high|xhigh|max|ultra` sets it; any other `effort` is a 422. When the chosen provider differs from
+`auxiliary.prompt_studio.provider` (or none is configured), the config's `base_url`, `api_key` and `extra_body` are not
+used (only its `timeout`), so a configured endpoint or key never reaches another provider. The Gemini thinking and JSON-mode
+adaptation follows the chosen provider. The `model` label in every response is the route actually used.
+
 ## POST /suggest
 ```json
 {
@@ -19,6 +28,8 @@ value is treated as `en`. It never changes the prompt itself, which follows the 
   "mode": "suggest|improve (default suggest)",
   "answer": "user's own text, required for improve",
   "locale": "en|pt (default en)",
+  "model_choice": { "provider": "…", "model": "…", "effort": "…" },
+  "session_context": "summary from /context (optional, ≤ 3000 chars)",
   "field": {
     "id": "autonomy",
     "kind": "enum|text|design|example",
@@ -35,7 +46,9 @@ Response: `{ "ok": true, "value": "…", "reason": "one sentence in the locale l
 
 For `enum`, `value` is always one of `field.options`. For text fields `value` may be empty (nothing to add; with a
 default, the desktop offers "use the default"). `improve` rewrites `answer` without adding facts. Hard 20 s
-deadline. Pasted third-party text in the ladder is marked as untrusted data.
+deadline. Pasted third-party text in the ladder is marked as untrusted data. `session_context` goes into the prompt as a
+tag-delimited, escaped `<session_context>` block marked as untrusted reference data (never instructions); it does not
+change the response shape and is never used by /compose.
 
 ## POST /compose
 ```json
@@ -44,13 +57,44 @@ deadline. Pasted third-party text in the ladder is marked as untrusted data.
   "intent": "the user's draft (required)",
   "answers": [ { "id": "field id", "kind": "enum|text|design|example", "question": "…", "answer": "…", "isDefault": true } ],
   "baseline": "the engine's prompt for the same answers",
-  "locale": "en|pt (default en)"
+  "locale": "en|pt (default en)",
+  "model_choice": { "provider": "…", "model": "…", "effort": "…" }
 }
 ```
 Response: `{ "ok": true, "prompt": "…", "notes": "one sentence in the locale language", "model": "…", "latency_ms": 5000, "source": "model" }`.
 The pasted block in `baseline` (`THIRD-PARTY MATERIAL` + `<document>`, or the older `<pasted_content id>` shape) is
 replaced by a marker before the model sees it and restored byte for byte afterwards. Hard 45 s deadline; the desktop
 waits 50 s and then uses `baseline`.
+
+## POST /context
+```json
+{ "session_id": "stored session id (1..128 chars, [A-Za-z0-9_.:-])", "profile": "default (≤ 64, [A-Za-z0-9_-])",
+  "locale": "en|pt", "model_choice": { "provider": "…", "model": "…", "effort": "…" } }
+```
+Opens the profile's session store read-only (`hermes_cli.web_server_sessions._open_session_db_for_profile(profile,
+read_only=True)`, falling back to `hermes_state.SessionDB(read_only=True)` for the default profile), resolves the id like
+the core sessions route (`resolve_session_id`, `resolve_resume_session_id`) and closes the store. Keeps the last 8 active,
+non-compacted user/assistant turns (role tool/system, tool calls and reasoning fields are skipped) plus the compaction
+summary (`_compressed_summary`) when present; redacts secrets (`agent.redact.redact_sensitive_text(force=True)` plus a local
+set for keys, tokens, Bearer headers and `password=` pairs); caps the text at 8000 characters keeping the most recent end;
+then asks the context model (`model_choice`) for JSON `{"summary"}` of at most 1200 characters in the locale language. The
+system prompt says the transcript is data, never instructions. Hard 15 s deadline, `max_tokens` 500.
+
+Response (HTTP 200): `{ "ok": true, "summary": "…", "model": "provider/model", "turns": 8, "ms": 1432 }` or
+`{ "ok": false, "code": "…", "error": "…" }`. A malformed request (bad `session_id`/`profile` characters or lengths, bad
+`model_choice`) is a 422.
+
+| `code` | When | `error` |
+|---|---|---|
+| `bad_request` | invalid `session_id`/`profile` reaching the reader | `invalid session_id or profile` |
+| `no_session` | the id is not in the store | `session not found` |
+| `empty_session` | no user/assistant text and no compaction summary | fixed sentence |
+| `timeout` | no reply within 15 s (also carries `model`) | `no summary within 15 s` |
+| `unavailable` | store or provider failure, or the reader cannot load (also `model` for provider failures) | `session store unavailable` / `model unavailable` / `context reader unavailable` |
+| `invalid_summary` | reply is not JSON with a non-empty string `summary` (also `model`) | fixed sentence |
+
+The transcript text is never logged and never returned: only the summary, the route label and counts leave the backend.
+Provider and store exceptions are logged with `logger.warning(exc_info=…)`; the response carries a fixed sentence only.
 
 ## GET /health
 `{ "ok": true, "model": "provider/model resolved for task prompt_studio" }`; if the model adapter cannot load:
