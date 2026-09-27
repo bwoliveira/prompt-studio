@@ -645,6 +645,9 @@ function documentBlock(pasted, source) {
 
 const ACTION = ['implementation', 'workflow']
 const WRITTEN = ['text', 'answer', 'analysis']
+// AS-10: gpt6-using.md also asks for plain language in technical communication ("Use plain language
+// over jargon"), so the plain-language line also covers code, review and workflow reports.
+const PLAIN = [...WRITTEN, 'implementation', 'review', 'workflow']
 const EXPLORING = ['analysis', 'data', 'review']
 const READ_ONLY = ['analysis', 'review', 'plan', 'answer', 'data']
 
@@ -702,7 +705,7 @@ function buildSafe(brief) {
     LANGUAGE_LINE,
     FORMAT_LINES[format] || '',
     LENGTH_LINES[length] || '',
-    written ? PLAIN_LINE : '',
+    PLAIN.includes(deliverable) ? PLAIN_LINE : '',
     written ? STYLE_LINE : ''
   ])
 
