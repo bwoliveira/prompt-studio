@@ -330,12 +330,14 @@ def split_third_party(baseline: str) -> tuple[str, str]:
 # is found, the exact documented line goes back at the end of the autonomy section.
 # gpt6-using: "Do not introduce unsolicited warnings, disclaimers, approval flows, or
 # safety/compliance checklists due to hypothetical risk." (a live rewrite dropped "hypothetical risk").
+# Proof words: English + Portuguese (pt-BR, with accents); matched as substrings of prompt.lower().
 REQUIRED_LINES = (
     (
         "Do not introduce unsolicited warnings, disclaimers, approval flows, or safety/compliance checklists due to hypothetical risk.",
         ("hypothetical", "hipotétic"),
     ),
 )
+# Header names: English + Portuguese; compared against line.strip().upper().
 _AUTONOMY_HEADERS = ("AUTONOMY", "AUTONOMIA")
 
 

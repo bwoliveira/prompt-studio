@@ -48,6 +48,16 @@ The UI is English-first through the Desktop plugin i18n API: `ctx.i18n.register(
 keys (the tests check it). Add a key to both in the same change. Generated prompts are not translated: section
 headers and rule lines stay English, and the user's text is copied as written.
 
+## Draft recognition languages
+
+The draft recognizers support Portuguese and English only. The keyword regexes live in
+`desktop/src/engine-astra.js` (`VERBS`, `UI_*`, `*_NOUN`, `*_ARTIFACT`, `ASK_FIRST`, subagent and
+format hints) and `desktop/src/engine-opus.js` (`CATEGORY_RULES`, `DELIVERABLE_RULES`, `*_VERB`,
+`QUESTION_START`, `INTERFACE`); both lower-case the draft and strip diacritics first (`fold()` /
+`normalize()`), so the Portuguese words are written without accents. The dashboard's
+`REQUIRED_LINES` proof words and `_AUTONOMY_HEADERS` in `dashboard/suggest_engine.py` are also
+English + Portuguese. Each pattern carries a `Languages:` comment; other languages fall back to defaults.
+
 ## Keyboard
 
 - While the studio is closed, only **F4** is handled (open the studio, and only when the composer is on screen).
