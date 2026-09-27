@@ -273,6 +273,9 @@ python3 scripts/docs_sources.py check --docs-dir <snapshot dir>   # every doc qu
 - The official doc snapshots used by `docs_sources.py` live outside the repository; see `docs/sources/README.md`.
 - `.gitattributes` keeps every text file with LF line endings, also on Windows checkouts, so
   `node scripts/build.mjs --check` compares the same bytes on every system.
+- Pull requests: `AGENTS.md` has the flow. First Bruno's `/review` in the Hermes session, then `bin/pr`, which runs
+  the local Codex review (`bin/review`, Codex CLI) and pushes only if it finds no P0, P1 or P2. Its tests:
+  `node --test bin/lib/local-review.test.mjs`.
 - Secret scanning: run `gitleaks` over the full history. `.gitleaksignore` lists the only accepted findings,
   fake secrets in the redaction tests of one early commit; later test fixtures are marked inline with
   `gitleaks:allow`.
@@ -291,6 +294,8 @@ docs/                      contract, developer notes, step and doc-quote reviews
 scripts/                   build, install validation and doc-quote check
 tests/                     Python tests and tests/desktop/ Node tests
 install.sh                 installer for a Hermes home or profile
+bin/                       pr and review: local Codex review before each pull request
+AGENTS.md                  rules for coding agents, including the review flow
 ```
 
 ## Credits
