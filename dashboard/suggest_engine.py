@@ -381,11 +381,12 @@ COMPOSE_TARGET_RULES = {
         "- Keep the BASELINE's lines quoted from OpenAI's docs word for word in English, even when the rest of the prompt is in another language."
     ),
 }
-# Both targets: the SUBAGENTS section is the user's explicit choice (team with a reviewer, or none).
+# Both targets: the SUBAGENTS section is either the user's explicit team/direct choice or the default
+# delegation rule (one conditional line, no split or reviewer lines); keep exactly what the BASELINE has.
 COMPOSE_SUBAGENT_RULE = (
-    "- If the BASELINE has a SUBAGENTS section, keep it as its own section with every line: how to split the work "
-    "into parallel parts, one subagent per part, the reviewer who did not write the work, and the lines quoted from "
-    "the vendor docs. Do not soften it into \"consider delegating\"; the user chose it."
+    "- If the BASELINE has a SUBAGENTS section, keep it as its own section with every line it has, word for word, "
+    "and add no line it does not have (no split or reviewer lines unless the BASELINE has them). "
+    "Do not soften it into \"consider delegating\"."
 )
 
 

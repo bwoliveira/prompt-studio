@@ -295,7 +295,7 @@ function buildNormalized(b) {
 
   add('task', 'TASK', [b.goal || 'No task was given. Ask the user what they want done.'])
 
-  const explore = !b.context && b.goal.length < 280 && ['implementation', 'review', 'workflow', 'data', 'analysis'].includes(deliverable)
+  const explore = !b.context && b.goal.length < 280 && ['workflow', 'data'].includes(deliverable)
   add('context', 'CONTEXT', [b.context, explore ? (paste ? `${EXPLORE_LINE} ${EXPLORE_UNTRUSTED}` : EXPLORE_LINE) : ''])
 
   if (paste && !paste.long) add('material', 'THIRD-PARTY MATERIAL', paste.lines)
