@@ -61,5 +61,28 @@ Size limits on both routes: draft, answers and `baseline` up to 250 000 characte
 422 (the desktop treats it as "no AI"). The configured `auxiliary.prompt_studio.timeout` can lower the /suggest
 provider timeout; /compose always gets its full 45 s.
 
-Errors on every route: `ok: false` with `error`; nothing is ever replaced by a made-up answer. The v1 routes
+Errors on every route: `ok: false` with `error`; nothing is ever replaced by a made-up answer.
+
+Engine failures (`ok: false` from /suggest and /compose, HTTP 200) also carry a stable machine `code`; `error` is a short
+English technical detail for logs and tests, never provider text (provider exceptions are logged server-side and only
+their class name is returned). The desktop shows its own localized text for `code` (en/pt, `errors.<code>`) and falls
+back to `error` when the code is unknown or absent.
+
+| `code` | Route | When | `error` |
+|---|---|---|---|
+| `bad_request` | both | draft (or /suggest field question) missing | `intent and field.question are required` / `intent is required` |
+| `nothing_to_improve` | /suggest | `improve` on a choice field or with no `answer` | fixed sentence |
+| `invalid_suggestion` | /suggest | reply is not JSON with `value` | fixed sentence |
+| `unknown_option` | /suggest | enum `value` is not one of `field.options` | fixed sentence |
+| `invalid_prompt` | /compose | reply has no `prompt` of at least 20 characters | fixed sentence |
+| `timeout` | both | no reply before the deadline | `no model reply within 20 s` / `no prompt from the model within 45 s` |
+| `unavailable` | both | the provider call raised | `model unavailable: <ExceptionClassName>` |
+| `empty_reply` | both | empty reply twice (also `empty: true`) | fixed sentence |
+
+`timeout`, `unavailable` and `empty_reply` also carry `model`. The route-level errors (400 for a blank draft, 500
+`{ "ok": false, "error": "suggest engine unavailable" }` / `"compose engine unavailable"` when the engine cannot load
+or crashes, 422 over the size limits) have no `code`.
+
+In /compose, any third-party framing the model writes itself (a `THIRD-PARTY MATERIAL` header line, `<pasted_content …>`
+or `<document>` spans) is removed; the final prompt carries only the Studio's own restored block, if any. The v1 routes
 `/interrogate` and `/brief` no longer exist.

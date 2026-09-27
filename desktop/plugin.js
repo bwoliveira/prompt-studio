@@ -1292,6 +1292,16 @@ const UI_MESSAGES = {
       writing: 'Generating the prompt…',
       writingAi: 'The AI is writing the prompt from your answers…'
     },
+    errors: {
+      invalid_suggestion: 'The model reply was not a usable suggestion.',
+      unknown_option: 'The model picked an option that is not in the list.',
+      timeout: 'The model did not answer in time.',
+      unavailable: 'The model could not be reached (details in the Hermes log).',
+      empty_reply: 'The model returned an empty reply; a provider filter may have blocked it.',
+      bad_request: 'The request was incomplete.',
+      nothing_to_improve: 'There is no text of yours to improve here.',
+      invalid_prompt: 'The model reply was not a usable prompt.'
+    },
     preview: {
       ai: '✨ Prompt written by the AI',
       engine: 'Prompt built without AI',
@@ -1451,6 +1461,16 @@ const UI_MESSAGES = {
       asking: 'Preparando a próxima pergunta…',
       writing: 'Gerando o prompt…',
       writingAi: 'A IA está escrevendo o prompt com as suas respostas…'
+    },
+    errors: {
+      invalid_suggestion: 'A resposta do modelo não era uma sugestão utilizável.',
+      unknown_option: 'O modelo escolheu uma opção que não está na lista.',
+      timeout: 'O modelo não respondeu a tempo.',
+      unavailable: 'Não foi possível falar com o modelo (detalhes no log do Hermes).',
+      empty_reply: 'O modelo devolveu uma resposta vazia; um filtro do provedor pode tê-la barrado.',
+      bad_request: 'O pedido estava incompleto.',
+      nothing_to_improve: 'Não há texto seu para melhorar aqui.',
+      invalid_prompt: 'A resposta do modelo não era um prompt utilizável.'
     },
     preview: {
       ai: '✨ Prompt escrito pela IA',
@@ -1799,8 +1819,32 @@ function questionKey(state) {
 }
 
 function clearSuggestion() {
+  cancelAutoSuggestion()
   suggestSerial += 1
   $suggestion.set(null)
+}
+
+// Auto mode waits a moment before asking (SP-2): the plugin REST door cannot abort a call, so
+// clicking through steps quickly would otherwise queue one backend request per step. Leaving the
+// step (clearSuggestion) or scheduling again cancels the pending ask; manual asks stay immediate.
+const AUTO_SUGGEST_DELAY_MS = 400
+let autoSuggestTimer = null
+
+function cancelAutoSuggestion() {
+  if (autoSuggestTimer !== null) clearTimeout(autoSuggestTimer)
+  autoSuggestTimer = null
+}
+
+function scheduleAutoSuggestion() {
+  cancelAutoSuggestion()
+  const key = questionKey($studio.get())
+  const delay = globalThis.__promptStudioAutoSuggestDelayMs ?? AUTO_SUGGEST_DELAY_MS
+  autoSuggestTimer = setTimeout(() => {
+    autoSuggestTimer = null
+    const state = $studio.get()
+    if ($aiMode.get() !== 'auto' || state.status !== 'active' || questionKey(state) !== key) return
+    requestSuggestion()
+  }, delay)
 }
 
 // Show the cached suggestion for the current question, or ask for one when the mode is automatic.
@@ -1813,7 +1857,7 @@ function refreshSuggestion() {
     $suggestion.set(cached)
     return
   }
-  if (mode === 'auto' && state.current.autoSuggest !== false) requestSuggestion()
+  if (mode === 'auto' && state.current.autoSuggest !== false) scheduleAutoSuggestion()
 }
 
 function setTarget(target) {
@@ -1981,6 +2025,15 @@ function describeFailure(error) {
   return { errorKey: 'failed', detail }
 }
 
+// ok:false reply -> tooltip text: the localized text for the backend's `code`, or the raw `error`
+// when the code is unknown or absent (older backend).
+function errorDetail(response) {
+  const code = typeof response?.code === 'string' ? response.code : ''
+  const key = `errors.${code}`
+  const text = code ? tr(key) : null
+  return text && text !== key ? text : String(response?.error || '')
+}
+
 async function generatePrompt() {
   const state = $studio.get()
   if (!['active', 'done'].includes(state.status)) return
@@ -2019,18 +2072,22 @@ async function generatePrompt() {
         body: { target, intent: requestState.intent, answers: studioAnswers(target, requestState.intent, ladder, locale), baseline: engineResult.prompt }
       }), COMPOSE_CLIENT_TIMEOUT_MS)
       if (serial !== composeSerial || $studio.get().status !== 'briefing') return // cancelled meanwhile
-      if (response?.ok && response.prompt) {
+      if ($aiMode.get() === 'off') {
+        // AI switched off while it was writing: keep the engine prompt.
+      } else if (response?.ok && response.prompt) {
         prompt = response.prompt
         note = response.notes || ''
       } else {
         note = tr('preview.empty')
-        noteDetail = String(response?.error || '')
+        noteDetail = errorDetail(response)
       }
     } catch (error) {
       if (serial !== composeSerial || $studio.get().status !== 'briefing') return
-      const { errorKey, detail } = describeFailure(error)
-      note = tr(errorKey === 'missing' ? 'preview.missing' : 'preview.failed')
-      noteDetail = detail
+      if ($aiMode.get() !== 'off') {
+        const { errorKey, detail } = describeFailure(error)
+        note = tr(errorKey === 'missing' ? 'preview.missing' : 'preview.failed')
+        noteDetail = detail
+      }
     }
   }
   update({ type: 'BRIEF_READY', ai: prompt !== engineResult.prompt ? prompt : '', engine: engineResult.prompt, note, noteDetail })
@@ -2055,6 +2112,7 @@ async function requestSuggestion(mode = 'suggest') {
   const improving = mode === 'improve'
   const typed = String(state.answer || '').trim()
   if (improving && (state.current.kind === 'enum' || !typed)) return
+  cancelAutoSuggestion()
   const key = questionKey(state)
   const serial = ++suggestSerial
   $suggestion.set({ key, mode, status: 'loading' })
@@ -2081,7 +2139,7 @@ async function requestSuggestion(mode = 'suggest') {
     }), SUGGEST_CLIENT_TIMEOUT_MS)
     next = response?.ok
       ? { key, mode, status: 'ready', value: response.value || '', reason: response.reason || '', agrees: response.agrees, model: response.model || '', latency: response.latency_ms }
-      : { key, mode, status: 'error', errorKey: response?.error && !response?.empty ? 'failed' : 'noAnswer', detail: String(response?.error || '') }
+      : { key, mode, status: 'error', errorKey: response?.error && !response?.empty ? 'failed' : 'noAnswer', detail: errorDetail(response) }
   } catch (error) {
     next = { key, mode, status: 'error', ...describeFailure(error) }
   }
@@ -2909,6 +2967,7 @@ export default {
   register(ctx) {
     pluginContext = ctx
     ctx.onDispose(() => {
+      cancelAutoSuggestion()
       suggestSerial += 1
       composeSerial += 1
       suggestionCache.clear()

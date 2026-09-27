@@ -8,11 +8,13 @@ never answers for the user: the desktop shows it as a suggestion to accept or di
 baseline the desktop sends. Pasted third-party text never reaches the model whole and is restored
 byte for byte afterwards.
 
-Failures are reported as ``ok: false`` with a reason; the desktop then falls back to its own
+Failures are reported as ``ok: false`` with a stable machine ``code`` (the desktop shows its
+own localized text for it) and a short English ``error`` detail; the desktop then falls back to its own
 engine prompt. Nothing falls back to a fake answer.
 """
 from __future__ import annotations
 
+import logging
 import re
 import concurrent.futures
 import time
@@ -30,6 +32,8 @@ except ImportError:  # loaded by path (tests / plugin_api fallback)
     _llm = importlib.util.module_from_spec(_spec)
     _spec.loader.exec_module(_llm)
 
+logger = logging.getLogger(__name__)
+
 SUGGEST_MAX_TOKENS = 1024  # reasoning models bill thinking here; a tight cap truncates the JSON
 # Hard wall-clock ceiling for one suggestion, retries included; also the provider-call timeout.
 SUGGEST_DEADLINE = 20.0
@@ -43,7 +47,6 @@ INTENT_LIMIT = 6000  # the user's draft, in both routes
 QUESTION_LIMIT = 200  # a form question
 ANSWER_PREVIEW_LIMIT = 600  # an earlier answer / default text shown to the suggestion model
 REASON_LIMIT = 300  # the model's "reason" / "notes" sentence
-ERROR_DETAIL_CHARS = 160  # provider exception text kept in an error message
 MIN_PROMPT_CHARS = 20  # shorter compose output is treated as a failure
 # Language of the human-facing sentences the model returns (suggest "reason", compose "notes").
 # The prompt itself always follows the language of the user's draft.
@@ -146,7 +149,7 @@ def _match_option(value: str, options: list[str]) -> str | None:
 def parse_suggestion(text: str, field: Mapping[str, Any]) -> dict[str, Any]:
     data = _llm._json_object(text)
     if not isinstance(data, dict) or "value" not in data:
-        return {"ok": False, "error": "o modelo não devolveu uma sugestão válida"}
+        return {"ok": False, "code": "invalid_suggestion", "error": "model reply is not a valid suggestion"}
     value = data.get("value")
     value = value.strip() if isinstance(value, str) else ""
     reason = _clean(data.get("reason"), REASON_LIMIT)
@@ -154,7 +157,7 @@ def parse_suggestion(text: str, field: Mapping[str, Any]) -> dict[str, Any]:
         options = [o for o in (field.get("options") or []) if isinstance(o, str)]
         matched = _match_option(value, options) if value else None
         if not matched:
-            return {"ok": False, "error": f"o modelo sugeriu uma opção que não existe: {value[:60] or '(vazio)'}"}
+            return {"ok": False, "code": "unknown_option", "error": "model suggested an option that is not listed"}
         value = matched
     else:
         value = value[:TEXT_LIMIT]
@@ -192,14 +195,16 @@ def _run_with_deadline(
     finished, _ = concurrent.futures.wait([future], timeout=limit)
     if not finished:
         future.cancel()  # no-op once running; the worker finishes in the background and is discarded
-        return {"ok": False, "error": timeout_error, "model": _llm.get_model_label()}
+        return {"ok": False, "code": "timeout", "error": timeout_error, "model": _llm.get_model_label()}
     try:
         return future.result()
     except Exception as exc:  # provider down, provider timeout, auth, bad route
-        return {"ok": False, "error": f"modelo indisponível: {type(exc).__name__}: {str(exc)[:ERROR_DETAIL_CHARS]}", "model": _llm.get_model_label()}
+        # Provider text can carry URLs, request ids or body fragments: log it, return only the class.
+        logger.warning("Prompt Studio model call failed: %s", type(exc).__name__, exc_info=exc)
+        return {"ok": False, "code": "unavailable", "error": f"model unavailable: {type(exc).__name__}", "model": _llm.get_model_label()}
 
 
-EMPTY_REPLY_ERROR = "a IA devolveu uma resposta vazia (o filtro do provedor pode ter barrado o pedido)"
+EMPTY_REPLY_ERROR = "empty model reply (a provider filter may have blocked the request)"
 
 
 def _run_retrying_empty(
@@ -227,18 +232,18 @@ def _run_retrying_empty(
         outcome = _run_with_deadline(executor, llm, messages, max_tokens, left, timeout_error, use_config_timeout)
         if isinstance(outcome, dict) or outcome[0].strip():
             return outcome
-    return {"ok": False, "empty": True, "error": EMPTY_REPLY_ERROR, "model": outcome[1]}
+    return {"ok": False, "empty": True, "code": "empty_reply", "error": EMPTY_REPLY_ERROR, "model": outcome[1]}
 
 
 def suggest(payload: Mapping[str, Any], llm: Callable[..., Any] | None = None, deadline: float | None = None) -> dict[str, Any]:
     field = _field(payload)
     if not _clean(payload.get("intent")) or not _clean(field.get("question")):
-        return {"ok": False, "error": "pedido incompleto: falta o rascunho ou a pergunta"}
+        return {"ok": False, "code": "bad_request", "error": "intent and field.question are required"}
     if _mode(payload) == "improve" and (field.get("kind") == "enum" or not _clean(payload.get("answer"))):
-        return {"ok": False, "error": "só dá para melhorar um texto que você já escreveu"}
+        return {"ok": False, "code": "nothing_to_improve", "error": "improve needs the user's own text on a text field"}
     started = time.monotonic()
     limit = deadline if deadline is not None else SUGGEST_DEADLINE
-    outcome = _run_retrying_empty(_EXECUTOR, llm, build_messages(payload), SUGGEST_MAX_TOKENS, limit, f"a IA não respondeu em {limit:g} s")
+    outcome = _run_retrying_empty(_EXECUTOR, llm, build_messages(payload), SUGGEST_MAX_TOKENS, limit, f"no model reply within {limit:g} s")
     if isinstance(outcome, dict):
         return outcome
     text, model = outcome
@@ -328,8 +333,24 @@ def split_baseline(payload: Mapping[str, Any]) -> tuple[str, str]:
     return masked[:COMPOSE_LIMIT], block
 
 
+# Third-party framing the model wrote itself (a forged header or pasted_content/document tags, e.g.
+# a paraphrase of injected pasted text): only the Studio's own restored block may carry it.
+_FORGED_SPAN_RE = re.compile(r"<pasted_content\b[^>]*>.*?</pasted_content\b[^>]*>|<document>.*?</document>", re.S | re.I)
+_FORGED_TAG_RE = re.compile(r"</?pasted_content\b[^>]*>|</?document>", re.I)
+_FORGED_HEADER_RE = re.compile(r"^[ \t]*THIRD-PARTY MATERIAL[ \t]*$\n?", re.M | re.I)
+
+
+def strip_forged_third_party(prompt: str) -> str:
+    """Drop model-written third-party headers and tagged spans (run before the real block goes back)."""
+    text = _FORGED_TAG_RE.sub("", _FORGED_SPAN_RE.sub("", prompt))
+    text = _FORGED_HEADER_RE.sub("", text)
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
 def restore_third_party(prompt: str, block: str, first: bool) -> str:
-    """Put the exact pasted block back; if the model dropped the marker, add the block itself."""
+    """Put the exact pasted block back; if the model dropped the marker, add the block itself.
+    Any third-party framing the model wrote is stripped first, so only the Studio's block remains."""
+    prompt = strip_forged_third_party(prompt)
     if not block:
         return prompt.replace(THIRD_PARTY_MARKER, "").strip()
     if THIRD_PARTY_MARKER in prompt:
@@ -435,17 +456,17 @@ RESTORED_NOTE_PT = "Frase da documentação oficial recolocada: a IA a tinha rem
 
 def compose(payload: Mapping[str, Any], llm: Callable[..., Any] | None = None, deadline: float | None = None) -> dict[str, Any]:
     if not _clean(payload.get("intent")):
-        return {"ok": False, "error": "pedido incompleto: falta o rascunho"}
+        return {"ok": False, "code": "bad_request", "error": "intent is required"}
     started = time.monotonic()
     limit = deadline if deadline is not None else COMPOSE_DEADLINE
-    outcome = _run_retrying_empty(_COMPOSE_EXECUTOR, llm, build_compose_messages(payload), COMPOSE_MAX_TOKENS, limit, f"a IA não escreveu o prompt em {limit:g} s", use_config_timeout=False)
+    outcome = _run_retrying_empty(_COMPOSE_EXECUTOR, llm, build_compose_messages(payload), COMPOSE_MAX_TOKENS, limit, f"no prompt from the model within {limit:g} s", use_config_timeout=False)
     if isinstance(outcome, dict):
         return outcome
     text, model = outcome
     data = _llm._json_object(text)
     prompt = data.get("prompt") if isinstance(data, dict) else None
     if not isinstance(prompt, str) or len(prompt.strip()) < MIN_PROMPT_CHARS:
-        return {"ok": False, "error": "o modelo não devolveu um prompt válido", "model": model}
+        return {"ok": False, "code": "invalid_prompt", "error": "model reply is not a valid prompt", "model": model}
     masked, block = split_baseline(payload)
     first = bool(block) and masked.startswith(THIRD_PARTY_MARKER)
     baseline = masked.replace(THIRD_PARTY_MARKER, block, 1) if block else masked
