@@ -9,12 +9,14 @@
 | `desktop/src/studio-core.js` | Step flow (questions, recommendations, answers to brief). Imports only the two engines. |
 | `desktop/src/i18n-core.js` | Questions, help and option labels, `en` and `pt`. |
 | `desktop/src/i18n-ui.js` | Every string `plugin.js` shows (buttons, notes, errors, shortcut help), `en` and `pt`. |
-| `desktop/plugin.js` | The single file Hermes Desktop loads. Imports only `@hermes/plugin-sdk`, `react` and `react/jsx-runtime`. |
+| `desktop/src/plugin-head.js` | The plugin's imports and `ID`; the only hand-written file allowed to import. |
+| `desktop/src/studio-state.js` | The `@core` state machine (reducer) plus the studio atom. No imports. |
+| `desktop/src/ui-locale.js`, `ui-prefs.js`, `ui-flow.js`, `ui-components.js` | The rest of the Desktop UI (locale helpers, preferences and context, flow and keys, components and `export default`), concatenated in this order into `plugin.js`'s single module scope. No imports. |
+| `desktop/plugin.js` | Generated whole by `scripts/build.mjs`; the single file Hermes Desktop loads. Imports only `@hermes/plugin-sdk`, `react` and `react/jsx-runtime`. |
 | `desktop/studio-core.mjs` | Generated ESM bundle of `src/*` for the Node tests. |
 
-`plugin.js` contains generated blocks between marker comments (`// @studio-start` / `// @studio-end` for the
-inlined `src/*` modules, plus the `@ui-i18n` and `@core` blocks). Never edit inside the markers: edit `desktop/src/*`
-and rebuild. Every rule line in an engine carries a comment with its doc source; add the matching row to
+`plugin.js` is fully generated (it keeps the marker comments `// @studio-start` / `// @studio-end`, `@ui-i18n` and
+`@core` because tests read them). Never edit it: edit `desktop/src/*` and rebuild. Every rule line in an engine carries a comment with its doc source; add the matching row to
 `docs/PROMPT-DOCS-REVIEW.md` when you add or change one.
 
 ## Build
