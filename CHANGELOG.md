@@ -2,7 +2,7 @@
 
 Versions come from the commit subjects; releases from 1.6.0 on are also git tags. Newest first.
 
-## Unreleased
+## 1.7.0
 
 - The plugin no longer sends a temperature: sampling stays as Hermes configures it for each model
   (Claude Opus 5.5, for example, rejects any non-default temperature).
@@ -17,6 +17,11 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   then update the plugin and Hermes; 1.6.0 and 1.6.1 need Hermes 0.21.5 on the Desktop).
 - README: Apple keyboard notes (fn with F-keys, Alt is Option; Alt shortcuts match the physical key).
 - README: the "not a recognized config key" warning for `auxiliary.prompt_studio.*` is harmless; the value is used.
+- The default model timeout in `__init__.py` is 20 s, as `install.sh` and the README already said (it was 15 s).
+- Windows: `.gitattributes` keeps LF line endings, so `build --check` no longer reports a stale build after a
+  checkout with CRLF conversion; the bash installer tests are skipped on Windows; the README states Windows support
+  and no longer calls the repository private.
+- Contributors: `AGENTS.md`, `bin/review` and `bin/pr` add a local Codex review before each pull request.
 
 ## 1.6.1
 
