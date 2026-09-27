@@ -787,3 +787,42 @@ def test_model_choice_reaches_the_adapter_and_labels_errors(fn, payload, monkeyp
     choice = {"provider": "anthropic", "model": "claude-haiku-5", "effort": "low"}
     out = getattr(se, fn)({**payload, "model_choice": choice})
     assert seen[0] == choice and out["model"] == "anthropic/claude-haiku-5"
+
+
+def test_astra_writer_is_not_told_to_merge_doc_lines_it_must_keep_word_for_word():
+    # AS-9: "merge them" contradicted "keep the BASELINE's lines quoted from OpenAI's docs word for word";
+    # the Astra BASELINE no longer repeats scope or permission rules (see engine-astra.test.mjs).
+    se = _load()
+    astra = se.COMPOSE_TARGET_RULES["astra"]
+    assert "merge them" not in astra
+    assert "word for word in English" in astra
+    assert "reserve ALWAYS/NEVER/must for true invariants" in astra
+
+
+def _replies_with_finish(*pairs):
+    """Stub whose replies carry a finish_reason, the way llm_adapter._default_llm returns them."""
+    se = _load()
+    calls = []
+
+    def llm(messages, temperature, max_tokens, timeout, is_json=False):
+        calls.append(timeout)
+        text, finish = pairs[min(len(calls), len(pairs)) - 1]
+        return se._llm.Reply(text, "stub/model", finish)
+
+    return se, llm, calls
+
+
+def test_empty_reply_cut_at_the_token_limit_is_not_retried():
+    # SP-3: an empty reply that ended on "length" (reasoning used the whole max_tokens) comes back the
+    # same on a retry with the same cap, so the retry would only double the cost.
+    se, llm, calls = _replies_with_finish(("", "length"), (json.dumps({"value": "x", "reason": "ok"}), "stop"))
+    out = se.suggest({**BASE, "field": TEXT}, llm=llm)
+    assert not out["ok"] and out["code"] == "empty_reply" and out.get("empty") is True
+    assert len(calls) == 1
+
+
+def test_empty_reply_from_the_safety_filter_is_still_retried_once():
+    # A filtered reply (finish_reason "content_filter") was seen passing on a second try (1.1.1).
+    se, llm, calls = _replies_with_finish(("", "content_filter"), (json.dumps({"value": "x", "reason": "ok"}), "stop"))
+    out = se.suggest({**BASE, "field": TEXT}, llm=llm)
+    assert out["ok"] and len(calls) == 2

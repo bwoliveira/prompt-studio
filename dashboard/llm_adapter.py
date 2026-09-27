@@ -27,6 +27,29 @@ def _strip_thinking(text: str) -> str:
     return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
 
+class Reply(tuple):
+    """``(text, model)`` from one model call, plus the provider's ``finish_reason`` ("" when unknown).
+
+    Still a 2-tuple, so every caller keeps unpacking ``text, model = reply``.
+    """
+
+    finish_reason: str
+
+    def __new__(cls, text: str, model: str, finish_reason: str = "") -> "Reply":
+        reply = super().__new__(cls, (text, model))
+        reply.finish_reason = finish_reason
+        return reply
+
+
+def _finish_reason(response: Any) -> str:
+    choices = response.get("choices") if isinstance(response, Mapping) else getattr(response, "choices", None)
+    if not choices:
+        return ""
+    first = choices[0]
+    value = first.get("finish_reason") if isinstance(first, Mapping) else getattr(first, "finish_reason", None)
+    return value if isinstance(value, str) else ""
+
+
 def _json_object(text: str) -> dict[str, Any] | None:
     """Find the best valid JSON object in prose, fences, or thinking output."""
     if not isinstance(text, str):
@@ -164,7 +187,7 @@ def _default_llm(
     )
     resolved_provider = route.get("provider", provider or "auto")
     resolved_model = route.get("model", model or "default")
-    return extract_content_or_reasoning(response), f"{resolved_provider}/{resolved_model}"
+    return Reply(extract_content_or_reasoning(response), f"{resolved_provider}/{resolved_model}", _finish_reason(response))
 
 
 def is_model_not_found(exc: BaseException) -> bool:
@@ -201,7 +224,7 @@ def _invoke(
     hard_timeout: bool = False,
     use_config_timeout: bool = True,
     model_choice: Mapping[str, Any] | None = None,
-) -> tuple[str, str]:
+) -> Reply:
     if llm is not None:
         try:
             result = llm(messages=messages, temperature=0.2, max_tokens=max_tokens, timeout=timeout, is_json=is_json)
@@ -211,7 +234,7 @@ def _invoke(
         result = _default_llm(messages=messages, temperature=0.2, max_tokens=max_tokens, timeout=timeout, is_json=is_json, hard_timeout=hard_timeout, use_config_timeout=use_config_timeout, model_choice=model_choice)
 
     if isinstance(result, tuple) and len(result) >= 2:
-        return str(result[0] or ""), str(result[1] or get_model_label(model_choice))
+        return Reply(str(result[0] or ""), str(result[1] or get_model_label(model_choice)), getattr(result, "finish_reason", ""))
     if isinstance(result, Mapping):
-        return str(result.get("text") or result.get("content") or ""), str(result.get("model") or get_model_label(model_choice))
-    return str(result or ""), get_model_label(model_choice)
+        return Reply(str(result.get("text") or result.get("content") or ""), str(result.get("model") or get_model_label(model_choice)))
+    return Reply(str(result or ""), get_model_label(model_choice))

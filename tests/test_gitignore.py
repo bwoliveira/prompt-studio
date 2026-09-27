@@ -24,3 +24,16 @@ def test_env_example_is_not_ignored_and_no_tracked_file_is_ignored():
     assert subprocess.run(["git", "check-ignore", "--no-index", "-q", ".env.example"], cwd=REPO, check=False).returncode == 1
     tracked = subprocess.run(["git", "ls-files", "-ci", "--exclude-standard"], cwd=REPO, capture_output=True, text=True, check=True)
     assert tracked.stdout == ""
+
+
+@pytest.mark.parametrize("name", ["tests/test_secrets.py", "dashboard/credentials_check.py", "desktop/src/secret-mask.js", "tests/desktop/credentials.test.mjs"])
+def test_source_code_named_like_a_secret_is_not_ignored(name):
+    # GI-2: *secret* / *credential* protect data files, not the plugin's own code.
+    result = subprocess.run(["git", "check-ignore", "--no-index", "-q", name], cwd=REPO, check=False)
+    assert result.returncode == 1, f"{name} is ignored"
+
+
+@pytest.mark.parametrize("name", ["secrets.json", "db-credentials.txt", "my_secret.yaml", "credentials"])
+def test_secret_data_files_stay_ignored(name):
+    result = subprocess.run(["git", "check-ignore", "--no-index", "-q", name], cwd=REPO, check=False)
+    assert result.returncode == 0, f"{name} is not ignored"

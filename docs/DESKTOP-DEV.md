@@ -35,6 +35,10 @@ hermes plugins validate .
 python3 scripts/docs_sources.py check --docs-dir <snapshot dir>   # every doc quote in PROMPT-DOCS-REVIEW.md
 ```
 
+The UI flow tests need react, react-dom, jsdom, nanostores, @nanostores/react and esbuild from
+`PROMPT_STUDIO_NODE_MODULES`, the repo's `node_modules` or the Hermes install (`/usr/local/lib/hermes-agent/node_modules`).
+Without them they are skipped with the reason on stderr; run with `CI=1` to make that a failure.
+
 The doc snapshots live outside the plugin; see `docs/sources/README.md`.
 
 ## i18n

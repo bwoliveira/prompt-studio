@@ -28,7 +28,7 @@ except ImportError:  # loaded by path (tests / plugin_api fallback)
 
     _spec = importlib.util.spec_from_file_location("prompt_studio_llm_adapter", Path(__file__).with_name("llm_adapter.py"))
     if _spec is None or _spec.loader is None:
-        raise ImportError("llm_adapter.py not found beside suggest_engine.py")
+        raise ImportError("llm_adapter.py not found beside suggest_engine.py") from None
     _llm = importlib.util.module_from_spec(_spec)
     _spec.loader.exec_module(_llm)
 
@@ -217,6 +217,7 @@ def _run_with_deadline(
 
 
 EMPTY_REPLY_ERROR = "empty model reply (a provider filter may have blocked the request)"
+EMPTY_LENGTH_ERROR = "empty model reply (the token limit ran out before any text)"
 
 
 def _run_retrying_empty(
@@ -234,12 +235,16 @@ def _run_retrying_empty(
     A provider safety filter can end a reply with no text (Anthropic: stop_reason "refusal",
     surfaced as finish_reason "content_filter"), and the same request often passes on a second
     try. The retry only uses the time left before ``limit``; a second empty reply is reported as
-    such (``empty: True``) instead of as a connection failure.
+    such (``empty: True``) instead of as a connection failure. An empty reply that ended on
+    ``length`` (the reasoning used the whole ``max_tokens``) is not retried: the same request with
+    the same cap ends the same way, so a retry would only double the cost (SP-3).
     """
     started = time.monotonic()
     outcome = _run_with_deadline(executor, llm, messages, max_tokens, limit, timeout_error, use_config_timeout, model_choice)
     if isinstance(outcome, dict) or outcome[0].strip():
         return outcome
+    if getattr(outcome, "finish_reason", "") == "length":
+        return {"ok": False, "empty": True, "code": "empty_reply", "error": EMPTY_LENGTH_ERROR, "model": outcome[1]}
     left = limit - (time.monotonic() - started)
     if left >= 1.0:
         outcome = _run_with_deadline(executor, llm, messages, max_tokens, left, timeout_error, use_config_timeout, model_choice)
@@ -417,7 +422,7 @@ COMPOSE_TARGET_RULES = {
     ),
     "astra": (
         "- Keep the BASELINE's lines on instruction priority (AGENTS.md/skills), autonomy, scaled verification, completion, carrying the task through to a working result and not adding unsolicited warnings: they come from OpenAI's official GPT-6 Astra prompting guidance.\n"
-        "- GPT-6 Astra follows instructions closely and can stop early when boundaries are stated strongly: state each rule once (the BASELINE repeats scope and permission rules; merge them), reserve ALWAYS/NEVER/must for true invariants, and do not add \"ask first\" or approval steps the user did not ask for.\n"
+        "- GPT-6 Astra follows instructions closely and can stop early when boundaries are stated strongly: state each rule once, reserve ALWAYS/NEVER/must for true invariants, and do not add \"ask first\" or approval steps the user did not ask for.\n"
         "- Put the third-party marker line at the end, where the BASELINE has it.\n"
         # Rethinking prompts for GPT-6 Astra: "GPT-6 Astra does that on its own, so the same
         # instructions can lead to unnecessary testing." / "say what you want explored and where it should stop."

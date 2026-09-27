@@ -16,6 +16,10 @@ id_ed25519*
 *.token
 *secret*
 *credential*
+# ...but the plugin's own code may carry those words (GI-2).
+!*.py
+!*.js
+!*.mjs
 auth.json
 .netrc
 .npmrc

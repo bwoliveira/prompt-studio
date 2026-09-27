@@ -21,7 +21,7 @@ except ImportError:  # loaded by path (tests / plugin_api fallback)
 
     _spec = importlib.util.spec_from_file_location("prompt_studio_llm_adapter", Path(__file__).with_name("llm_adapter.py"))
     if _spec is None or _spec.loader is None:
-        raise ImportError("llm_adapter.py not found beside session_context.py")
+        raise ImportError("llm_adapter.py not found beside session_context.py") from None
     _llm = importlib.util.module_from_spec(_spec)
     _spec.loader.exec_module(_llm)
 

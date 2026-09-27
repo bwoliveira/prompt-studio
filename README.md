@@ -182,6 +182,10 @@ uvx --with fastapi --with httpx --with pyyaml pytest -q tests
 hermes plugins validate .
 ```
 
+The UI flow tests (`tests/desktop/studio-flow.test.mjs`) need react, react-dom, jsdom, nanostores,
+@nanostores/react and esbuild. They are taken from `PROMPT_STUDIO_NODE_MODULES`, the repo's `node_modules` or the
+Hermes install; without them the tests are skipped with the reason printed, and with `CI=1` they fail instead.
+
 The source is in `desktop/src/` (engines, studio core, translations, Desktop UI). `desktop/plugin.js` is the single
 file Hermes Desktop loads, so the build generates it from those sources. Developer notes are in
 `docs/DESKTOP-DEV.md`, the REST contract is in `docs/CONTRACT.md`, and the reason for each step is in

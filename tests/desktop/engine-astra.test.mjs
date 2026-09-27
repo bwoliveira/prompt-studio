@@ -306,3 +306,16 @@ test('AS-7: implementation test block is the full doc block', () => {
   assert.ok(sec({ goal: 'Fix the login bug' }, 'done').includes(`${TEST_LINE}\n${TEST_2}`))
   assert.ok(!ENGINE.build({ goal: 'Automatize o deploy', deliverable: 'workflow' }).prompt.includes(TEST_2))
 })
+
+test('AS-9: no sentence is repeated in the Astra prompt, so the writer has nothing to merge', () => {
+  const drafts = ['Fix the login bug in the React app and deploy it', 'Crie um script de backup diario para as fotos da familia',
+    'Write a short email to the team about the release', 'Analise os logs do servidor e resuma os erros']
+  for (const goal of drafts) {
+    for (const autonomy of [undefined, 'proactive', 'guided']) {
+      const prompt = ENGINE.build({ goal, ...(autonomy ? { autonomy } : {}) }).prompt ?? ENGINE.build({ goal }).prompt
+      const sentences = prompt.split(/(?<=[.!?])\s+|\n+/).map(s => s.trim()).filter(s => s.length > 25)
+      const repeated = sentences.filter((s, i) => sentences.indexOf(s) !== i)
+      assert.deepEqual(repeated, [], `${goal} / ${autonomy}`)
+    }
+  }
+})

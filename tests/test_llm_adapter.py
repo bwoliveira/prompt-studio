@@ -204,3 +204,23 @@ def test_no_config_block_and_no_model_choice_lets_hermes_auto_route(monkeypatch)
     for key in ("provider", "model", "base_url", "api_key"):
         assert key not in captured
     assert captured["reasoning_config"] is None and captured["extra_body"] is None
+
+
+def test_default_llm_reports_the_finish_reason_and_still_unpacks_as_text_and_model(monkeypatch):
+    # SP-3: the retry decision needs finish_reason; callers keep unpacking (text, model).
+    fake = types.ModuleType("agent.auxiliary_client")
+    fake.call_llm = lambda **kw: types.SimpleNamespace(choices=[types.SimpleNamespace(finish_reason="length")])
+    fake.extract_content_or_reasoning = lambda r: ""
+    fake._get_auxiliary_task_config = lambda task: {}
+    fake._resolve_task_provider_model = lambda *a, **k: ("p", "m", None, None, None)
+    monkeypatch.setitem(sys.modules, "agent.auxiliary_client", fake)
+    monkeypatch.setitem(sys.modules, "agent", types.ModuleType("agent"))
+    hc = types.ModuleType("hermes_constants")
+    hc.parse_reasoning_effort = lambda v: None
+    monkeypatch.setitem(sys.modules, "hermes_constants", hc)
+    reply = adapter._invoke(None, [], max_tokens=10, timeout=1)
+    text, model = reply
+    assert (text, model) == ("", "p/m") and reply.finish_reason == "length"
+    # A response without choices has no finish_reason, and nothing breaks.
+    fake.call_llm = lambda **kw: {"choices": []}
+    assert adapter._invoke(None, [], max_tokens=10, timeout=1).finish_reason == ""

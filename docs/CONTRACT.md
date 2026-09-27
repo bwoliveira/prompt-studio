@@ -123,7 +123,7 @@ back to `error` when the code is unknown or absent.
 | `timeout` | both | no reply before the deadline | `no model reply within 20 s` / `no prompt from the model within 45 s` |
 | `unavailable` | both | the provider call raised | `model unavailable: <ExceptionClassName>` |
 | `model_not_found` | both | the provider does not know the model name (404 / "model not found") | `model not found: <ExceptionClassName>` |
-| `empty_reply` | both | empty reply twice (also `empty: true`) | fixed sentence |
+| `empty_reply` | both | empty reply twice, or once when it ended on `finish_reason: length` (no retry: the same cap ends the same way) (also `empty: true`) | fixed sentence |
 
 `timeout`, `unavailable`, `model_not_found` and `empty_reply` also carry `model`. The route-level errors (400 for a blank draft, 500
 `{ "ok": false, "error": "suggest engine unavailable" }` / `"compose engine unavailable"` when the engine cannot load
