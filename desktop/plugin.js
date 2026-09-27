@@ -1243,6 +1243,7 @@ const UI_MESSAGES = {
       clearFailed: 'Could not clear the message field.',
       restoreFailed: 'Could not return the draft to the message field.',
       placeFailed: 'Could not place the prompt in the message field.',
+      placedNotSent: 'The prompt was placed in the message field but not sent (Hermes is busy). Send it when ready.',
       nextFailed: 'Prompt Studio could not prepare the next question.',
       unknownOption: list => `Option not recognized. Choose one of: ${list}`,
       conflict: detail => `Some answers contradict each other: ${detail} Edit an answer and try again.`
@@ -1383,8 +1384,10 @@ const UI_MESSAGES = {
     preview: {
       ai: '✨ Prompt written by the AI',
       engine: 'Prompt built without AI',
-      use: 'Use this prompt',
-      useTitle: 'Places it in the message field; you send it when you are ready',
+      send: 'Send now',
+      sendTitle: 'Sends the prompt now, as if you pressed Enter',
+      edit: 'Put in composer to edit',
+      editTitle: 'Places it in the message field; you edit it and send it when you are ready',
       switchTitle: 'Same answers, built with or without AI',
       showEngine: 'See the version without AI',
       showAi: 'See the AI version',
@@ -1403,7 +1406,7 @@ const UI_MESSAGES = {
       skip: "Skip, I don't have one, or use the default",
       useAi: 'Use the AI text or the recommended one it offers',
       back: 'Back, undo the edit, or back to the steps',
-      generate: 'Generate the prompt, then use it',
+      generate: 'Generate the prompt; on the preview, send it now',
       close: 'Close and return the draft',
       pick: 'Pick an option',
       edit: 'Edit an answered step',
@@ -1415,6 +1418,7 @@ const UI_MESSAGES = {
       model: 'Model: Opus or Astra',
       mode: 'Next AI help mode',
       version: 'Other version in the preview',
+      editPrompt: 'Put the prompt in the composer to edit before sending',
       noteAlt: 'Use the left Alt key: on some layouts the right Alt works as AltGr.',
       noteDigits: 'Alt+digits follow the physical number row, whatever the keyboard layout.',
       noteKeys: 'Tab, Enter and Esc keep working as usual.'
@@ -1442,6 +1446,7 @@ const UI_MESSAGES = {
       clearFailed: 'Não foi possível limpar o campo de mensagem.',
       restoreFailed: 'Não foi possível devolver o rascunho ao campo de mensagem.',
       placeFailed: 'Não foi possível colocar o prompt no campo de mensagem.',
+      placedNotSent: 'O prompt foi colocado no campo de mensagem, mas não enviado (o Hermes está ocupado). Envie quando quiser.',
       nextFailed: 'O Prompt Studio não conseguiu preparar a próxima pergunta.',
       unknownOption: list => `Opção não reconhecida. Escolha uma de: ${list}`,
       conflict: detail => `Algumas respostas se contradizem: ${detail} Edite uma resposta e tente de novo.`
@@ -1582,8 +1587,10 @@ const UI_MESSAGES = {
     preview: {
       ai: '✨ Prompt escrito pela IA',
       engine: 'Prompt montado sem IA',
-      use: 'Usar este prompt',
-      useTitle: 'Coloca no campo de mensagem; você envia quando quiser',
+      send: 'Enviar agora',
+      sendTitle: 'Envia o prompt agora, como se você apertasse Enter',
+      edit: 'Pôr no composer para editar',
+      editTitle: 'Coloca no campo de mensagem; você edita e envia quando quiser',
       switchTitle: 'Mesmas respostas, montado com ou sem IA',
       showEngine: 'Ver versão sem IA',
       showAi: 'Ver versão da IA',
@@ -1602,7 +1609,7 @@ const UI_MESSAGES = {
       skip: 'Pular, Não tenho, ou usar o padrão',
       useAi: 'Usar o texto da IA ou o recomendado que ela oferece',
       back: 'Voltar, desfazer a edição ou voltar às etapas',
-      generate: 'Gerar o prompt e depois usá-lo',
+      generate: 'Gerar o prompt; na prévia, enviar agora',
       close: 'Fechar e devolver o rascunho',
       pick: 'Escolher uma opção',
       edit: 'Editar uma etapa respondida',
@@ -1614,6 +1621,7 @@ const UI_MESSAGES = {
       model: 'Modelo: Opus ou Astra',
       mode: 'Próximo modo da ajuda da IA',
       version: 'Outra versão na prévia',
+      editPrompt: 'Pôr o prompt no composer para editar antes de enviar',
       noteAlt: 'Use o Alt da esquerda: em alguns layouts o Alt da direita funciona como AltGr.',
       noteDigits: 'Alt+dígito segue a fileira física de números, qualquer que seja o layout do teclado.',
       noteKeys: 'Tab, Enter e Esc continuam funcionando como sempre.'
@@ -2331,6 +2339,33 @@ function usePreview() {
   update({ type: 'RESET' })
 }
 
+// F9 on the preview: send as if the user pressed Enter, in the session the Studio is bound to.
+// host.composer.submit is fail-closed (false = not sent, e.g. a turn is running): then the prompt
+// is placed in the composer with a short note, so it is never lost.
+function sendPreview() {
+  const state = $studio.get()
+  if (state.status !== 'preview' || !state.preview) return
+  const text = state.preview[state.preview.showing]
+  const sessionId = host.state?.focusedSessionId?.get?.() ?? null
+  composerAdapter.forwardAttachments(state.attachments)
+  let sent = false
+  try {
+    sent = typeof host.composer?.submit === 'function' && host.composer.submit(sessionId, text) === true
+  } catch {
+    sent = false
+  }
+  if (!sent) {
+    if (!composerAdapter.writeDraft(text)) {
+      host.notify({ kind: 'error', message: tr('notify.placeFailed') })
+      return
+    }
+    host.notify({ kind: 'info', message: tr('notify.placedNotSent') })
+  }
+  stopContextRead()
+  $helpOpen.set(false)
+  update({ type: 'RESET' })
+}
+
 async function requestSuggestion(mode = 'suggest') {
   const state = $studio.get()
   if (state.status !== 'active' || !state.current || !pluginContext) return
@@ -2440,7 +2475,8 @@ const SHORTCUT_MAP = [
   ['Alt+C', 'paste'],
   ['Alt+O / Alt+A', 'model'],
   ['Alt+I', 'mode'],
-  ['Alt+V', 'version']
+  ['Alt+V', 'version'],
+  ['Alt+E', 'editPrompt']
 ]
 // While open these are always swallowed, even when no control shows them right now: F5 would
 // otherwise reach the window (reload in some Electron setups).
@@ -2740,6 +2776,8 @@ function EnumAnswer({ state }) {
   const mode = useValue($aiMode)
   const mine = mySuggestion(state, suggestion)
   const rec = enumRecommendation(current, mode, mine)
+  // Auto: the AI's pick changes the cards, so they wait until it arrives, fails or is stopped.
+  if (mode === 'auto' && mine?.status === 'loading') return null
   const options = rec.all.filter(option => !rec.value || !rec.same(option, rec.value))
   return jsxs('div', {
     'aria-labelledby': QUESTION_TEXT_ID,
@@ -2787,6 +2825,8 @@ function TextAnswer({ state, placeholder }) {
   const aiText = mode === 'auto' && hasDefault && mine?.status === 'ready' && mine.mode === 'suggest' && mine.value ? mine.value : ''
   // One primary action per step: Confirm once something is typed, otherwise Recommended / Skip.
   const typed = Boolean(String(state.answer || '').trim())
+  // Auto: the recommended button may become the AI text, so it waits for the suggestion.
+  const waiting = mode === 'auto' && hasDefault && mine?.status === 'loading' && mine.mode === 'suggest'
   return jsxs('div', {
     style: { marginTop: '8px' },
     children: [
@@ -2813,6 +2853,8 @@ function TextAnswer({ state, placeholder }) {
             : null,
           aiText
             ? jsx(Button, { data: { 'data-studio-use-default': true }, onClick: () => commitAnswer(''), title: current.hint || '', keyHint: 'F6', children: t('answer.useDefault', current.recommended) })
+            : waiting
+            ? null
             : hasDefault
             ? jsx(Button, { variant: typed ? 'default' : 'primary', data: { 'data-studio-recommend': true }, onClick: () => commitAnswer(''), title: current.hint || '', keyHint: typed ? undefined : 'F5', reserveKey: 'F5', children: t('answer.recommended', current.recommended) })
             : jsx(Button, { variant: typed ? 'default' : 'primary', data: { 'data-studio-skip': true }, onClick: () => commitAnswer(''), keyHint: 'F6', children: t('answer.skip') }),
@@ -2839,19 +2881,21 @@ function ActionBar({ state }) {
     'data-studio-actions': true,
     style: { alignItems: 'center', borderTop: '1px solid var(--ui-stroke-tertiary, var(--ui-stroke-secondary))', display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '12px', paddingTop: '10px' },
     children: [
-      jsx(Button, {
+      // While the AI writes the prompt, the steps' actions are not shown (they depend on it).
+      busy ? null : jsx(Button, {
         variant: finished ? 'primary' : 'default',
         data: { 'data-studio-generate': true },
-        disabled: busy,
         onClick: generatePrompt,
         keyHint: 'F9',
         reserveKey: 'F9',
         title: [finished ? '' : t('actions.generateRest'), mode === 'off' ? t('actions.generateOff') : t('actions.generateOn')].filter(Boolean).join(' '),
         children: generateLabel(t, finished, mode)
       }),
-      state.editing
-        ? jsx(Button, { data: { 'data-studio-back': true }, disabled: busy, onClick: goBack, title: t('actions.undoEditTitle'), keyHint: 'F8', reserveKey: 'F8', children: t('actions.undoEdit') })
-        : jsx(Button, { data: { 'data-studio-back': true }, disabled: busy || !state.ladder.length, onClick: goBack, keyHint: 'F8', reserveKey: 'F8', children: t('actions.back') }),
+      busy
+        ? null
+        : state.editing
+        ? jsx(Button, { data: { 'data-studio-back': true }, onClick: goBack, title: t('actions.undoEditTitle'), keyHint: 'F8', reserveKey: 'F8', children: t('actions.undoEdit') })
+        : jsx(Button, { data: { 'data-studio-back': true }, disabled: !state.ladder.length, onClick: goBack, keyHint: 'F8', reserveKey: 'F8', children: t('actions.back') }),
       // Cancel stays available while the AI writes the prompt.
       jsx(Button, { data: { 'data-studio-cancel': true }, onClick: cancelStudio, title: t('actions.cancelTitle'), keyHint: 'F10', children: t('actions.cancel') }),
       jsx('span', { style: { flex: 1 } }),
@@ -2972,7 +3016,8 @@ function PreviewPanel({ state }) {
       jsxs('div', {
         style: { display: 'flex', flexWrap: 'wrap', gap: '6px' },
         children: [
-          jsx(Button, { variant: 'primary', data: { 'data-studio-use-prompt': true }, onClick: usePreview, title: t('preview.useTitle'), keyHint: 'F9', children: t('preview.use') }),
+          jsx(Button, { variant: 'primary', data: { 'data-studio-send-prompt': true }, onClick: sendPreview, title: t('preview.sendTitle'), keyHint: 'F9', children: t('preview.send') }),
+          jsx(Button, { data: { 'data-studio-use-prompt': true }, onClick: usePreview, title: t('preview.editTitle'), keyHint: 'Alt+E', children: t('preview.edit') }),
           ai && engine
             ? jsx(Button, {
                 data: { 'data-studio-switch-version': true },
@@ -3185,7 +3230,7 @@ function SettingsDialog() {
 function ContextStatus() {
   const t = useT()
   const context = useValue($context)
-  if (!context) return null
+  if (!context || context.status === 'reading') return null
   const text = context.status === 'reading'
     ? t('context.reading')
     : context.status === 'ready'
@@ -3222,7 +3267,7 @@ function ShortcutsList() {
 // The first thing to act on for each screen (U1). Never the composer while the studio is open.
 function focusTarget(root, state) {
   const pick = (...selectors) => selectors.map(sel => root.querySelector(sel)).find(el => el && !el.disabled) || null
-  if (state.status === 'preview') return pick('[data-studio-use-prompt]')
+  if (state.status === 'preview') return pick('[data-studio-send-prompt]', '[data-studio-use-prompt]')
   if (state.status === 'done') return pick('[data-studio-generate]')
   if (state.status === 'active' && state.current) {
     if (state.current.kind === 'enum') return pick('[data-studio-recommend]', '[data-studio-option]')
@@ -3250,12 +3295,17 @@ function useStudioFocus(state) {
 function StudioLadder() {
   const t = useT()
   const state = useValue($studio)
+  const context = useValue($context)
   useStudioFocus(state)
   if (state.status === 'idle') return null
   const canEdit = ['active', 'done'].includes(state.status)
   const number = state.editing ? state.editing.index + 1 : state.ladder.length + 1
+  // While this session is read, the steps (which use it) are not shown: only the loading state and Cancel.
+  const reading = context?.status === 'reading' && canEdit
   const body =
-    state.status === 'asking'
+    reading
+      ? jsx('div', { 'data-studio-context-loading': true, children: jsx(LoadingRow, { children: t('context.reading') }) })
+      : state.status === 'asking'
       ? jsx(LoadingRow, { children: t('loading.asking') })
       : state.status === 'briefing'
         ? jsx(LoadingRow, { children: $aiMode.get() === 'off' ? t('loading.writing') : t('loading.writingAi') })
@@ -3275,7 +3325,7 @@ function StudioLadder() {
     tabIndex: -1,
     children: [
       jsx(StudioMotionStyles, {}),
-      jsx('span', { 'aria-live': 'polite', 'data-studio-announce': true, style: visuallyHidden, children: state.status === 'active' && state.current ? t('step.announce', number, state.current.question) : '' }),
+      jsx('span', { 'aria-live': 'polite', 'data-studio-announce': true, style: visuallyHidden, children: !reading && state.status === 'active' && state.current ? t('step.announce', number, state.current.question) : '' }),
       jsxs('div', {
         'data-studio-intent-row': true,
         style: { alignItems: 'center', display: 'flex', gap: '6px', lineHeight: '18px', minWidth: 0 },
@@ -3292,7 +3342,9 @@ function StudioLadder() {
       jsx(TargetSwitch, {}),
       jsx(Ladder, { canEdit, editing: state.editing, ladder: state.ladder }),
       body,
-      canEdit || state.status === 'briefing' ? jsx(ActionBar, { state }) : null
+      reading
+        ? jsx('div', { style: { display: 'flex', marginTop: '12px' }, children: jsx(Button, { data: { 'data-studio-cancel': true }, onClick: cancelStudio, title: t('actions.cancelTitle'), keyHint: 'F10', children: t('actions.cancel') }) })
+        : canEdit || state.status === 'briefing' ? jsx(ActionBar, { state }) : null
     ]
   })
 }

@@ -89,6 +89,7 @@ English + Portuguese. Each pattern carries a `Languages:` comment; other languag
 | Alt+O / Alt+A | Target model (Opus / Astra) |
 | Alt+I | AI mode |
 | Alt+V | Version |
+| Alt+E | Put in composer to edit |
 
 Use the left Alt: on some layouts the right Alt is AltGr. Alt+digits follow the physical number row.
 

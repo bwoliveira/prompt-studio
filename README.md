@@ -103,7 +103,7 @@ after `git pull` to update.
 
    Every step has a recommended choice. You can skip, go back, or edit any earlier answer.
 4. Generate. The preview shows the prompt; switch between the AI version and the version built without AI,
-   then **Use this prompt** to place it in the message field.
+   then **Send now** (F9) to send it at once, or **Put in composer to edit** (Alt+E) to place it in the message field and edit it first.
 
 ![The final prompt preview with the step answers and the Use this prompt, See the version without AI, Back and Cancel buttons](docs/images/step-preview.png)
 
@@ -129,7 +129,7 @@ Every control shows its key next to its label. Keys work with the cursor in the 
 | F6 | Skip / I don't have one |
 | F7 | Use the AI suggestion (it goes into the field; F5 then confirms it) |
 | F8 | Back / undo the edit / back to the steps |
-| F9 | Generate the prompt, then use it |
+| F9 | Generate the prompt; on the preview, send it now |
 | F10 | Close and return the draft |
 | Alt+1 … Alt+9 | Pick an option |
 | Alt+Shift+1 … Alt+Shift+9 | Edit an answered step |
@@ -141,6 +141,7 @@ Every control shows its key next to its label. Keys work with the cursor in the 
 | Alt+O / Alt+A | Write for Opus / Astra |
 | Alt+I | Next AI mode (Auto, On request, Off) |
 | Alt+V | Other version in the preview |
+| Alt+E | Put the prompt in the composer to edit before sending |
 
 Keys and scope:
 

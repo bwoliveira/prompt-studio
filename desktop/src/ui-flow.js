@@ -260,6 +260,33 @@ function usePreview() {
   update({ type: 'RESET' })
 }
 
+// F9 on the preview: send as if the user pressed Enter, in the session the Studio is bound to.
+// host.composer.submit is fail-closed (false = not sent, e.g. a turn is running): then the prompt
+// is placed in the composer with a short note, so it is never lost.
+function sendPreview() {
+  const state = $studio.get()
+  if (state.status !== 'preview' || !state.preview) return
+  const text = state.preview[state.preview.showing]
+  const sessionId = host.state?.focusedSessionId?.get?.() ?? null
+  composerAdapter.forwardAttachments(state.attachments)
+  let sent = false
+  try {
+    sent = typeof host.composer?.submit === 'function' && host.composer.submit(sessionId, text) === true
+  } catch {
+    sent = false
+  }
+  if (!sent) {
+    if (!composerAdapter.writeDraft(text)) {
+      host.notify({ kind: 'error', message: tr('notify.placeFailed') })
+      return
+    }
+    host.notify({ kind: 'info', message: tr('notify.placedNotSent') })
+  }
+  stopContextRead()
+  $helpOpen.set(false)
+  update({ type: 'RESET' })
+}
+
 async function requestSuggestion(mode = 'suggest') {
   const state = $studio.get()
   if (state.status !== 'active' || !state.current || !pluginContext) return
