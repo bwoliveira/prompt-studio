@@ -183,6 +183,7 @@ export { jsx } from 'react/jsx-runtime'
   }
   const listeners = []
   const disposers = []
+  const timers = []
   const addSpy = { window: 0, document: 0 }
   const realWindowAdd = window.addEventListener.bind(window)
   const realDocumentAdd = document.addEventListener
@@ -197,6 +198,16 @@ export { jsx } from 'react/jsx-runtime'
       const off = () => target.removeEventListener(type, listener, options)
       disposers.push(off)
       return off
+    },
+    // Host-tracked timer, as the SDK's ctx.setTimeout: returns a disposer; records every call.
+    setTimeout(fn, ms) {
+      const timer = { ms, fired: false, cleared: false, clear: null }
+      const id = setTimeout(() => { timer.fired = true; fn() }, ms)
+      timers.push(timer)
+      const clear = () => { if (!timer.fired) timer.cleared = true; clearTimeout(id) }
+      timer.clear = clear
+      disposers.push(clear)
+      return clear
     },
     onDispose(fn) { disposers.push(fn) },
     registerMany(items) { for (const item of items) slots[item.area] = item },
@@ -214,7 +225,7 @@ export { jsx } from 'react/jsx-runtime'
     roots[0].render(mod.jsx(() => slots.top.render(), {}))
     roots[1].render(mod.jsx(() => slots.actions.render(), {}))
   })
-  ui = { ...mod, roots, dom, storage, listeners, addSpy, slots, disposers }
+  ui = { ...mod, roots, dom, storage, listeners, addSpy, slots, disposers, timers }
 })
 
 after(async () => {
@@ -1147,6 +1158,72 @@ test('SP-2: in Auto, clicking through steps fast sends one /suggest, for the ste
     assert.equal(suggestFields().length, before + 1, 'manual request sent at once')
   } finally {
     globalThis.__promptStudioAutoSuggestDelayMs = 0
+  }
+})
+
+test('SDK: timers go through ctx.setTimeout; the debounce fires once, is cancelled on leave, and request deadlines are cleared or reject', { skip }, async () => {
+  globalThis.__promptStudioAutoSuggestDelayMs = 60
+  try {
+    await openStudio()
+    await pasteStep('')
+    const debounce = () => ui.timers.filter(t => t.ms === 60)
+    // Leaving the step before the delay cancels the pending ask (cancelAutoSuggestion).
+    const first = debounce().at(-1)
+    assert.ok(first, 'debounce scheduled through ctx.setTimeout')
+    await click('[data-studio-skip]')
+    assert.equal(first.cleared, true, 'moving on cancels the pending debounce')
+    assert.equal(first.fired, false)
+    const stoppedOn = field()
+    const before = suggestFields().length
+    await waitFor(() => $('[data-studio-ai-use]'))
+    assert.equal(debounce().at(-1).fired, true, 'the debounce fired')
+    assert.equal(suggestFields().length, before + 1, 'exactly one request')
+    assert.deepEqual(suggestFields().slice(-1), [stoppedOn])
+    // The /suggest deadline was armed through ctx and cleared once the request settled.
+    const deadline = ui.timers.filter(t => t.ms === 25_000).at(-1)
+    assert.ok(deadline, 'request deadline armed through ctx.setTimeout')
+    assert.equal(deadline.cleared, true, 'deadline cleared when the request settled')
+    assert.equal(deadline.fired, false)
+  } finally {
+    globalThis.__promptStudioAutoSuggestDelayMs = 0
+  }
+  // A hung request still rejects after the deadline, through a ctx timer.
+  await freshSettings('sess-1')
+  await openStudio(INTENT, 'auto')
+  await click('[data-studio-cancel]')
+  backend.context = () => new Promise(() => {})
+  globalThis.__promptStudioContextTimeoutMs = 25
+  try {
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    await click('[data-studio-open]')
+    await waitFor(() => $('[data-studio-context-status]')?.textContent.includes(ui.i18n.bundles.en.errors.timeout))
+    const hung = ui.timers.filter(t => t.ms === 25).at(-1)
+    assert.ok(hung && hung.fired === true, 'the deadline fired through ctx.setTimeout')
+  } finally {
+    delete globalThis.__promptStudioContextTimeoutMs
+  }
+  const source = await import('node:fs').then(fs => fs.readFileSync(join(repo, 'desktop', 'plugin.js'), 'utf8'))
+  const uiPart = source.slice(source.indexOf('// @studio-end'))
+  assert.equal((uiPart.match(/(?<![.\w])setTimeout\(/g) || []).length, 1, 'only the fallback for hosts without ctx.setTimeout')
+  assert.doesNotMatch(uiPart, /(?<![.\w])setInterval\(/)
+})
+
+test('SDK: a timer still pending when the host disposes the plugin never fires', { skip }, async () => {
+  globalThis.__promptStudioAutoSuggestDelayMs = 60
+  try {
+    await openStudio()
+    await pasteStep('')
+    const pending = ui.timers.filter(t => t.ms === 60).at(-1)
+    assert.ok(pending && pending.fired === false, 'debounce pending')
+    assert.ok(ui.disposers.includes(pending.clear), 'its cleanup is registered with the host')
+    const before = suggestFields().length
+    pending.clear() // what the host runs for this timer on dispose
+    await new Promise(resolve => setTimeout(resolve, 150))
+    assert.ok(pending.fired === false, 'the disposed timer did not fire')
+    assert.equal(suggestFields().length, before, 'no request after dispose')
+  } finally {
+    globalThis.__promptStudioAutoSuggestDelayMs = 0
+    await click('[data-studio-cancel]')
   }
 })
 

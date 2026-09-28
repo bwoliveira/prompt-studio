@@ -1776,6 +1776,14 @@ export function reduceStudio(state, action) {
 const $studio = atom(initialStudioState())
 let pluginContext = null
 
+// Timers go through ctx.setTimeout so the host clears them on dispose (SDK pitfall: bare globals are
+// not tracked). It returns a disposer. Plain global only when the host has no ctx.setTimeout.
+function later(fn, ms) {
+  if (typeof pluginContext?.setTimeout === 'function') return pluginContext.setTimeout(fn, ms)
+  const id = setTimeout(fn, ms)
+  return () => clearTimeout(id)
+}
+
 // ---------------------------------------------------------------------------
 // i18n: bundles live in desktop/src/i18n-ui.js (inlined above between @ui-i18n markers).
 // React components use usePluginI18n(ID); code outside React uses tr() -> ctx.i18n.t.
@@ -2028,7 +2036,7 @@ const AUTO_SUGGEST_DELAY_MS = 400
 let autoSuggestTimer = null
 
 function cancelAutoSuggestion() {
-  if (autoSuggestTimer !== null) clearTimeout(autoSuggestTimer)
+  if (autoSuggestTimer !== null) autoSuggestTimer()
   autoSuggestTimer = null
 }
 
@@ -2037,7 +2045,7 @@ function scheduleAutoSuggestion() {
   const key = questionKey($studio.get())
   const delay = globalThis.__promptStudioAutoSuggestDelayMs ?? AUTO_SUGGEST_DELAY_MS
   const serial = suggestSerial
-  autoSuggestTimer = setTimeout(async () => {
+  autoSuggestTimer = later(async () => {
     autoSuggestTimer = null
     // A pending session context read comes first (it has its own deadline); manual asks never wait.
     if (contextPromise) await contextPromise
@@ -2221,11 +2229,11 @@ const TIMEOUT_MESSAGE = 'client timeout'
 const MISSING_ROUTE = /404|405|not found|method not allowed/i
 
 function withTimeout(promise, ms) {
-  let timer
+  let cancel
   return Promise.race([
     promise,
-    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(TIMEOUT_MESSAGE)), ms) })
-  ]).finally(() => clearTimeout(timer))
+    new Promise((_, reject) => { cancel = later(() => reject(new Error(TIMEOUT_MESSAGE)), ms) })
+  ]).finally(() => cancel())
 }
 
 // Technical failure -> one of the plain-language message keys, plus the raw detail for the tooltip.

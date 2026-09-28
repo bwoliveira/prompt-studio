@@ -2,6 +2,11 @@
 
 Versions come from the commit subjects; releases from 1.6.0 on are also git tags. Newest first.
 
+## Unreleased
+
+- Desktop: the request deadline and the auto-suggestion delay now use the host-tracked `ctx.setTimeout`, so
+  Hermes clears them when the plugin is disabled or reloaded (it falls back to the global timer on hosts without it).
+
 ## 1.7.0
 
 - The plugin no longer sends a temperature: sampling stays as Hermes configures it for each model

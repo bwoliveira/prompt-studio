@@ -132,11 +132,11 @@ const TIMEOUT_MESSAGE = 'client timeout'
 const MISSING_ROUTE = /404|405|not found|method not allowed/i
 
 function withTimeout(promise, ms) {
-  let timer
+  let cancel
   return Promise.race([
     promise,
-    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(TIMEOUT_MESSAGE)), ms) })
-  ]).finally(() => clearTimeout(timer))
+    new Promise((_, reject) => { cancel = later(() => reject(new Error(TIMEOUT_MESSAGE)), ms) })
+  ]).finally(() => cancel())
 }
 
 // Technical failure -> one of the plain-language message keys, plus the raw detail for the tooltip.
