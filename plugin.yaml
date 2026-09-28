@@ -2,7 +2,7 @@ name: prompt-studio
 version: 1.7.1
 description: Prompt Studio for Claude Opus 5.5 and GPT-6 Astra. Build a prompt step by step, with AI suggestions per step and an AI-written final prompt.
 manifest_version: 1
-requires_hermes: ">=0.20.0"
+requires_hermes: ">=0.21.5"
 author: bwoliveira
 license: MIT
 homepage: https://github.com/bwoliveira/prompt-studio

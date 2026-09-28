@@ -4,6 +4,14 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
 
 ## Unreleased
 
+- Desktop: the message field is read and written only through the SDK's `host.composer`; the plugin no longer
+  reads or changes the app's DOM (catalog rule 8). This needs Hermes Desktop 0.21.5 or newer, so
+  `requires_hermes` is now `>=0.21.5`; on an older Desktop the Studio does not open and asks you to update Hermes.
+- Attachments are no longer copied by the plugin (the SDK has no attachment API): they stay in the message field.
+  **Put in composer to edit** keeps them with the prompt; **Send now** sends only the text, and the preview says so
+  in red.
+- The draft is never lost while the Studio opens: switching conversations, disabling or reloading the plugin puts
+  it back in its own conversation's message field (or the clipboard, or below the current draft, never over it).
 - Contributors: `AGENTS.md` now has the agent fire the Hermes `/review` itself and keep fixing the local Codex review
   findings every five minutes until it approves, without the maintainer in the loop.
 

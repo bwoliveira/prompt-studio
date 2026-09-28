@@ -66,6 +66,11 @@ before(async () => {
   g.IS_REACT_ACT_ENVIRONMENT = true
   // Auto-mode suggestion debounce (SP-2): 0 ms keeps the other tests fast; the SP-2 test sets the real delay.
   g.__promptStudioAutoSuggestDelayMs = 0
+  // Frames run as 0 ms timers (jsdom paces them at 16 ms) and the studio waits 0 ms after the app's composer
+  // focus retries (real: 50 ms), so opening settles within settle(); the focus-retry test proves the order.
+  g.requestAnimationFrame = fn => setTimeout(() => fn(Date.now()), 0)
+  g.cancelAnimationFrame = id => clearTimeout(id)
+  g.__promptStudioFocusSettleMs = 0
   // React's scheduler and act() queue work on MessageChannel ports, which keep node:test from
   // exiting. Track every port so after() can close them.
   const RealChannel = globalThis.MessageChannel
@@ -136,7 +141,67 @@ export const host = {
   composer: {
     submits: [],
     focuses: [],
+    writes: [],
     submitResult: true,
+    // getDraft/setDraft answer from the test composer element, like the app's mounted surface.
+    // Staged attachments live beside the text and are never touched by setDraft.
+    // __promptStudioComposerGate: a promise the calls wait for (tests of calls still pending).
+    // __promptStudioNoActiveComposer: getDraft answers null, as the SDK does when no composer is active.
+    // One composer per conversation, like the app: the test element is the composer of the conversation on
+    // screen (stored id, else runtime id, else 'new'); other conversations keep their text in offscreen, and are
+    // mounted unless __promptStudioSessionUnmounted. null = the composer in use.
+    offscreen: new Map(),
+    shown() { return host.state.focusedStoredSessionId.get() ?? host.state.focusedSessionId.get() ?? 'new' },
+    target(address) {
+      const editor = document.querySelector('[data-slot="composer-rich-input"]')
+      // null = the composer typed in last: the one on screen unless a test sets another pane's.
+      const active = globalThis.__promptStudioActiveComposer
+      if (address === null && active && active !== this.shown()) return { key: active }
+      if (address === null || address === this.shown() || address === host.state.focusedSessionId.get()) return { editor }
+      if (globalThis.__promptStudioSessionUnmounted) return null
+      return { key: address }
+    },
+    read(target) { return target.editor ? target.editor.textContent : (this.offscreen.get(target.key) ?? '') },
+    write(target, text) {
+      if (!target.editor) { this.offscreen.set(target.key, text); return }
+      const editor = target.editor
+      editor.textContent = text
+      // Like the app (use-composer-draft paintDraft -> focus request -> effect -> focusComposerInput):
+      // after the reply, the composer takes the focus now, on the next frame and on a 0 ms timer.
+      setTimeout(() => {
+        const focus = () => { if (document.activeElement !== editor) editor.focus() }
+        focus()
+        requestAnimationFrame(focus)
+        setTimeout(focus, 0)
+      }, 0)
+    },
+    async getDraft(sessionId) {
+      await globalThis.__promptStudioComposerGate
+      if (globalThis.__promptStudioNoActiveComposer) return null
+      const target = this.target(sessionId)
+      return target ? this.read(target) : null
+    },
+    async setDraft(sessionId, text) {
+      await globalThis.__promptStudioComposerGate
+      if (globalThis.__promptStudioSetDraftFails) return false
+      const target = this.target(sessionId)
+      if (!target) return false
+      this.writes.push({ sessionId, text })
+      this.write(target, text)
+      return true
+    },
+    inserts: [],
+    // insertText appends a paragraph (block mode), keeping what is there.
+    async insertText(sessionId, text, opts) {
+      await globalThis.__promptStudioComposerGate
+      if (globalThis.__promptStudioSetDraftFails) return false
+      const target = this.target(sessionId)
+      if (!target) return false
+      this.inserts.push({ sessionId, text, mode: opts?.mode })
+      const before = this.read(target)
+      this.write(target, before ? before + String.fromCharCode(10) + text : text)
+      return true
+    },
     submit(sessionId, text) { this.submits.push({ sessionId, text }); return this.submitResult },
     focus(sessionId) { this.focuses.push(sessionId) }
   },
@@ -189,7 +254,7 @@ export { jsx } from 'react/jsx-runtime'
   const realDocumentAdd = document.addEventListener
   window.addEventListener = (...args) => { addSpy.window += 1; return realWindowAdd(...args) }
   document.addEventListener = (...args) => { addSpy.document += 1; return realDocumentAdd.apply(document, args) }
-  mod.plugin.register({
+  const pluginContext = {
     i18n: { register(bundles) { Object.assign(mod.i18n.bundles, bundles); return () => {} }, t: mod.translate, onLocaleChange: () => () => {} },
     storage,
     addEventListener(target, type, listener, options) {
@@ -210,6 +275,7 @@ export { jsx } from 'react/jsx-runtime'
       return clear
     },
     onDispose(fn) { disposers.push(fn) },
+    os: { clipboard: [], async writeClipboard(text) { if (globalThis.__promptStudioClipboardFails) return false; this.clipboard.push(text); return true } },
     registerMany(items) { for (const item of items) slots[item.area] = item },
     async rest(path, { body }) {
       backend.calls.push({ path, body })
@@ -217,7 +283,8 @@ export { jsx } from 'react/jsx-runtime'
       if (!handler) throw new Error(`HTTP 404 ${path}`)
       return handler(body)
     }
-  })
+  }
+  mod.plugin.register(pluginContext)
   window.addEventListener = realWindowAdd
   document.addEventListener = realDocumentAdd
   const roots = [mod.createRoot(document.getElementById('top')), mod.createRoot(document.getElementById('actions'))]
@@ -225,7 +292,7 @@ export { jsx } from 'react/jsx-runtime'
     roots[0].render(mod.jsx(() => slots.top.render(), {}))
     roots[1].render(mod.jsx(() => slots.actions.render(), {}))
   })
-  ui = { ...mod, roots, dom, storage, listeners, addSpy, slots, disposers, timers }
+  ui = { ...mod, roots, dom, storage, listeners, addSpy, slots, disposers, timers, pluginContext }
 })
 
 after(async () => {
@@ -1535,7 +1602,7 @@ test('CX-1: language "pt" with Hermes in English shows Portuguese strings and qu
 
 // ---------------------------------------------------------------- final step: send now (F9) or edit first (Alt+E)
 const composer = () => ui.host.composer
-function resetComposer() { composer().submits.length = 0; composer().focuses.length = 0; composer().submitResult = true }
+function resetComposer() { composer().submits.length = 0; composer().focuses.length = 0; composer().writes.length = 0; composer().inserts.length = 0; composer().offscreen.clear(); composer().submitResult = true }
 async function toPreview() {
   resetComposer()
   await freshSettings(null)
@@ -1582,7 +1649,8 @@ test('FIN-1: F9 does not send into another session when the focus moved after op
   try {
     await press('F9')
     assert.equal(composer().submits.length, 0, 'not sent to the other session')
-    assert.equal(draft(), prompt, 'prompt never lost')
+    assert.deepEqual(composer().writes.at(-1), { sessionId: 'sess-live', text: prompt }, 'placed in its own conversation, never lost')
+    assert.notEqual(draft(), prompt, 'the other conversation on screen is not touched')
     assert.ok(ui.notifications.some(n => n.message === ui.i18n.bundles.en.notify.placedNotSent), 'placed-not-sent note')
   } finally {
     ui.host.state.focusedSessionId.set('sess-live')
@@ -1760,3 +1828,476 @@ test('SDK-1: the Settings rows use the SDK ListRow/ToggleRow when present and th
   assert.equal(ui.storage.get('readContext'), true)
   await closeSettings()
 })
+
+test('SDK composer: the draft is read and written only through host.composer, addressed to its conversation', { skip }, async () => {
+  resetComposer()
+  await openStudio()
+  assert.equal(draft(), '', 'composer emptied when the studio opens')
+  assert.deepEqual(composer().writes.at(-1), { sessionId: 'sess-live', text: '' })
+  await click('[data-studio-cancel]')
+  await waitFor(() => draft() === INTENT)
+  assert.deepEqual(composer().writes.at(-1), { sessionId: 'sess-live', text: INTENT }, 'Close returns the draft to its own conversation through setDraft')
+})
+
+test('SDK composer: a host without host.composer tells the user to update Hermes and does not open', { skip }, async () => {
+  const saved = ui.host.composer
+  ui.host.composer = undefined
+  try {
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    ui.notifications.length = 0
+    await click('[data-studio-open]')
+    assert.ok($('[data-studio-strip]') === null, 'studio not opened')
+    assert.ok(ui.notifications.some(n => n.kind === 'error' && n.message === ui.i18n.bundles.en.notify.needsComposer), 'update note')
+    assert.equal(draft(), INTENT, 'draft untouched')
+  } finally {
+    ui.host.composer = saved
+  }
+})
+
+test('SDK composer: when setDraft is refused the preview stays open with an error and nothing is lost', { skip }, async () => {
+  await toPreview()
+  globalThis.__promptStudioSetDraftFails = true
+  try {
+    ui.notifications.length = 0
+    await click('[data-studio-use-prompt]')
+    assert.ok($('[data-studio-preview]'), 'preview still open')
+    assert.ok(ui.notifications.some(n => n.kind === 'error' && n.message === ui.i18n.bundles.en.notify.placeFailed), 'error shown')
+  } finally {
+    globalThis.__promptStudioSetDraftFails = false
+    await click('[data-studio-cancel]')
+  }
+})
+
+test('Attachments: the preview warns in the destructive color that Send now does not carry attachments', { skip }, async () => {
+  await toPreview()
+  const note = $('[data-studio-attachments-note]')
+  assert.ok(note, 'note shown on the preview')
+  assert.equal(note.textContent, ui.i18n.bundles.en.preview.attachmentsNote)
+  assert.match(note.getAttribute('style'), /var\(--dt-destructive\)/)
+  await click('[data-studio-cancel]')
+})
+
+test('SDK composer: no active composer (getDraft null) says so instead of "empty", and does not open', { skip }, async () => {
+  globalThis.__promptStudioNoActiveComposer = true
+  try {
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    ui.notifications.length = 0
+    await click('[data-studio-open]')
+    assert.ok($('[data-studio-strip]') === null, 'studio not opened')
+    assert.ok(ui.notifications.some(n => n.kind === 'error' && n.message === ui.i18n.bundles.en.notify.readFailed), 'read-failed note')
+    assert.ok(!ui.notifications.some(n => n.message === ui.i18n.bundles.en.notify.empty), 'not reported as empty')
+  } finally {
+    globalThis.__promptStudioNoActiveComposer = false
+  }
+})
+
+// Holds every host.composer call until release() runs.
+function holdComposer() {
+  let release
+  globalThis.__promptStudioComposerGate = new Promise(resolve => { release = resolve })
+  return async () => { globalThis.__promptStudioComposerGate = undefined; release(); await settle() }
+}
+
+test('SDK composer: F4 pressed again while the draft is being read opens the studio once', { skip }, async () => {
+  resetComposer()
+  $('[data-slot="composer-rich-input"]').textContent = INTENT
+  const release = holdComposer()
+  await press('F4')
+  await press('F4')
+  await release()
+  await waitFor(() => $('[data-studio-strip]'))
+  assert.equal(composer().writes.filter(w => w.text === '').length, 1, 'composer emptied once')
+  await click('[data-studio-cancel]')
+})
+
+test('SDK composer: a second Alt+E or F9, or Close, while the prompt is being placed does nothing', { skip }, async () => {
+  await toPreview()
+  resetComposer()
+  const prompt = $('[data-studio-preview-text]').textContent
+  const release = holdComposer()
+  await press('Alt+E')
+  await press('Alt+E')
+  await press('F10')
+  composer().submitResult = false
+  await press('F9')
+  await release()
+  await waitFor(() => $('[data-studio-strip]') === null)
+  assert.deepEqual(composer().writes.map(w => w.text), [prompt], 'one write: the prompt, never the old draft')
+  assert.equal(draft(), prompt)
+  assert.equal(composer().submits.length, 0, 'F9 ignored while placing')
+})
+
+test('SDK composer: the composer focus retries after setDraft do not take the focus back from the studio', { skip }, async () => {
+  $('[data-slot="composer-rich-input"]').textContent = INTENT
+  $('[data-slot="composer-rich-input"]').focus()
+  await press('F4')
+  await waitFor(() => $('[data-studio-strip]'))
+  // Let every deferred retry (0 ms timers and animation frames) run.
+  await ui.act(async () => { await new Promise(resolve => setTimeout(resolve, 120)) })
+  await settle()
+  const strip = $('[data-studio-strip]')
+  assert.ok(strip && strip.contains(document.activeElement), 'focus stays in the studio')
+  await click('[data-studio-cancel]')
+})
+
+// Switch the focused session while the Studio is opening (during the wait for the app's focus retries).
+async function openWhileSwitching() {
+  resetComposer()
+  backend.calls.length = 0
+  ui.notifications.length = 0
+  globalThis.__promptStudioFocusSettleMs = 40
+  try {
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    await press('F4')
+    ui.host.state.focusedSessionId.set('sess-other')
+    await ui.act(async () => { await new Promise(resolve => setTimeout(resolve, 120)) })
+    await settle()
+  } finally {
+    globalThis.__promptStudioFocusSettleMs = 0
+  }
+}
+
+test('SDK composer: switching conversations while the Studio opens returns the draft to its own conversation', { skip }, async () => {
+  try {
+    await openWhileSwitching()
+    assert.ok($('[data-studio-strip]') === null, 'studio not opened on the other conversation')
+    assert.deepEqual(composer().writes.at(-1), { sessionId: 'sess-live', text: INTENT }, 'draft back to its session')
+    assert.ok(ui.notifications.some(n => n.message === ui.i18n.bundles.en.notify.sessionChanged))
+    assert.equal(backend.calls.length, 0, 'no context read of the other conversation')
+  } finally {
+    ui.host.state.focusedSessionId.set('sess-live')
+  }
+})
+
+test('SDK composer: when the original conversation is not on screen any more the draft is copied to the clipboard', { skip }, async () => {
+  globalThis.__promptStudioSessionUnmounted = true
+  const clipboard = ui.pluginContext.os.clipboard
+  clipboard.length = 0
+  try {
+    await openWhileSwitching()
+    assert.ok($('[data-studio-strip]') === null, 'studio not opened')
+    assert.deepEqual(clipboard, [INTENT])
+    assert.ok(ui.notifications.some(n => n.message === ui.i18n.bundles.en.notify.sessionChangedCopied))
+  } finally {
+    globalThis.__promptStudioSessionUnmounted = false
+    ui.host.state.focusedSessionId.set('sess-live')
+  }
+})
+
+test('SDK composer: original conversation gone and clipboard refused: the draft is added below the other conversation draft', { skip }, async () => {
+  globalThis.__promptStudioSessionUnmounted = true
+  globalThis.__promptStudioClipboardFails = true
+  try {
+    resetComposer()
+    ui.notifications.length = 0
+    globalThis.__promptStudioFocusSettleMs = 40
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    await press('F4')
+    // The user lands on conversation B, which has its own unsent draft.
+    ui.host.state.focusedSessionId.set('sess-other')
+    await ui.act(async () => { $('[data-slot="composer-rich-input"]').textContent = 'rascunho da conversa B' })
+    await ui.act(async () => { await new Promise(resolve => setTimeout(resolve, 120)) })
+    await settle()
+    assert.ok($('[data-studio-strip]') === null, 'studio not opened')
+    assert.equal(draft(), `rascunho da conversa B\n${INTENT}`, "B's draft kept, A's draft added below")
+    assert.deepEqual(composer().inserts, [{ sessionId: null, text: INTENT, mode: 'block' }])
+    assert.equal(composer().submits.length, 0, 'not sent')
+    assert.ok(ui.notifications.some(n => n.message === ui.i18n.bundles.en.notify.sessionChangedHere))
+  } finally {
+    globalThis.__promptStudioFocusSettleMs = 0
+    globalThis.__promptStudioSessionUnmounted = false
+    globalThis.__promptStudioClipboardFails = false
+    ui.host.state.focusedSessionId.set('sess-live')
+  }
+})
+
+test('SDK composer: when every place refuses the draft, the error notice carries the draft text', { skip }, async () => {
+  globalThis.__promptStudioSessionUnmounted = true
+  globalThis.__promptStudioClipboardFails = true
+  try {
+    resetComposer()
+    ui.notifications.length = 0
+    globalThis.__promptStudioFocusSettleMs = 40
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    await press('F4')
+    ui.host.state.focusedSessionId.set('sess-other')
+    globalThis.__promptStudioSetDraftFails = true
+    await ui.act(async () => { await new Promise(resolve => setTimeout(resolve, 120)) })
+    await settle()
+    assert.ok($('[data-studio-strip]') === null, 'studio not opened')
+    const lost = ui.notifications.find(n => n.kind === 'error')
+    assert.ok(lost && lost.message.includes(INTENT), 'the draft text is in the notice')
+  } finally {
+    globalThis.__promptStudioFocusSettleMs = 0
+    globalThis.__promptStudioSetDraftFails = false
+    globalThis.__promptStudioSessionUnmounted = false
+    globalThis.__promptStudioClipboardFails = false
+    ui.host.state.focusedSessionId.set('sess-live')
+  }
+})
+
+test('SDK composer: while the prompt is being placed, Alt+V and Back to steps do nothing and the buttons are disabled', { skip }, async () => {
+  backend.compose = () => ({ ok: true, prompt: 'PROMPT DA IA', notes: 'ok' })
+  await toPreview()
+  resetComposer()
+  const release = holdComposer()
+  const prompt = $('[data-studio-preview-text]').textContent
+  await press('Alt+E')
+  for (const sel of ['[data-studio-send-prompt]', '[data-studio-use-prompt]', '[data-studio-back-to-steps]', '[data-studio-cancel]']) {
+    assert.equal($(sel).disabled, true, `${sel} disabled while placing`)
+  }
+  if ($('[data-studio-switch-version]')) assert.equal($('[data-studio-switch-version]').disabled, true)
+  await press('Alt+V')
+  await press('F8')
+  await release()
+  await waitFor(() => $('[data-studio-strip]') === null)
+  assert.equal(draft(), prompt, 'the prompt shown when Alt+E was pressed is placed and the studio closed')
+  assert.deepEqual(composer().writes.map(w => w.text), [prompt])
+})
+
+// A host dispose (plugin disabled or hot reload): every tracked disposer runs (listeners, timers,
+// onDispose), then the plugin registers again, as the Desktop loader does on reload.
+async function hostReload() {
+  await ui.act(async () => {
+    for (const off of ui.disposers.splice(0)) off()
+    ui.plugin.register(ui.pluginContext)
+  })
+  await ui.act(async () => {
+    ui.roots[0].render(ui.jsx(() => ui.slots.top.render(), {}))
+    ui.roots[1].render(ui.jsx(() => ui.slots.actions.render(), {}))
+  })
+  await settle()
+}
+
+test('SDK composer: a dispose while the Studio is opening gives the draft back to the composer', { skip }, async () => {
+  resetComposer()
+  globalThis.__promptStudioFocusSettleMs = 40
+  try {
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    await press('F4')
+    assert.equal(draft(), '', 'composer emptied, studio not open yet')
+    await hostReload()
+    await ui.act(async () => { await new Promise(resolve => setTimeout(resolve, 120)) })
+    await settle()
+    assert.ok($('[data-studio-strip]') === null, 'the cut-short opening never continues')
+    assert.deepEqual(composer().writes.at(-1), { sessionId: 'sess-live', text: INTENT }, 'draft back in its composer')
+  } finally {
+    globalThis.__promptStudioFocusSettleMs = 0
+  }
+  await openStudio()
+  assert.ok($('[data-studio-strip]'), 'the reloaded plugin opens normally')
+  await click('[data-studio-cancel]')
+})
+
+test('SDK composer: a dispose while the Studio is open gives the draft back to the composer', { skip }, async () => {
+  resetComposer()
+  await openStudio()
+  assert.equal(draft(), '')
+  await hostReload()
+  assert.ok($('[data-studio-strip]') === null, 'studio closed by the dispose')
+  assert.deepEqual(composer().writes.at(-1), { sessionId: 'sess-live', text: INTENT }, 'draft back in its composer')
+})
+
+test('SDK composer: a dispose after switching conversations never writes the fresh-chat draft into the other one', { skip }, async () => {
+  ui.host.state.focusedSessionId.set(null)
+  try {
+    resetComposer()
+    await openStudio()
+    ui.host.state.focusedSessionId.set('sess-other')
+    await ui.act(async () => { $('[data-slot="composer-rich-input"]').textContent = 'rascunho da conversa B' })
+    await hostReload()
+    await settle()
+    assert.equal(draft(), 'rascunho da conversa B', "B's draft untouched")
+    assert.deepEqual(composer().writes.at(-1), { sessionId: 'new', text: INTENT }, "addressed to the fresh chat ('new'), never null")
+  } finally {
+    ui.host.state.focusedSessionId.set('sess-live')
+  }
+})
+
+test('SDK composer: a dispose with the original conversation gone copies the draft to the clipboard', { skip }, async () => {
+  const clipboard = ui.pluginContext.os.clipboard
+  clipboard.length = 0
+  resetComposer()
+  await openStudio()
+  ui.host.state.focusedSessionId.set('sess-other')
+  globalThis.__promptStudioSessionUnmounted = true
+  try {
+    ui.notifications.length = 0
+    await hostReload()
+    await settle()
+    assert.deepEqual(clipboard, [INTENT], 'draft on the clipboard, not lost')
+    assert.ok(ui.notifications.some(n => n.message === ui.i18n.bundles.en.notify.draftBackCopied))
+  } finally {
+    globalThis.__promptStudioSessionUnmounted = false
+    ui.host.state.focusedSessionId.set('sess-live')
+  }
+})
+
+test('SDK composer: text typed in the composer while the Studio is open is kept on Close and on dispose', { skip }, async () => {
+  for (const finish of ['close', 'dispose']) {
+    resetComposer()
+    await openStudio()
+    await ui.act(async () => { $('[data-slot="composer-rich-input"]').textContent = 'texto novo' })
+    if (finish === 'close') await click('[data-studio-cancel]')
+    else await hostReload()
+    await settle()
+    assert.equal(draft(), `texto novo\n${INTENT}`, `${finish}: the new text kept, the request added below`)
+  }
+})
+
+test('SDK composer: a saved conversation with no runtime id yet is addressed by its stored id, not as a new chat', { skip }, async () => {
+  resetComposer()
+  await freshSettings('stored-1')
+  ui.host.state.focusedSessionId.set(null)
+  try {
+    await openStudio(INTENT, 'off')
+    await click('[data-studio-generate]')
+    await waitFor(() => $('[data-studio-preview]'))
+    const prompt = $('[data-studio-preview-text]').textContent
+    await click('[data-studio-use-prompt]')
+    await waitFor(() => $('[data-studio-strip]') === null)
+    assert.equal(draft(), prompt, 'prompt placed in that conversation')
+    assert.deepEqual(composer().writes.at(-1), { sessionId: 'stored-1', text: prompt }, 'addressed by its stored id')
+  } finally {
+    ui.host.state.focusedStoredSessionId.set(null)
+    ui.host.state.focusedSessionId.set('sess-live')
+  }
+})
+
+test('SDK composer: with two panes, F4 reads and clears the focused conversation, never the other pane typed in last', { skip }, async () => {
+  resetComposer()
+  composer().offscreen.set('sess-a', 'rascunho do painel A')
+  globalThis.__promptStudioActiveComposer = 'sess-a'
+  try {
+    await openStudio('rascunho da conversa B em foco')
+    assert.match($('[data-studio-intent-row]').textContent, /rascunho da conversa B em foco/, 'the focused conversation draft')
+    assert.equal(composer().offscreen.get('sess-a'), 'rascunho do painel A', 'pane A untouched')
+    await click('[data-studio-cancel]')
+    await waitFor(() => draft() === 'rascunho da conversa B em foco')
+    assert.equal(composer().offscreen.get('sess-a'), 'rascunho do painel A', 'pane A still untouched after Close')
+  } finally {
+    globalThis.__promptStudioActiveComposer = undefined
+  }
+})
+
+test('SDK composer: a dispose while the prompt is being placed keeps the prompt and does not bring the request back over it', { skip }, async () => {
+  await toPreview()
+  resetComposer()
+  const prompt = $('[data-studio-preview-text]').textContent
+  const release = holdComposer()
+  await press('Alt+E')
+  await hostReload()
+  await release()
+  await settle()
+  assert.equal(draft(), prompt, 'the placed prompt, alone')
+  assert.ok(!draft().includes(INTENT) || prompt.includes(INTENT), 'the original request was not added')
+})
+
+test('SDK composer: a dispose while a placement that fails is pending brings the request back after it', { skip }, async () => {
+  await toPreview()
+  resetComposer()
+  const release = holdComposer()
+  await press('Alt+E')
+  // The placement is refused (its conversation left the screen); the restore that follows is accepted.
+  let refused = 0
+  const setDraft = composer().setDraft
+  composer().setDraft = async function (sessionId, text) {
+    if (text !== INTENT && refused === 0) { refused += 1; await globalThis.__promptStudioComposerGate; return false }
+    return setDraft.call(this, sessionId, text)
+  }
+  try {
+    await hostReload()
+    await release()
+    await settle()
+  } finally {
+    composer().setDraft = setDraft
+  }
+  assert.equal(refused, 1, 'the placement ran first and was refused')
+  assert.equal(draft(), INTENT, 'then the request came back, not lost')
+})
+
+// Disable without registering again: the host runs every disposer and the context is gone afterwards.
+async function hostDisable() {
+  await ui.act(async () => { for (const off of ui.disposers.splice(0)) off() })
+  await settle()
+}
+
+test('SDK composer: disabled while a refused placement is pending, the request still reaches the clipboard', { skip }, async () => {
+  await toPreview()
+  resetComposer()
+  const clipboard = ui.pluginContext.os.clipboard
+  clipboard.length = 0
+  const release = holdComposer()
+  await press('Alt+E')
+  // The conversation leaves the screen: the placement and the restore to it are both refused.
+  ui.host.state.focusedSessionId.set('sess-other')
+  globalThis.__promptStudioSessionUnmounted = true
+  try {
+    await hostDisable()
+    await release()
+    await settle()
+    assert.deepEqual(clipboard, [INTENT], 'the clipboard API taken at dispose time was used')
+  } finally {
+    globalThis.__promptStudioSessionUnmounted = false
+    ui.host.state.focusedSessionId.set('sess-live')
+    await ui.act(async () => { ui.plugin.register(ui.pluginContext) })
+    await ui.act(async () => {
+      ui.roots[0].render(ui.jsx(() => ui.slots.top.render(), {}))
+      ui.roots[1].render(ui.jsx(() => ui.slots.actions.render(), {}))
+    })
+    await settle()
+  }
+})
+
+test('SDK composer: disabled while the composer is being cleared, a refused restore still reaches the clipboard', { skip }, async () => {
+  resetComposer()
+  const clipboard = ui.pluginContext.os.clipboard
+  clipboard.length = 0
+  $('[data-slot="composer-rich-input"]').textContent = INTENT
+  // The clear ('') waits for release and succeeds; every later write is refused (the composer left the screen).
+  let release
+  const gate = new Promise(resolve => { release = resolve })
+  const setDraft = composer().setDraft
+  composer().setDraft = async function (sessionId, text) {
+    if (text !== '') return false
+    await gate
+    return setDraft.call(this, sessionId, text)
+  }
+  const insertText = composer().insertText
+  composer().insertText = async () => false
+  try {
+    await press('F4')
+    await hostDisable()
+    release()
+    await settle()
+    assert.equal(draft(), '', 'the draft left the composer')
+    assert.deepEqual(clipboard, [INTENT], 'the clipboard API taken before the await was used')
+  } finally {
+    composer().setDraft = setDraft
+    composer().insertText = insertText
+    await ui.act(async () => { ui.plugin.register(ui.pluginContext) })
+    await ui.act(async () => {
+      ui.roots[0].render(ui.jsx(() => ui.slots.top.render(), {}))
+      ui.roots[1].render(ui.jsx(() => ui.slots.actions.render(), {}))
+    })
+    await settle()
+  }
+})
+
+test('SDK composer: a composer whose draft cannot be read gets the prompt appended, never written over', { skip }, async () => {
+  await toPreview()
+  resetComposer()
+  const prompt = $('[data-studio-preview-text]').textContent
+  await ui.act(async () => { $('[data-slot="composer-rich-input"]').textContent = 'texto que ninguém leu' })
+  const getDraft = composer().getDraft
+  composer().getDraft = async () => null
+  try {
+    await click('[data-studio-use-prompt]')
+    await waitFor(() => $('[data-studio-strip]') === null)
+  } finally {
+    composer().getDraft = getDraft
+  }
+  assert.equal(draft(), `texto que ninguém leu\n${prompt}`, 'existing text kept, prompt below')
+  assert.equal(composer().writes.length, 0, 'no setDraft over unread text')
+})
+

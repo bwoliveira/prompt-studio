@@ -29,10 +29,11 @@ function namedSdkImports(source) {
   return names
 }
 
-test('fixtures cover the oldest supported Hermes (requires_hermes) and 0.21.4', () => {
+test('fixtures cover the oldest supported Hermes (requires_hermes) and the older 0.20.0 and 0.21.4 Desktops', () => {
   const min = readFileSync(join(repo, 'plugin.yaml'), 'utf8').match(/requires_hermes:\s*"?>=\s*([\d.]+)/)[1]
   assert.ok(fixtures.includes(`hermes-sdk-exports-${min}.txt`), `fixture for requires_hermes ${min}`)
-  assert.ok(fixtures.includes('hermes-sdk-exports-0.21.4.txt'))
+  // Older Desktops must still load the plugin, so it can tell the user to update Hermes.
+  assert.ok(fixtures.includes('hermes-sdk-exports-0.20.0.txt') && fixtures.includes('hermes-sdk-exports-0.21.4.txt'))
 })
 
 for (const file of fixtures) {

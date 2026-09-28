@@ -15,36 +15,153 @@ function askNext() {
   refreshSuggestion()
 }
 
-// Session focused when the Studio opened; F9 sends only there (see sendPreview).
-let openedSessionId = null
+// The conversation the Studio was opened in, as a host.composer address (see focusedAddress): Close, dispose,
+// placing and F9 all go there, never to whatever composer is active by then.
+let openedAddress = 'new'
 
-function startFromComposer() {
+// Resolves after two animation frames and a short timer: later than the app's deferred composer-focus
+// retries (the focus effect may run after a paint, then retries on the next frame and a 0 ms timer).
+const FOCUS_SETTLE_MS = 50
+function hostFocusSettled() {
+  return new Promise(resolve => {
+    const done = () => later(resolve, globalThis.__promptStudioFocusSettleMs ?? FOCUS_SETTLE_MS)
+    if (typeof requestAnimationFrame !== 'function') return done()
+    requestAnimationFrame(() => requestAnimationFrame(done))
+  })
+}
+
+// One opening and one placement at a time: host.composer calls are async.
+let starting = false
+// The draft taken out of the composer while the Studio opens (not yet in $studio), and a counter bumped on
+// dispose so an opening cut short by disable or hot reload never continues (see disposeComposerFlow).
+let pendingDraft = null
+let lifecycle = 0
+// The preview placement in flight (a promise of its success), so a dispose waits for it (see disposeComposerFlow).
+let placement = null
+
+// On dispose the composer gets its draft back, whether the Studio was opening or open.
+function disposeComposerFlow() {
+  lifecycle += 1
   const state = $studio.get()
-  if (state.status !== 'idle') return
-  const intent = composerAdapter.readDraft().trim()
-  if (!intent) {
-    host.notify({ kind: 'info', message: tr('notify.empty') })
+  const lost = pendingDraft ?? (state.status !== 'idle' && state.intent ? { text: state.intent, address: openedAddress } : null)
+  const inFlight = placement
+  pendingDraft = null
+  starting = false
+  $placing.set(false)
+  if (!lost) return
+  // pluginContext is cleared right after this, and restore may run later: take the clipboard API now.
+  const os = pluginContext?.os
+  const restore = () => returnDraftTo(lost.address, lost.text, { os, reason: 'closed' })
+  // A prompt being placed wins: the request comes back only if that placement fails.
+  if (inFlight) inFlight.then(ok => { if (!ok) restore() })
+  else restore()
+}
+
+async function startFromComposer() {
+  if ($studio.get().status !== 'idle' || starting) return
+  if (!composerAdapter.available()) {
+    host.notify({ kind: 'error', message: tr('notify.needsComposer') })
     return
   }
-  if (intent.length < 10) {
-    host.notify({ kind: 'warning', message: tr('notify.short') })
-    return
+  starting = true
+  const generation = lifecycle
+  // A dispose clears pluginContext; a recovery that runs after one still needs the clipboard.
+  const os = pluginContext?.os
+  // F9 sends only into the session the Studio was opened in (see sendPreview): taken before any await.
+  const originAddress = focusedAddress()
+  try {
+    // Read and cleared by the same address every later write uses: with two panes, the composer that was
+    // typed in last (null) can belong to another conversation than the focused one.
+    const draft = await composerAdapter.readDraft(originAddress)
+    if (draft === null) {
+      host.notify({ kind: 'error', message: tr('notify.readFailed') })
+      return
+    }
+    const intent = draft.trim()
+    if (!intent) {
+      host.notify({ kind: 'info', message: tr('notify.empty') })
+      return
+    }
+    if (intent.length < 10) {
+      host.notify({ kind: 'warning', message: tr('notify.short') })
+      return
+    }
+    if (focusedAddress() !== originAddress || generation !== lifecycle) return
+    if (!(await composerAdapter.writeDraft('', originAddress))) {
+      host.notify({ kind: 'error', message: tr('notify.clearFailed') })
+      return
+    }
+    if (generation !== lifecycle) {
+      returnDraftTo(originAddress, draft, { os, reason: 'closed' })
+      return
+    }
+    pendingDraft = { text: draft, address: originAddress }
+    // setDraft makes the app focus the composer it painted, now and again on a later frame and timer
+    // (focusComposerInput). The studio opens only after those retries, so its focus is not taken back.
+    await hostFocusSettled()
+    if (generation !== lifecycle) return
+    pendingDraft = null
+    if ($studio.get().status !== 'idle') {
+      await returnDraftTo(originAddress, draft, { reason: 'closed' })
+      return
+    }
+    // The user switched conversations while it opened: the draft goes back where it came from, never
+    // into the conversation now on screen.
+    if (focusedAddress() !== originAddress) {
+      await returnDraftTo(originAddress, draft)
+      return
+    }
+    suggestionCache.clear()
+    $helpOpen.set(false)
+    // Settings are read from storage on every opening (storage is the source of truth).
+    loadSettings()
+    openedAddress = originAddress
+    update({ type: 'START', intent })
+    startContextRead()
+    askNext()
+  } finally {
+    starting = false
   }
-  const attachments = composerAdapter.readAttachments()
-  // Focus goes to the studio (see useStudioFocus), never back to the empty composer.
-  if (!composerAdapter.writeDraft('', { focus: false })) {
-    host.notify({ kind: 'error', message: tr('notify.clearFailed') })
-    return
+}
+
+function focusedSession() {
+  return host.state?.focusedSessionId?.get?.() ?? null
+}
+
+// The focused conversation as a host.composer address: its stored id (a saved conversation whose runtime is not
+// bound yet has only that one), else its runtime id, else 'new' for a fresh chat. Never null, which would reach
+// whatever composer is active later.
+function focusedAddress() {
+  return host.state?.focusedStoredSessionId?.get?.() ?? focusedSession() ?? 'new'
+}
+
+// The draft was taken out of its composer, so it must land somewhere, never over another draft: its own
+// conversation's composer (address: session id or 'new'); else the clipboard; else appended below the text of
+// the composer in use (nothing sent); else the error notice carries the text itself.
+// reason 'switch': the user changed conversations while the Studio opened; 'closed': Close, or the plugin
+// was disabled or reloaded. os: the clipboard API, kept by the caller when the context is being disposed.
+async function returnDraftTo(address, draft, { reason = 'switch', os = pluginContext?.os } = {}) {
+  const key = reason === 'switch' ? 'sessionChanged' : 'draftBack'
+  if (await composerAdapter.placeDraft(draft, address)) {
+    if (reason === 'switch') host.notify({ kind: 'info', message: tr('notify.sessionChanged') })
+    return true
   }
-  suggestionCache.clear()
-  $helpOpen.set(false)
-  // Settings are read from storage on every opening (storage is the source of truth).
-  loadSettings()
-  // F9 sends only into the session the Studio was opened in (see sendPreview).
-  openedSessionId = host.state?.focusedSessionId?.get?.() ?? null
-  update({ type: 'START', attachments, intent })
-  startContextRead()
-  askNext()
+  let copied = false
+  try {
+    copied = (await os?.writeClipboard?.(draft)) === true
+  } catch {
+    copied = false
+  }
+  if (copied) {
+    host.notify({ kind: 'warning', message: tr(`notify.${key}Copied`) })
+    return false
+  }
+  if (await composerAdapter.appendDraft(draft)) {
+    host.notify({ kind: 'warning', message: tr(`notify.${key}Here`) })
+    return false
+  }
+  host.notify({ kind: 'error', message: tr(`notify.${key}Lost`, draft) })
+  return false
 }
 
 function unknownOption(current) {
@@ -108,16 +225,15 @@ function goBack() {
 
 function cancelStudio() {
   const state = $studio.get()
-  if (state.status === 'idle') return
+  // While the prompt is being placed, Close would race it and put the old draft over the prompt.
+  if (state.status === 'idle' || $placing.get()) return
   clearSuggestion()
   composeSerial += 1
   stopContextRead()
   $helpOpen.set(false)
   const intent = state.intent
   update({ type: 'RESET' })
-  if (intent && !composerAdapter.writeDraft(intent)) {
-    host.notify({ kind: 'error', message: tr('notify.restoreFailed') })
-  }
+  if (intent) returnDraftTo(openedAddress, intent, { reason: 'closed' })
 }
 
 // Final prompt. With AI on, the model writes it from the answers (the local engine prompt goes
@@ -251,43 +367,65 @@ async function generatePrompt() {
   update({ type: 'BRIEF_READY', ai: prompt !== engineResult.prompt ? prompt : '', engine: engineResult.prompt, note, noteDetail })
 }
 
-// Preview accepted: the prompt goes to the composer (not sent) with the original attachments.
-function usePreview() {
+// Preview accepted: the prompt goes to the composer (not sent). setDraft replaces only the text,
+// so attachments staged in the composer stay there and go with it.
+
+// The prompt goes into the conversation the Studio was opened in. Tracked in `placement` so a dispose during
+// the write waits for its outcome instead of racing it.
+function placePrompt(text) {
+  const run = composerAdapter.placeDraft(text, openedAddress)
+  placement = run
+  run.finally(() => { if (placement === run) placement = null })
+  return run
+}
+
+async function usePreview() {
   const state = $studio.get()
-  if (state.status !== 'preview' || !state.preview) return
-  if (!composerAdapter.writeDraft(state.preview[state.preview.showing])) {
-    host.notify({ kind: 'error', message: tr('notify.placeFailed') })
-    return
+  if (state.status !== 'preview' || !state.preview || $placing.get()) return
+  $placing.set(true)
+  try {
+    // Into the conversation the Studio was opened in; false (not on screen) keeps the preview open.
+    if (!(await placePrompt(state.preview[state.preview.showing]))) {
+      host.notify({ kind: 'error', message: tr('notify.placeFailed') })
+      return
+    }
+  } finally {
+    $placing.set(false)
   }
-  composerAdapter.forwardAttachments(state.attachments)
+  if ($studio.get() !== state) return
   stopContextRead()
   $helpOpen.set(false)
   update({ type: 'RESET' })
 }
 
 // F9 on the preview: send as if the user pressed Enter, in the session the Studio was opened in.
-// host.composer.submit is fail-closed (false = not sent, e.g. a turn is running): then the prompt
-// is placed in the composer with a short note, so it is never lost. If the focused session changed
-// since opening, it is not sent either (it would land in another conversation).
-function sendPreview() {
+// host.composer.submit sends text only: attachments staged in the composer stay there, unsent (the
+// preview says so). submit is fail-closed (false = not sent, e.g. a turn is running): then the
+// prompt is placed in the composer with a short note, so it is never lost. If the focused session
+// changed since opening, it is not sent either (it would land in another conversation).
+async function sendPreview() {
   const state = $studio.get()
-  if (state.status !== 'preview' || !state.preview) return
+  if (state.status !== 'preview' || !state.preview || $placing.get()) return
   const text = state.preview[state.preview.showing]
-  const sessionId = host.state?.focusedSessionId?.get?.() ?? null
-  composerAdapter.forwardAttachments(state.attachments)
   let sent = false
   try {
-    sent = sessionId === openedSessionId && typeof host.composer?.submit === 'function' && host.composer.submit(sessionId, text) === true
+    sent = focusedAddress() === openedAddress && typeof host.composer?.submit === 'function' && host.composer.submit(openedAddress, text) === true
   } catch {
     sent = false
   }
   if (!sent) {
-    if (!composerAdapter.writeDraft(text)) {
-      host.notify({ kind: 'error', message: tr('notify.placeFailed') })
-      return
+    $placing.set(true)
+    try {
+      if (!(await placePrompt(text))) {
+        host.notify({ kind: 'error', message: tr('notify.placeFailed') })
+        return
+      }
+    } finally {
+      $placing.set(false)
     }
     host.notify({ kind: 'info', message: tr('notify.placedNotSent') })
   }
+  if ($studio.get() !== state) return
   stopContextRead()
   $helpOpen.set(false)
   update({ type: 'RESET' })

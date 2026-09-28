@@ -559,6 +559,7 @@ function DoneRow() {
 
 function PreviewPanel({ state }) {
   const t = useT()
+  const placing = useValue($placing)
   const { ai, engine, showing, note, noteDetail } = state.preview
   const prompt = state.preview[showing]
   const failed = !ai && Boolean(note)
@@ -579,21 +580,24 @@ function PreviewPanel({ state }) {
       jsxs('div', {
         style: { display: 'flex', flexWrap: 'wrap', gap: '6px' },
         children: [
-          jsx(Button, { variant: 'primary', data: { 'data-studio-send-prompt': true }, onClick: sendPreview, title: t('preview.sendTitle'), keyHint: 'F9', children: t('preview.send') }),
-          jsx(Button, { data: { 'data-studio-use-prompt': true }, onClick: usePreview, title: t('preview.editTitle'), keyHint: 'Alt+E', children: t('preview.edit') }),
+          jsx(Button, { variant: 'primary', data: { 'data-studio-send-prompt': true }, onClick: sendPreview, disabled: placing, title: t('preview.sendTitle'), keyHint: 'F9', children: t('preview.send') }),
+          jsx(Button, { data: { 'data-studio-use-prompt': true }, onClick: usePreview, disabled: placing, title: t('preview.editTitle'), keyHint: 'Alt+E', children: t('preview.edit') }),
           ai && engine
             ? jsx(Button, {
                 data: { 'data-studio-switch-version': true },
+                disabled: placing,
                 onClick: () => update({ type: 'SHOW_VERSION', version: showing === 'ai' ? 'engine' : 'ai' }),
                 title: t('preview.switchTitle'),
                 keyHint: 'Alt+V',
                 children: showing === 'ai' ? t('preview.showEngine') : t('preview.showAi')
               })
             : null,
-          jsx(Button, { data: { 'data-studio-back-to-steps': true }, onClick: () => update({ type: 'BACK_TO_STEPS' }), keyHint: 'F8', children: t('preview.backToSteps') }),
-          jsx(Button, { data: { 'data-studio-cancel': true }, onClick: cancelStudio, title: t('actions.cancelTitle'), keyHint: 'F10', children: t('actions.cancel') })
+          jsx(Button, { data: { 'data-studio-back-to-steps': true }, disabled: placing, onClick: () => update({ type: 'BACK_TO_STEPS' }), keyHint: 'F8', children: t('preview.backToSteps') }),
+          jsx(Button, { data: { 'data-studio-cancel': true }, onClick: cancelStudio, disabled: placing, title: t('actions.cancelTitle'), keyHint: 'F10', children: t('actions.cancel') })
         ]
-      })
+      }),
+      // host.composer.submit sends text only; attachments stay in the composer (see sendPreview).
+      jsx('span', { 'data-studio-attachments-note': true, role: 'note', style: { color: 'var(--dt-destructive)', fontSize: '12px', lineHeight: '16px', marginTop: '4px' }, children: t('preview.attachmentsNote') })
     ]
   })
 }
@@ -997,6 +1001,7 @@ export default {
   register(ctx) {
     pluginContext = ctx
     ctx.onDispose(() => {
+      disposeComposerFlow()
       cancelAutoSuggestion()
       suggestSerial += 1
       composeSerial += 1
@@ -1037,7 +1042,7 @@ export default {
         area: PALETTE_AREA,
         data: {
           action: `${ID}.start`,
-          detail: () => (composerAdapter.readDraft().trim() ? tr('palette.detailDraft') : tr('palette.detailEmpty')),
+          detail: () => tr('palette.detailDraft'),
           id: `${ID}.start`,
           keywords: ['prompt', 'studio', 'opus', 'astra'],
           label: tr('palette.label'),

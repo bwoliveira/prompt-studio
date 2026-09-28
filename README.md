@@ -31,10 +31,9 @@ The two prompt engines were written for this plugin from the official Anthropic 
 
 ## Requirements
 
-- Hermes 0.20.0 or later (`requires_hermes: ">=0.20.0"` in `plugin.yaml`), with Hermes Desktop.
-  Checked against the Desktop SDK export lists of 0.20.0 and 0.21.4 and a simulated older SDK, and run for real
-  on 0.21.5 only; on Desktops
-  before 0.21.5, whose SDK lacks `ListRow`/`ToggleRow`, the Settings dialog uses built-in fallback rows.
+- Hermes 0.21.5 or later (`requires_hermes: ">=0.21.5"` in `plugin.yaml`), with Hermes Desktop 0.21.5 or later.
+  The Studio reads and writes the message field only through the Desktop SDK's `host.composer`, added in 0.21.5;
+  on an older Desktop it does not open and asks you to update Hermes.
 - The `hermes` CLI on `PATH`, or its path in `HERMES_BIN`.
 - Python 3.12 or later for the installer (set `PYTHON_BIN` to pick an interpreter).
 - **Platforms:** tested only on Linux (Linux Mint, with Hermes Desktop). Windows and macOS are not tested.
@@ -232,9 +231,10 @@ The REST routes and their request and response shapes are in `docs/CONTRACT.md`.
   nothing listens for the key. Open **Capabilities → Plugins** and find Prompt Studio: a red **failed**
   badge means the Desktop half did not load, and the error is shown under it. Hermes Desktop also shows a
   *Plugin "…" failed to load* toast at startup. To fix it, update the plugin (`hermes plugins update prompt-studio`)
-  and Hermes to the latest stable release, then reopen Hermes Desktop. Prompt Studio 1.6.0 and 1.6.1 need
-  Hermes 0.21.5 or newer on the Desktop (they import `ListRow`/`ToggleRow`, added to the Desktop SDK in 0.21.5);
-  1.7.0 and later also load on 0.20.0 through 0.21.4.
+  and Hermes to the latest stable release, then reopen Hermes Desktop. Prompt Studio 1.8.0 and later need
+  Hermes Desktop 0.21.5 or newer.
+- **Attachments:** files attached in the message field stay there while the Studio is open. **Put in composer to
+  edit** (Alt+E) keeps them with the prompt; **Send now** (F9) sends only the text, and the preview says so in red.
 
 ## Privacy and security
 
@@ -280,8 +280,10 @@ The two models need different prompts, and the engines follow each vendor's guid
 - **One package with three parts:** `plugin.yaml` + `__init__.py` (the agent half registers the
   `prompt_studio` auxiliary task), `dashboard/` (REST routes at `/api/plugins/prompt-studio/`) and
   `desktop/plugin.js` (the Desktop half).
-- **SDK only:** the Desktop half imports only `@hermes/plugin-sdk` and `react`.
-- **Host-tracked resources:** the key listener goes through `ctx.addEventListener`, preferences through
+- **SDK only:** the Desktop half imports only `@hermes/plugin-sdk` and `react`, and reads and writes the message
+  field only through `host.composer`; it never reads or changes the app's DOM or internal stores.
+- **Host-tracked resources:** the key listener goes through `ctx.addEventListener`, timers through `ctx.setTimeout`,
+  preferences through
   `ctx.storage`, text through `ctx.i18n`, and colours through theme variables.
 - **Declared capabilities match reality:** the agent half declares no tools, hooks, middleware or environment
   variables; the Desktop half adds only a composer guard that blocks a blank send while the Studio is open.

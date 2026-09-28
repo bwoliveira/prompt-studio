@@ -50,88 +50,85 @@ function isSkipped(answer) {
   return answer === SKIP_MARK || answer === '(skipped)' || answer === '(pulado)'
 }
 
-// This is the only module that selects or imperatively writes app-owned DOM.
-// Selector provenance is documented in docs/DESKTOP-DEV.md.
+// The composer is reached only through the SDK's host.composer (Hermes Desktop 0.21.5+): no app DOM.
+// `null` addresses the composer the user is typing in. Attachments are not readable through the SDK;
+// setDraft replaces only the text, so staged attachments stay in the composer.
 const composerAdapter = {
-  getRoot() {
-    // index.tsx:1243-1277 creates the root; :1313-1326 distinguishes the live composer from its fallback root.
-    return document.querySelector('[data-slot="composer-root"]:has([data-slot="composer-surface"])')
+  available() {
+    return typeof host.composer?.getDraft === 'function' && typeof host.composer?.setDraft === 'function'
   },
 
-  getInput() {
-    const root = this.getRoot()
-    if (!root) return null
-    // rich-editor.ts:22 defines this slot; index.tsx:1053-1113 renders the visible contenteditable editor.
-    return root.querySelector('[data-slot="composer-surface"] [data-slot="composer-rich-input"][role="textbox"]')
-      // Legacy-compatible textarea path. index.tsx:1130-1140's aria-hidden textarea is deliberately excluded.
-      || root.querySelector('[data-slot="composer-surface"] textarea:not([aria-hidden])')
-  },
-
-  readDraft() {
-    const input = this.getInput()
-    if (!input) return ''
-    return input instanceof HTMLTextAreaElement ? input.value : input.textContent || ''
-  },
-
-  // `focus: false` clears the composer without moving the focus there (opening the studio).
-  writeDraft(text, { focus = true } = {}) {
-    const input = this.getInput()
-    if (!input) return false
-    if (input instanceof HTMLTextAreaElement) {
-      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
-      if (!setter) return false
-      setter.call(input, text)
-    } else {
-      input.textContent = text
+  // null = no composer answered (none is active) or the call failed; '' = an empty composer.
+  async readDraft(address = null) {
+    if (!this.available()) return null
+    try {
+      const text = await host.composer.getDraft(address)
+      return typeof text === 'string' ? text : null
+    } catch {
+      return null
     }
-    input.dispatchEvent(new Event('input', { bubbles: true }))
-    if (focus) this.focusComposer()
-    return true
   },
 
-  readAttachments() {
-    const attachmentState = host.state?.composerAttachments?.get?.() ?? globalThis.__HERMES_PLUGIN_SDK__?.$composerAttachments?.get?.()
-    if (Array.isArray(attachmentState)) return attachmentState
-    const root = this.getRoot() || document
-    return [...root.querySelectorAll('[data-slot="composer-attachments"] [data-attachment], [data-slot="composer-attachments"] > *')]
-      .map((element, index) => {
-        const image = element.querySelector?.('img')
-        const name = element.getAttribute?.('data-name') || image?.getAttribute('alt') || element.textContent?.trim() || `Attachment ${index + 1}`
-        return {
-          id: element.getAttribute?.('data-id') || `${name}-${index}`,
-          kind: image ? 'image' : 'file',
-          name,
-          data_url: image?.getAttribute('src') || undefined,
-          path: element.getAttribute?.('data-path') || undefined,
-          size: Number(element.getAttribute?.('data-size')) || undefined
-        }
-      })
+  // sessionId null = the composer in use; a session id = that session's composer (false when not mounted).
+  // Appends to the composer in use (a paragraph after what is there): never replaces someone's draft.
+  appendDraft(text) {
+    return this.serial(async () => {
+      if (typeof host.composer?.insertText !== 'function') return false
+      try {
+        return (await host.composer.insertText(null, text, { mode: 'block' })) === true
+      } catch {
+        return false
+      }
+    })
   },
 
-  forwardAttachments(attachments) {
-    const payload = Array.isArray(attachments) ? attachments : []
-    const attachmentState = host.state?.composerAttachments ?? globalThis.__HERMES_PLUGIN_SDK__?.$composerAttachments
-    if (attachmentState?.set) attachmentState.set(payload)
-    return payload
-  },
-
-  focusComposer() {
-    const input = this.getInput()
-    if (!(input instanceof HTMLElement)) return false
-    input.focus()
-    if (input.isContentEditable) {
-      const range = document.createRange()
-      range.selectNodeContents(input)
-      range.collapse(false)
-      const selection = window.getSelection()
-      selection?.removeAllRanges()
-      selection?.addRange(range)
+  async writeDraft(text, sessionId = null) {
+    if (!this.available()) return false
+    try {
+      return (await host.composer.setDraft(sessionId, text)) === true
+    } catch {
+      return false
     }
-    return true
+  },
+
+  // Puts text into a conversation's composer without ever losing what is there: an empty composer gets the
+  // text, one that already holds other text gets it appended below. False when that composer is not on screen.
+  // Serialized with appendDraft: a read-then-write never interleaves with another one, so two placements
+  // (for example a dispose restore during a preview placement) cannot both see an empty composer.
+  placeDraft(text, address) {
+    return this.serial(() => this.placeNow(text, address))
+  },
+
+  queue: Promise.resolve(),
+  serial(task) {
+    const run = this.queue.then(task, task)
+    this.queue = run.then(() => undefined, () => undefined)
+    return run
+  },
+
+  async placeNow(text, address) {
+    if (!this.available() || !String(text || '').trim()) return false
+    let current = null
+    try {
+      current = await host.composer.getDraft(address)
+    } catch {
+      current = null
+    }
+    // Replace only a composer read as empty (or already holding this text). An unreadable one (null) may
+    // hold a draft, so the text is appended, never written over it.
+    const existing = typeof current === 'string' ? current.trim() : null
+    if (existing === '' || existing === text.trim()) return this.writeDraft(text, address)
+    if (typeof host.composer.insertText !== 'function') return false
+    try {
+      return (await host.composer.insertText(address, text, { mode: 'block' })) === true
+    } catch {
+      return false
+    }
   }
 }
 
 function update(action) {
+  if ($placing.get() && action.type !== 'RESET') return
   $studio.set(reduceStudio($studio.get(), action))
 }
 
