@@ -5,7 +5,6 @@
 export function initialStudioState() {
   return {
     answer: '',
-    attachments: [],
     current: null,
     intent: '',
     ladder: [],
@@ -50,7 +49,6 @@ export function reduceStudio(state, action) {
     case 'START':
       return {
         ...initialStudioState(),
-        attachments: Array.isArray(action.attachments) ? action.attachments : [],
         intent: action.intent,
         status: 'asking'
       }

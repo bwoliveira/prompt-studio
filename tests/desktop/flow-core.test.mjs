@@ -105,16 +105,10 @@ test('RETARGET replaces the answered steps and asks again', () => {
   assert.deepEqual(state.ladder.map(r => r.answer), ['kept'])
 })
 
-test('composer attachments are captured once and survive the flow', () => {
-  const shot = { id: 's1', kind: 'image', name: 'screen.png' }
-  let state = reduceStudio(initialStudioState(), { type: 'START', attachments: [shot], intent: 'x' })
-  state = reduceStudio(reduceStudio(state, { type: 'INTERROGATION', response: { done: true } }), { type: 'WRITE_BRIEF' })
-  assert.deepEqual(state.attachments, [shot])
-  assert.deepEqual(reduceStudio(initialStudioState(), { type: 'START', attachments: 'bad', intent: 'x' }).attachments, [])
-})
-
-test('plugin forwards the captured attachments with the prompt; only F-keys/Alt chords are bound, never Tab/Enter/Esc', () => {
-  assert.match(plugin, /composerAdapter\.forwardAttachments\(state\.attachments\)/)
+test('composer only through host.composer (no app DOM, no attachment reach-in); only F-keys/Alt chords are bound, never Tab/Enter/Esc', () => {
+  assert.doesNotMatch(plugin, /data-slot="composer|composerAttachments|__HERMES_PLUGIN_SDK__|forwardAttachments/)
+  assert.match(plugin, /host\.composer\.getDraft\(null\)/)
+  assert.match(plugin, /host\.composer\.setDraft\(null, text\)/)
   assert.equal((plugin.match(/addEventListener\((window, )?['"]key(down|up)/g) || []).length, 1, 'one listener (the studio keys)')
   assert.match(plugin, /ctx\.addEventListener\(window, 'keydown'/, 'tracked by the host')
   assert.doesNotMatch(plugin, /event\.key === ['"](Tab|Enter|Escape)/)

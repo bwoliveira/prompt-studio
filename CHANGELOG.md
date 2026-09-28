@@ -2,6 +2,15 @@
 
 Versions come from the commit subjects; releases from 1.6.0 on are also git tags. Newest first.
 
+## Unreleased
+
+- Desktop: the message field is read and written only through the SDK's `host.composer`; the plugin no longer
+  reads or changes the app's DOM (catalog rule 8). This needs Hermes Desktop 0.21.5 or newer, so
+  `requires_hermes` is now `>=0.21.5`; on an older Desktop the Studio does not open and asks you to update Hermes.
+- Attachments are no longer copied by the plugin (the SDK has no attachment API): they stay in the message field.
+  **Put in composer to edit** keeps them with the prompt; **Send now** sends only the text, and the preview says so
+  in red.
+
 ## 1.7.1
 
 - Desktop: the request deadline and the auto-suggestion delay now use the host-tracked `ctx.setTimeout`, so

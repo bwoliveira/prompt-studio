@@ -136,7 +136,17 @@ export const host = {
   composer: {
     submits: [],
     focuses: [],
+    writes: [],
     submitResult: true,
+    // getDraft/setDraft answer from the test composer element, like the app's mounted surface.
+    // Staged attachments live beside the text and are never touched by setDraft.
+    async getDraft(sessionId) { return document.querySelector('[data-slot="composer-rich-input"]')?.textContent ?? null },
+    async setDraft(sessionId, text) {
+      if (globalThis.__promptStudioSetDraftFails) return false
+      this.writes.push({ sessionId, text })
+      document.querySelector('[data-slot="composer-rich-input"]').textContent = text
+      return true
+    },
     submit(sessionId, text) { this.submits.push({ sessionId, text }); return this.submitResult },
     focus(sessionId) { this.focuses.push(sessionId) }
   },
@@ -1535,7 +1545,7 @@ test('CX-1: language "pt" with Hermes in English shows Portuguese strings and qu
 
 // ---------------------------------------------------------------- final step: send now (F9) or edit first (Alt+E)
 const composer = () => ui.host.composer
-function resetComposer() { composer().submits.length = 0; composer().focuses.length = 0; composer().submitResult = true }
+function resetComposer() { composer().submits.length = 0; composer().focuses.length = 0; composer().writes.length = 0; composer().submitResult = true }
 async function toPreview() {
   resetComposer()
   await freshSettings(null)
@@ -1760,3 +1770,52 @@ test('SDK-1: the Settings rows use the SDK ListRow/ToggleRow when present and th
   assert.equal(ui.storage.get('readContext'), true)
   await closeSettings()
 })
+
+test('SDK composer: the draft is read and written only through host.composer (null = the composer in use)', { skip }, async () => {
+  resetComposer()
+  await openStudio()
+  assert.equal(draft(), '', 'composer emptied when the studio opens')
+  assert.deepEqual(composer().writes.at(-1), { sessionId: null, text: '' })
+  await click('[data-studio-cancel]')
+  await waitFor(() => draft() === INTENT)
+  assert.deepEqual(composer().writes.at(-1), { sessionId: null, text: INTENT }, 'Close returns the draft through setDraft')
+})
+
+test('SDK composer: a host without host.composer tells the user to update Hermes and does not open', { skip }, async () => {
+  const saved = ui.host.composer
+  ui.host.composer = undefined
+  try {
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    ui.notifications.length = 0
+    await click('[data-studio-open]')
+    assert.ok($('[data-studio-strip]') === null, 'studio not opened')
+    assert.ok(ui.notifications.some(n => n.kind === 'error' && n.message === ui.i18n.bundles.en.notify.needsComposer), 'update note')
+    assert.equal(draft(), INTENT, 'draft untouched')
+  } finally {
+    ui.host.composer = saved
+  }
+})
+
+test('SDK composer: when setDraft is refused the preview stays open with an error and nothing is lost', { skip }, async () => {
+  await toPreview()
+  globalThis.__promptStudioSetDraftFails = true
+  try {
+    ui.notifications.length = 0
+    await click('[data-studio-use-prompt]')
+    assert.ok($('[data-studio-preview]'), 'preview still open')
+    assert.ok(ui.notifications.some(n => n.kind === 'error' && n.message === ui.i18n.bundles.en.notify.placeFailed), 'error shown')
+  } finally {
+    globalThis.__promptStudioSetDraftFails = false
+    await click('[data-studio-cancel]')
+  }
+})
+
+test('Attachments: the preview warns in the destructive color that Send now does not carry attachments', { skip }, async () => {
+  await toPreview()
+  const note = $('[data-studio-attachments-note]')
+  assert.ok(note, 'note shown on the preview')
+  assert.equal(note.textContent, ui.i18n.bundles.en.preview.attachmentsNote)
+  assert.match(note.getAttribute('style'), /var\(--dt-destructive\)/)
+  await click('[data-studio-cancel]')
+})
+

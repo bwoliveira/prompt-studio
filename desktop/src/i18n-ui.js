@@ -18,12 +18,13 @@ export const UI_MESSAGES = {
     },
     palette: {
       label: 'Prompt Studio',
-      detailDraft: 'Build the prompt from the draft',
-      detailEmpty: 'The message field is empty'
+      detailDraft: 'Build the prompt from the draft'
     },
     notify: {
       empty: 'Write your request in the message field, then open Prompt Studio (F4).',
       short: 'Describe the request in at least 10 characters.',
+      needsComposer: 'Prompt Studio needs Hermes Desktop 0.21.5 or newer. Update Hermes and reopen the app.',
+      readFailed: 'Could not read the message field. Click in it and try again.',
       clearFailed: 'Could not clear the message field.',
       restoreFailed: 'Could not return the draft to the message field.',
       placeFailed: 'Could not place the prompt in the message field.',
@@ -175,6 +176,7 @@ export const UI_MESSAGES = {
       sendTitle: 'Sends the prompt now, as if you pressed Enter',
       edit: 'Put in composer to edit',
       editTitle: 'Places it in the message field; you edit it and send it when you are ready',
+      attachmentsNote: '⚠ Attachments do not go with “Send now”. To send them, use “Put in composer to edit”.',
       switchTitle: 'Same answers, built with or without AI',
       showEngine: 'See the version without AI',
       showAi: 'See the AI version',
@@ -224,12 +226,13 @@ export const UI_MESSAGES = {
     },
     palette: {
       label: 'Prompt Studio',
-      detailDraft: 'Montar o prompt a partir do rascunho',
-      detailEmpty: 'O campo de mensagem está vazio'
+      detailDraft: 'Montar o prompt a partir do rascunho'
     },
     notify: {
       empty: 'Escreva o pedido no campo de mensagem e abra o Prompt Studio (F4).',
       short: 'Descreva o pedido com pelo menos 10 caracteres.',
+      needsComposer: 'O Prompt Studio precisa do Hermes Desktop 0.21.5 ou mais novo. Atualize o Hermes e reabra o app.',
+      readFailed: 'Não foi possível ler o campo de mensagem. Clique nele e tente de novo.',
       clearFailed: 'Não foi possível limpar o campo de mensagem.',
       restoreFailed: 'Não foi possível devolver o rascunho ao campo de mensagem.',
       placeFailed: 'Não foi possível colocar o prompt no campo de mensagem.',
@@ -381,6 +384,7 @@ export const UI_MESSAGES = {
       sendTitle: 'Envia o prompt agora, como se você apertasse Enter',
       edit: 'Pôr no composer para editar',
       editTitle: 'Coloca no campo de mensagem; você edita e envia quando quiser',
+      attachmentsNote: '⚠ Anexos não vão com “Enviar agora”. Para enviá-los, use “Pôr no composer para editar”.',
       switchTitle: 'Mesmas respostas, montado com ou sem IA',
       showEngine: 'Ver versão sem IA',
       showAi: 'Ver versão da IA',

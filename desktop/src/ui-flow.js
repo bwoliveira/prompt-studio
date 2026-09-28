@@ -18,33 +18,48 @@ function askNext() {
 // Session focused when the Studio opened; F9 sends only there (see sendPreview).
 let openedSessionId = null
 
-function startFromComposer() {
-  const state = $studio.get()
-  if (state.status !== 'idle') return
-  const intent = composerAdapter.readDraft().trim()
-  if (!intent) {
-    host.notify({ kind: 'info', message: tr('notify.empty') })
+let starting = false
+
+async function startFromComposer() {
+  if ($studio.get().status !== 'idle' || starting) return
+  if (!composerAdapter.available()) {
+    host.notify({ kind: 'error', message: tr('notify.needsComposer') })
     return
   }
-  if (intent.length < 10) {
-    host.notify({ kind: 'warning', message: tr('notify.short') })
-    return
+  starting = true
+  try {
+    const draft = await composerAdapter.readDraft()
+    if (draft === null) {
+      host.notify({ kind: 'error', message: tr('notify.readFailed') })
+      return
+    }
+    const intent = draft.trim()
+    if (!intent) {
+      host.notify({ kind: 'info', message: tr('notify.empty') })
+      return
+    }
+    if (intent.length < 10) {
+      host.notify({ kind: 'warning', message: tr('notify.short') })
+      return
+    }
+    // Focus goes to the studio (see useStudioFocus), never back to the empty composer.
+    if (!(await composerAdapter.writeDraft(''))) {
+      host.notify({ kind: 'error', message: tr('notify.clearFailed') })
+      return
+    }
+    if ($studio.get().status !== 'idle') return
+    suggestionCache.clear()
+    $helpOpen.set(false)
+    // Settings are read from storage on every opening (storage is the source of truth).
+    loadSettings()
+    // F9 sends only into the session the Studio was opened in (see sendPreview).
+    openedSessionId = host.state?.focusedSessionId?.get?.() ?? null
+    update({ type: 'START', intent })
+    startContextRead()
+    askNext()
+  } finally {
+    starting = false
   }
-  const attachments = composerAdapter.readAttachments()
-  // Focus goes to the studio (see useStudioFocus), never back to the empty composer.
-  if (!composerAdapter.writeDraft('', { focus: false })) {
-    host.notify({ kind: 'error', message: tr('notify.clearFailed') })
-    return
-  }
-  suggestionCache.clear()
-  $helpOpen.set(false)
-  // Settings are read from storage on every opening (storage is the source of truth).
-  loadSettings()
-  // F9 sends only into the session the Studio was opened in (see sendPreview).
-  openedSessionId = host.state?.focusedSessionId?.get?.() ?? null
-  update({ type: 'START', attachments, intent })
-  startContextRead()
-  askNext()
 }
 
 function unknownOption(current) {
@@ -115,8 +130,10 @@ function cancelStudio() {
   $helpOpen.set(false)
   const intent = state.intent
   update({ type: 'RESET' })
-  if (intent && !composerAdapter.writeDraft(intent)) {
-    host.notify({ kind: 'error', message: tr('notify.restoreFailed') })
+  if (intent) {
+    composerAdapter.writeDraft(intent).then(ok => {
+      if (!ok) host.notify({ kind: 'error', message: tr('notify.restoreFailed') })
+    })
   }
 }
 
@@ -251,30 +268,38 @@ async function generatePrompt() {
   update({ type: 'BRIEF_READY', ai: prompt !== engineResult.prompt ? prompt : '', engine: engineResult.prompt, note, noteDetail })
 }
 
-// Preview accepted: the prompt goes to the composer (not sent) with the original attachments.
-function usePreview() {
+// Preview accepted: the prompt goes to the composer (not sent). setDraft replaces only the text,
+// so attachments staged in the composer stay there and go with it.
+let placing = false
+
+async function usePreview() {
   const state = $studio.get()
-  if (state.status !== 'preview' || !state.preview) return
-  if (!composerAdapter.writeDraft(state.preview[state.preview.showing])) {
-    host.notify({ kind: 'error', message: tr('notify.placeFailed') })
-    return
+  if (state.status !== 'preview' || !state.preview || placing) return
+  placing = true
+  try {
+    if (!(await composerAdapter.writeDraft(state.preview[state.preview.showing]))) {
+      host.notify({ kind: 'error', message: tr('notify.placeFailed') })
+      return
+    }
+  } finally {
+    placing = false
   }
-  composerAdapter.forwardAttachments(state.attachments)
+  if ($studio.get() !== state) return
   stopContextRead()
   $helpOpen.set(false)
   update({ type: 'RESET' })
 }
 
 // F9 on the preview: send as if the user pressed Enter, in the session the Studio was opened in.
-// host.composer.submit is fail-closed (false = not sent, e.g. a turn is running): then the prompt
-// is placed in the composer with a short note, so it is never lost. If the focused session changed
-// since opening, it is not sent either (it would land in another conversation).
-function sendPreview() {
+// host.composer.submit sends text only: attachments staged in the composer stay there, unsent (the
+// preview says so). submit is fail-closed (false = not sent, e.g. a turn is running): then the
+// prompt is placed in the composer with a short note, so it is never lost. If the focused session
+// changed since opening, it is not sent either (it would land in another conversation).
+async function sendPreview() {
   const state = $studio.get()
-  if (state.status !== 'preview' || !state.preview) return
+  if (state.status !== 'preview' || !state.preview || placing) return
   const text = state.preview[state.preview.showing]
   const sessionId = host.state?.focusedSessionId?.get?.() ?? null
-  composerAdapter.forwardAttachments(state.attachments)
   let sent = false
   try {
     sent = sessionId === openedSessionId && typeof host.composer?.submit === 'function' && host.composer.submit(sessionId, text) === true
@@ -282,12 +307,18 @@ function sendPreview() {
     sent = false
   }
   if (!sent) {
-    if (!composerAdapter.writeDraft(text)) {
-      host.notify({ kind: 'error', message: tr('notify.placeFailed') })
-      return
+    placing = true
+    try {
+      if (!(await composerAdapter.writeDraft(text))) {
+        host.notify({ kind: 'error', message: tr('notify.placeFailed') })
+        return
+      }
+    } finally {
+      placing = false
     }
     host.notify({ kind: 'info', message: tr('notify.placedNotSent') })
   }
+  if ($studio.get() !== state) return
   stopContextRead()
   $helpOpen.set(false)
   update({ type: 'RESET' })

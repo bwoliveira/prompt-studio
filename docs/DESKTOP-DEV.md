@@ -93,16 +93,13 @@ English + Portuguese. Each pattern carries a `Languages:` comment; other languag
 
 Use the left Alt: on some layouts the right Alt is AltGr. Alt+digits follow the physical number row.
 
-## Composer DOM adapter
+## Composer access
 
-`composerAdapter` in `plugin.js` is the only code that touches the app DOM.
-
-| Selector | Use |
-| --- | --- |
-| `[data-slot="composer-root"]:has([data-slot="composer-surface"])` | live composer root |
-| `[data-slot="composer-surface"] [data-slot="composer-rich-input"][role="textbox"]` | rich input: read, write, focus |
-| `[data-slot="composer-surface"] textarea:not([aria-hidden])` | visible textarea renderer, if present |
-| `[data-slot="composer-attachments"] …` | attachments staged with the draft, kept with the prompt |
+`composerAdapter` in `desktop/src/ui-locale.js` reads and writes the message field only through the SDK's
+`host.composer` (Hermes Desktop 0.21.5+), addressed with `null` (the composer in use): `getDraft` to start,
+`setDraft` to empty it, return the draft on Close and place the prompt; F9 uses `submit` for the session the Studio
+was opened in. The plugin touches no app DOM. The SDK has no attachment API, so attachments are not read: they stay
+in the composer, go with the prompt on Alt+E and are not sent by F9 (the preview says so).
 
 ## Try it in Hermes Desktop
 
@@ -113,7 +110,7 @@ Use the left Alt: on some layouts the right Alt is AltGr. Alt+digits follow the 
 3. Each step shows the AI suggestion on its own in automatic mode; confirm, pick an option or skip. **Back**
    restores the previous answer.
 4. **Close** puts the original draft back.
-5. **Generate**: the prompt lands in the composer with attachments kept; it is not sent.
+5. **Generate**, then **Put in composer to edit**: the prompt lands in the composer, attachments still there; it is not sent.
 6. With the backend route failing, **Generate** still places the engine's prompt with a warning.
 
 The AI model used by the studio is the auxiliary task `prompt_studio` in the Hermes config

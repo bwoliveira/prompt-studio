@@ -593,7 +593,9 @@ function PreviewPanel({ state }) {
           jsx(Button, { data: { 'data-studio-back-to-steps': true }, onClick: () => update({ type: 'BACK_TO_STEPS' }), keyHint: 'F8', children: t('preview.backToSteps') }),
           jsx(Button, { data: { 'data-studio-cancel': true }, onClick: cancelStudio, title: t('actions.cancelTitle'), keyHint: 'F10', children: t('actions.cancel') })
         ]
-      })
+      }),
+      // host.composer.submit sends text only; attachments stay in the composer (see sendPreview).
+      jsx('span', { 'data-studio-attachments-note': true, role: 'note', style: { color: 'var(--dt-destructive)', fontSize: '12px', lineHeight: '16px', marginTop: '4px' }, children: t('preview.attachmentsNote') })
     ]
   })
 }
@@ -1037,7 +1039,7 @@ export default {
         area: PALETTE_AREA,
         data: {
           action: `${ID}.start`,
-          detail: () => (composerAdapter.readDraft().trim() ? tr('palette.detailDraft') : tr('palette.detailEmpty')),
+          detail: () => tr('palette.detailDraft'),
           id: `${ID}.start`,
           keywords: ['prompt', 'studio', 'opus', 'astra'],
           label: tr('palette.label'),

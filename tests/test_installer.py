@@ -71,7 +71,7 @@ class InstallerTests(unittest.TestCase):
             home = root / "untouched-home"
             result = self.run_install(copy_repo(root), home, make_hermes(root, "0.19.9"))
             self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-            self.assertIn("[ERROR] Incompatible Hermes version: requires >=0.20.0, running 0.19.9", result.stderr)
+            self.assertIn("[ERROR] Incompatible Hermes version: requires >=0.21.5, running 0.19.9", result.stderr)
             self.assertFalse(home.exists(), "pre-flight must not create target home")
 
     def test_malformed_manifest_fails_before_registration(self) -> None:
