@@ -1246,7 +1246,9 @@ const UI_MESSAGES = {
       needsComposer: 'Prompt Studio needs Hermes Desktop 0.21.5 or newer. Update Hermes and reopen the app.',
       readFailed: 'Could not read the message field. Click in it and try again.',
       clearFailed: 'Could not clear the message field.',
-      restoreFailed: 'Could not return the draft to the message field.',
+      draftBackCopied: 'The draft could not go back to its message field; it was copied to the clipboard.',
+      draftBackHere: 'The draft could not go back to its conversation; it was added below the text in this message field, not sent.',
+      draftBackLost: draft => `The draft could not go back to the message field. Your draft: ${draft}`,
       sessionChanged: 'You switched conversations while Prompt Studio was opening; the draft went back to its conversation.',
       sessionChangedCopied: 'You switched conversations while Prompt Studio was opening; the draft was copied to the clipboard.',
       sessionChangedHere: 'You switched conversations while Prompt Studio was opening; the draft was added below the text in this message field, not sent.',
@@ -1458,7 +1460,9 @@ const UI_MESSAGES = {
       needsComposer: 'O Prompt Studio precisa do Hermes Desktop 0.21.5 ou mais novo. Atualize o Hermes e reabra o app.',
       readFailed: 'Não foi possível ler o campo de mensagem. Clique nele e tente de novo.',
       clearFailed: 'Não foi possível limpar o campo de mensagem.',
-      restoreFailed: 'Não foi possível devolver o rascunho ao campo de mensagem.',
+      draftBackCopied: 'Não foi possível devolver o rascunho ao campo de mensagem; ele foi copiado para a área de transferência.',
+      draftBackHere: 'Não foi possível devolver o rascunho à conversa dele; ele foi acrescentado abaixo do texto deste campo de mensagem, sem enviar.',
+      draftBackLost: draft => `Não foi possível devolver o rascunho ao campo de mensagem. Seu rascunho: ${draft}`,
       sessionChanged: 'Você trocou de conversa enquanto o Prompt Studio abria; o rascunho voltou para a conversa dele.',
       sessionChangedCopied: 'Você trocou de conversa enquanto o Prompt Studio abria; o rascunho foi copiado para a área de transferência.',
       sessionChangedHere: 'Você trocou de conversa enquanto o Prompt Studio abria; o rascunho foi acrescentado abaixo do texto deste campo de mensagem, sem enviar.',
@@ -2087,6 +2091,9 @@ function askNext() {
 
 // Session focused when the Studio opened; F9 sends only there (see sendPreview).
 let openedSessionId = null
+// Composer address of that conversation for host.composer writes: its session id, or 'new' for a fresh chat
+// (never null, which would reach whatever composer is active by then).
+let openedAddress = 'new'
 
 // Resolves after two animation frames and a short timer: later than the app's deferred composer-focus
 // retries (the focus effect may run after a paint, then retries on the next frame and a 0 ms timer).
@@ -2110,11 +2117,12 @@ let lifecycle = 0
 function disposeComposerFlow() {
   lifecycle += 1
   const state = $studio.get()
-  const lost = pendingDraft ?? (state.status !== 'idle' && state.intent ? { text: state.intent, sessionId: openedSessionId } : null)
+  const lost = pendingDraft ?? (state.status !== 'idle' && state.intent ? { text: state.intent, address: openedAddress } : null)
   pendingDraft = null
   starting = false
   $placing.set(false)
-  if (lost) composerAdapter.writeDraft(lost.text, lost.sessionId)
+  // pluginContext is cleared right after this; the recovery keeps the clipboard it needs.
+  if (lost) returnDraftTo(lost.address, lost.text, { os: pluginContext?.os, reason: 'closed' })
 }
 
 async function startFromComposer() {
@@ -2127,6 +2135,7 @@ async function startFromComposer() {
   const generation = lifecycle
   // F9 sends only into the session the Studio was opened in (see sendPreview): taken before any await.
   const originSessionId = focusedSession()
+  const originAddress = composerAddress(originSessionId)
   try {
     const draft = await composerAdapter.readDraft()
     if (draft === null) {
@@ -2148,23 +2157,23 @@ async function startFromComposer() {
       return
     }
     if (generation !== lifecycle) {
-      composerAdapter.writeDraft(draft, originSessionId)
+      returnDraftTo(originAddress, draft, { reason: 'closed' })
       return
     }
-    pendingDraft = { text: draft, sessionId: originSessionId }
+    pendingDraft = { text: draft, address: originAddress }
     // setDraft makes the app focus the composer it painted, now and again on a later frame and timer
     // (focusComposerInput). The studio opens only after those retries, so its focus is not taken back.
     await hostFocusSettled()
     if (generation !== lifecycle) return
     pendingDraft = null
     if ($studio.get().status !== 'idle') {
-      composerAdapter.writeDraft(draft, originSessionId)
+      await returnDraftTo(originAddress, draft, { reason: 'closed' })
       return
     }
     // The user switched conversations while it opened: the draft goes back where it came from, never
     // into the conversation now on screen.
     if (focusedSession() !== originSessionId) {
-      await returnDraftTo(originSessionId, draft)
+      await returnDraftTo(originAddress, draft)
       return
     }
     suggestionCache.clear()
@@ -2172,6 +2181,7 @@ async function startFromComposer() {
     // Settings are read from storage on every opening (storage is the source of truth).
     loadSettings()
     openedSessionId = originSessionId
+    openedAddress = originAddress
     update({ type: 'START', intent })
     startContextRead()
     askNext()
@@ -2184,29 +2194,37 @@ function focusedSession() {
   return host.state?.focusedSessionId?.get?.() ?? null
 }
 
-// The composer was already emptied, so the draft must land somewhere: its own session's composer; else the
-// clipboard; else appended to the composer now in use (its own draft kept, nothing sent); else the error
-// notice carries the text itself.
-async function returnDraftTo(sessionId, draft) {
-  if (sessionId !== null && (await composerAdapter.writeDraft(draft, sessionId))) {
-    host.notify({ kind: 'info', message: tr('notify.sessionChanged') })
-    return
+function composerAddress(sessionId) {
+  return sessionId ?? 'new'
+}
+
+// The draft was taken out of its composer, so it must land somewhere, never over another draft: its own
+// conversation's composer (address: session id or 'new'); else the clipboard; else appended below the text of
+// the composer in use (nothing sent); else the error notice carries the text itself.
+// reason 'switch': the user changed conversations while the Studio opened; 'closed': Close, or the plugin
+// was disabled or reloaded. os: the clipboard API, kept by the caller when the context is being disposed.
+async function returnDraftTo(address, draft, { reason = 'switch', os = pluginContext?.os } = {}) {
+  const key = reason === 'switch' ? 'sessionChanged' : 'draftBack'
+  if (await composerAdapter.writeDraft(draft, address)) {
+    if (reason === 'switch') host.notify({ kind: 'info', message: tr('notify.sessionChanged') })
+    return true
   }
   let copied = false
   try {
-    copied = (await pluginContext?.os?.writeClipboard?.(draft)) === true
+    copied = (await os?.writeClipboard?.(draft)) === true
   } catch {
     copied = false
   }
   if (copied) {
-    host.notify({ kind: 'warning', message: tr('notify.sessionChangedCopied') })
-    return
+    host.notify({ kind: 'warning', message: tr(`notify.${key}Copied`) })
+    return false
   }
   if (await composerAdapter.appendDraft(draft)) {
-    host.notify({ kind: 'warning', message: tr('notify.sessionChangedHere') })
-    return
+    host.notify({ kind: 'warning', message: tr(`notify.${key}Here`) })
+    return false
   }
-  host.notify({ kind: 'error', message: tr('notify.sessionChangedLost', draft) })
+  host.notify({ kind: 'error', message: tr(`notify.${key}Lost`, draft) })
+  return false
 }
 
 function unknownOption(current) {
@@ -2278,11 +2296,7 @@ function cancelStudio() {
   $helpOpen.set(false)
   const intent = state.intent
   update({ type: 'RESET' })
-  if (intent) {
-    composerAdapter.writeDraft(intent).then(ok => {
-      if (!ok) host.notify({ kind: 'error', message: tr('notify.restoreFailed') })
-    })
-  }
+  if (intent) returnDraftTo(openedAddress, intent, { reason: 'closed' })
 }
 
 // Final prompt. With AI on, the model writes it from the answers (the local engine prompt goes
@@ -2424,7 +2438,8 @@ async function usePreview() {
   if (state.status !== 'preview' || !state.preview || $placing.get()) return
   $placing.set(true)
   try {
-    if (!(await composerAdapter.writeDraft(state.preview[state.preview.showing]))) {
+    // Into the conversation the Studio was opened in; false (not on screen) keeps the preview open.
+    if (!(await composerAdapter.writeDraft(state.preview[state.preview.showing], openedAddress))) {
       host.notify({ kind: 'error', message: tr('notify.placeFailed') })
       return
     }
@@ -2456,7 +2471,7 @@ async function sendPreview() {
   if (!sent) {
     $placing.set(true)
     try {
-      if (!(await composerAdapter.writeDraft(text))) {
+      if (!(await composerAdapter.writeDraft(text, openedAddress))) {
         host.notify({ kind: 'error', message: tr('notify.placeFailed') })
         return
       }

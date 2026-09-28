@@ -157,7 +157,9 @@ export const host = {
       if (globalThis.__promptStudioSetDraftFails) return false
       // A session address reaches only a mounted composer (the app answers false otherwise); the test
       // composer element shows the focused session, so a write to another session does not touch it.
-      if (sessionId !== null) {
+      // 'new' = the fresh chat, shown only while no session is focused.
+      const shown = host.state.focusedSessionId.get() ?? 'new'
+      if (sessionId !== null && sessionId !== shown) {
         if (globalThis.__promptStudioSessionUnmounted) return false
         this.writes.push({ sessionId, text })
         return true
@@ -1632,7 +1634,8 @@ test('FIN-1: F9 does not send into another session when the focus moved after op
   try {
     await press('F9')
     assert.equal(composer().submits.length, 0, 'not sent to the other session')
-    assert.equal(draft(), prompt, 'prompt never lost')
+    assert.deepEqual(composer().writes.at(-1), { sessionId: 'sess-live', text: prompt }, 'placed in its own conversation, never lost')
+    assert.notEqual(draft(), prompt, 'the other conversation on screen is not touched')
     assert.ok(ui.notifications.some(n => n.message === ui.i18n.bundles.en.notify.placedNotSent), 'placed-not-sent note')
   } finally {
     ui.host.state.focusedSessionId.set('sess-live')
@@ -1818,7 +1821,7 @@ test('SDK composer: the draft is read and written only through host.composer (nu
   assert.deepEqual(composer().writes.at(-1), { sessionId: null, text: '' })
   await click('[data-studio-cancel]')
   await waitFor(() => draft() === INTENT)
-  assert.deepEqual(composer().writes.at(-1), { sessionId: null, text: INTENT }, 'Close returns the draft through setDraft')
+  assert.deepEqual(composer().writes.at(-1), { sessionId: 'sess-live', text: INTENT }, 'Close returns the draft to its own conversation through setDraft')
 })
 
 test('SDK composer: a host without host.composer tells the user to update Hermes and does not open', { skip }, async () => {
@@ -2078,5 +2081,40 @@ test('SDK composer: a dispose while the Studio is open gives the draft back to t
   await hostReload()
   assert.ok($('[data-studio-strip]') === null, 'studio closed by the dispose')
   assert.deepEqual(composer().writes.at(-1), { sessionId: 'sess-live', text: INTENT }, 'draft back in its composer')
+})
+
+test('SDK composer: a dispose after switching conversations never writes the fresh-chat draft into the other one', { skip }, async () => {
+  ui.host.state.focusedSessionId.set(null)
+  try {
+    resetComposer()
+    await openStudio()
+    ui.host.state.focusedSessionId.set('sess-other')
+    await ui.act(async () => { $('[data-slot="composer-rich-input"]').textContent = 'rascunho da conversa B' })
+    await hostReload()
+    await settle()
+    assert.equal(draft(), 'rascunho da conversa B', "B's draft untouched")
+    assert.deepEqual(composer().writes.at(-1), { sessionId: 'new', text: INTENT }, "addressed to the fresh chat ('new'), never null")
+  } finally {
+    ui.host.state.focusedSessionId.set('sess-live')
+  }
+})
+
+test('SDK composer: a dispose with the original conversation gone copies the draft to the clipboard', { skip }, async () => {
+  const clipboard = ui.pluginContext.os.clipboard
+  clipboard.length = 0
+  resetComposer()
+  await openStudio()
+  ui.host.state.focusedSessionId.set('sess-other')
+  globalThis.__promptStudioSessionUnmounted = true
+  try {
+    ui.notifications.length = 0
+    await hostReload()
+    await settle()
+    assert.deepEqual(clipboard, [INTENT], 'draft on the clipboard, not lost')
+    assert.ok(ui.notifications.some(n => n.message === ui.i18n.bundles.en.notify.draftBackCopied))
+  } finally {
+    globalThis.__promptStudioSessionUnmounted = false
+    ui.host.state.focusedSessionId.set('sess-live')
+  }
 })
 
