@@ -229,7 +229,9 @@ test('AGENTS.md has the agent fire /review and follow the Codex review itself, f
   assert.match(agents, /comes back a third time/);
   const readme = readFileSync(new URL('../../README.md', import.meta.url), 'utf8');
   assert.match(readme, /The agent fires the Hermes `\/review` itself/);
-  assert.match(agents, /fires `\/review` itself with\s+`\/root\/\.hermes\/scripts\/hermes-slash\/hermes-review/);
+  assert.match(agents, /fires `\/review` itself with\s+the `hermes-review` helper/);
+  assert.match(agents, /HERMES_SLASH_DIR/);
+  assert.match(agents, /when the helper is not installed or not executable/);
   assert.match(agents, /skill `pr-review-autopilot`/);
   assert.match(agents, /loop every five minutes/);
   assert.match(agents, /until the review reports none and the PR is merged/);

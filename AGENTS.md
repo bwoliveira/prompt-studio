@@ -27,10 +27,12 @@ review. Hermes agents follow the skill `pr-review-autopilot`.
 **Before the first `bin/pr` of a branch, two reviews, in this order:**
 1. **Hermes `/review`, fired by the agent.** When the implementation is done, tests pass and everything is committed,
    the agent writes a short brief in the session (goal, branch, commits, risk areas) and fires `/review` itself with
-   `/root/.hermes/scripts/hermes-slash/hermes-review --focus "<brief>"`, then ends its turn so the review can start.
-   If that script reports the session "not live in the dashboard backend", or the agent does not run in a Hermes
-   session, the agent runs the same review as a subagent with the brief, this file and the diff, and says so in the PR
-   description. Any other error of the script means a wrong call: fix it and fire again. It fixes what
+   the `hermes-review` helper: `"${HERMES_SLASH_DIR:-$HOME/.hermes/scripts/hermes-slash}/hermes-review" --focus
+   "<brief>"`, then ends its turn so the review can start. The helper is local to the maintainer's Hermes install and
+   is not shipped with this repository. The agent runs the same review as a subagent instead, with the brief, this file
+   and the diff, and says so in the PR description, when the helper is not installed or not executable there, when it
+   reports the session "not live in the dashboard backend", or when the agent does not run in a Hermes session. Any
+   other error of the helper means a wrong call: fix it and fire again. It fixes what
    is well founded (P0, P1 and P2 always, with a test) and records in the PR description what `/review` found and what
    was done.
 2. **Local Codex review (`bin/review`).** It runs by itself inside `bin/pr` with the Codex CLI; P0, P1 or P2 block the
