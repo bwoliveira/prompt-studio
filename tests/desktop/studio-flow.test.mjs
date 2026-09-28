@@ -248,7 +248,7 @@ export { jsx } from 'react/jsx-runtime'
       return clear
     },
     onDispose(fn) { disposers.push(fn) },
-    os: { clipboard: [], async writeClipboard(text) { this.clipboard.push(text); return true } },
+    os: { clipboard: [], async writeClipboard(text) { if (globalThis.__promptStudioClipboardFails) return false; this.clipboard.push(text); return true } },
     registerMany(items) { for (const item of items) slots[item.area] = item },
     async rest(path, { body }) {
       backend.calls.push({ path, body })
@@ -1952,6 +1952,47 @@ test('SDK composer: when the original conversation is not on screen any more the
     assert.ok(ui.notifications.some(n => n.message === ui.i18n.bundles.en.notify.sessionChangedCopied))
   } finally {
     globalThis.__promptStudioSessionUnmounted = false
+    ui.host.state.focusedSessionId.set('sess-live')
+  }
+})
+
+test('SDK composer: original conversation gone and clipboard refused: the draft goes to the composer in use, not sent', { skip }, async () => {
+  globalThis.__promptStudioSessionUnmounted = true
+  globalThis.__promptStudioClipboardFails = true
+  try {
+    await openWhileSwitching()
+    assert.ok($('[data-studio-strip]') === null, 'studio not opened')
+    assert.equal(draft(), INTENT, 'draft in the composer on screen')
+    assert.equal(composer().submits.length, 0, 'not sent')
+    assert.ok(ui.notifications.some(n => n.message === ui.i18n.bundles.en.notify.sessionChangedHere))
+  } finally {
+    globalThis.__promptStudioSessionUnmounted = false
+    globalThis.__promptStudioClipboardFails = false
+    ui.host.state.focusedSessionId.set('sess-live')
+  }
+})
+
+test('SDK composer: when every place refuses the draft, the error notice carries the draft text', { skip }, async () => {
+  globalThis.__promptStudioSessionUnmounted = true
+  globalThis.__promptStudioClipboardFails = true
+  try {
+    resetComposer()
+    ui.notifications.length = 0
+    globalThis.__promptStudioFocusSettleMs = 40
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    await press('F4')
+    ui.host.state.focusedSessionId.set('sess-other')
+    globalThis.__promptStudioSetDraftFails = true
+    await ui.act(async () => { await new Promise(resolve => setTimeout(resolve, 120)) })
+    await settle()
+    assert.ok($('[data-studio-strip]') === null, 'studio not opened')
+    const lost = ui.notifications.find(n => n.kind === 'error')
+    assert.ok(lost && lost.message.includes(INTENT), 'the draft text is in the notice')
+  } finally {
+    globalThis.__promptStudioFocusSettleMs = 0
+    globalThis.__promptStudioSetDraftFails = false
+    globalThis.__promptStudioSessionUnmounted = false
+    globalThis.__promptStudioClipboardFails = false
     ui.host.state.focusedSessionId.set('sess-live')
   }
 })

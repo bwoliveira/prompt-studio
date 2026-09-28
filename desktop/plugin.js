@@ -1249,6 +1249,8 @@ const UI_MESSAGES = {
       restoreFailed: 'Could not return the draft to the message field.',
       sessionChanged: 'You switched conversations while Prompt Studio was opening; the draft went back to its conversation.',
       sessionChangedCopied: 'You switched conversations while Prompt Studio was opening; the draft was copied to the clipboard.',
+      sessionChangedHere: 'You switched conversations while Prompt Studio was opening; the draft is in this message field, not sent.',
+      sessionChangedLost: draft => `You switched conversations while Prompt Studio was opening and the draft could not be put back. Your draft: ${draft}`,
       placeFailed: 'Could not place the prompt in the message field.',
       placedNotSent: 'The prompt was placed in the message field but not sent (Hermes is busy). Send it when ready.',
       nextFailed: 'Prompt Studio could not prepare the next question.',
@@ -1459,6 +1461,8 @@ const UI_MESSAGES = {
       restoreFailed: 'Não foi possível devolver o rascunho ao campo de mensagem.',
       sessionChanged: 'Você trocou de conversa enquanto o Prompt Studio abria; o rascunho voltou para a conversa dele.',
       sessionChangedCopied: 'Você trocou de conversa enquanto o Prompt Studio abria; o rascunho foi copiado para a área de transferência.',
+      sessionChangedHere: 'Você trocou de conversa enquanto o Prompt Studio abria; o rascunho está neste campo de mensagem, sem enviar.',
+      sessionChangedLost: draft => `Você trocou de conversa enquanto o Prompt Studio abria e não foi possível devolver o rascunho. Seu rascunho: ${draft}`,
       placeFailed: 'Não foi possível colocar o prompt no campo de mensagem.',
       placedNotSent: 'O prompt foi colocado no campo de mensagem, mas não enviado (o Hermes está ocupado). Envie quando quiser.',
       nextFailed: 'O Prompt Studio não conseguiu preparar a próxima pergunta.',
@@ -2141,7 +2145,8 @@ function focusedSession() {
   return host.state?.focusedSessionId?.get?.() ?? null
 }
 
-// Back into its own session's composer; if that one is not on screen any more, to the clipboard.
+// The composer was already emptied, so the draft must land somewhere: its own session's composer; else the
+// clipboard; else the composer now in use (not sent); else the error notice carries the text itself.
 async function returnDraftTo(sessionId, draft) {
   if (sessionId !== null && (await composerAdapter.writeDraft(draft, sessionId))) {
     host.notify({ kind: 'info', message: tr('notify.sessionChanged') })
@@ -2153,7 +2158,15 @@ async function returnDraftTo(sessionId, draft) {
   } catch {
     copied = false
   }
-  host.notify(copied ? { kind: 'warning', message: tr('notify.sessionChangedCopied') } : { kind: 'error', message: tr('notify.restoreFailed') })
+  if (copied) {
+    host.notify({ kind: 'warning', message: tr('notify.sessionChangedCopied') })
+    return
+  }
+  if (await composerAdapter.writeDraft(draft)) {
+    host.notify({ kind: 'warning', message: tr('notify.sessionChangedHere') })
+    return
+  }
+  host.notify({ kind: 'error', message: tr('notify.sessionChangedLost', draft) })
 }
 
 function unknownOption(current) {

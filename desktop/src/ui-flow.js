@@ -89,7 +89,8 @@ function focusedSession() {
   return host.state?.focusedSessionId?.get?.() ?? null
 }
 
-// Back into its own session's composer; if that one is not on screen any more, to the clipboard.
+// The composer was already emptied, so the draft must land somewhere: its own session's composer; else the
+// clipboard; else the composer now in use (not sent); else the error notice carries the text itself.
 async function returnDraftTo(sessionId, draft) {
   if (sessionId !== null && (await composerAdapter.writeDraft(draft, sessionId))) {
     host.notify({ kind: 'info', message: tr('notify.sessionChanged') })
@@ -101,7 +102,15 @@ async function returnDraftTo(sessionId, draft) {
   } catch {
     copied = false
   }
-  host.notify(copied ? { kind: 'warning', message: tr('notify.sessionChangedCopied') } : { kind: 'error', message: tr('notify.restoreFailed') })
+  if (copied) {
+    host.notify({ kind: 'warning', message: tr('notify.sessionChangedCopied') })
+    return
+  }
+  if (await composerAdapter.writeDraft(draft)) {
+    host.notify({ kind: 'warning', message: tr('notify.sessionChangedHere') })
+    return
+  }
+  host.notify({ kind: 'error', message: tr('notify.sessionChangedLost', draft) })
 }
 
 function unknownOption(current) {
