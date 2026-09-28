@@ -15,10 +15,8 @@ function askNext() {
   refreshSuggestion()
 }
 
-// Session focused when the Studio opened; F9 sends only there (see sendPreview).
-let openedSessionId = null
-// Composer address of that conversation for host.composer writes: its session id, or 'new' for a fresh chat
-// (never null, which would reach whatever composer is active by then).
+// The conversation the Studio was opened in, as a host.composer address (see focusedAddress): Close, dispose,
+// placing and F9 all go there, never to whatever composer is active by then.
 let openedAddress = 'new'
 
 // Resolves after two animation frames and a short timer: later than the app's deferred composer-focus
@@ -60,8 +58,7 @@ async function startFromComposer() {
   starting = true
   const generation = lifecycle
   // F9 sends only into the session the Studio was opened in (see sendPreview): taken before any await.
-  const originSessionId = focusedSession()
-  const originAddress = composerAddress(originSessionId)
+  const originAddress = focusedAddress()
   try {
     const draft = await composerAdapter.readDraft()
     if (draft === null) {
@@ -77,7 +74,7 @@ async function startFromComposer() {
       host.notify({ kind: 'warning', message: tr('notify.short') })
       return
     }
-    if (focusedSession() !== originSessionId || generation !== lifecycle) return
+    if (focusedAddress() !== originAddress || generation !== lifecycle) return
     if (!(await composerAdapter.writeDraft(''))) {
       host.notify({ kind: 'error', message: tr('notify.clearFailed') })
       return
@@ -98,7 +95,7 @@ async function startFromComposer() {
     }
     // The user switched conversations while it opened: the draft goes back where it came from, never
     // into the conversation now on screen.
-    if (focusedSession() !== originSessionId) {
+    if (focusedAddress() !== originAddress) {
       await returnDraftTo(originAddress, draft)
       return
     }
@@ -106,7 +103,6 @@ async function startFromComposer() {
     $helpOpen.set(false)
     // Settings are read from storage on every opening (storage is the source of truth).
     loadSettings()
-    openedSessionId = originSessionId
     openedAddress = originAddress
     update({ type: 'START', intent })
     startContextRead()
@@ -120,8 +116,11 @@ function focusedSession() {
   return host.state?.focusedSessionId?.get?.() ?? null
 }
 
-function composerAddress(sessionId) {
-  return sessionId ?? 'new'
+// The focused conversation as a host.composer address: its stored id (a saved conversation whose runtime is not
+// bound yet has only that one), else its runtime id, else 'new' for a fresh chat. Never null, which would reach
+// whatever composer is active later.
+function focusedAddress() {
+  return host.state?.focusedStoredSessionId?.get?.() ?? focusedSession() ?? 'new'
 }
 
 // The draft was taken out of its composer, so it must land somewhere, never over another draft: its own
@@ -131,7 +130,7 @@ function composerAddress(sessionId) {
 // was disabled or reloaded. os: the clipboard API, kept by the caller when the context is being disposed.
 async function returnDraftTo(address, draft, { reason = 'switch', os = pluginContext?.os } = {}) {
   const key = reason === 'switch' ? 'sessionChanged' : 'draftBack'
-  if (await composerAdapter.writeDraft(draft, address)) {
+  if (await composerAdapter.placeDraft(draft, address)) {
     if (reason === 'switch') host.notify({ kind: 'info', message: tr('notify.sessionChanged') })
     return true
   }
@@ -365,7 +364,7 @@ async function usePreview() {
   $placing.set(true)
   try {
     // Into the conversation the Studio was opened in; false (not on screen) keeps the preview open.
-    if (!(await composerAdapter.writeDraft(state.preview[state.preview.showing], openedAddress))) {
+    if (!(await composerAdapter.placeDraft(state.preview[state.preview.showing], openedAddress))) {
       host.notify({ kind: 'error', message: tr('notify.placeFailed') })
       return
     }
@@ -387,17 +386,16 @@ async function sendPreview() {
   const state = $studio.get()
   if (state.status !== 'preview' || !state.preview || $placing.get()) return
   const text = state.preview[state.preview.showing]
-  const sessionId = host.state?.focusedSessionId?.get?.() ?? null
   let sent = false
   try {
-    sent = sessionId === openedSessionId && typeof host.composer?.submit === 'function' && host.composer.submit(sessionId, text) === true
+    sent = focusedAddress() === openedAddress && typeof host.composer?.submit === 'function' && host.composer.submit(openedAddress, text) === true
   } catch {
     sent = false
   }
   if (!sent) {
     $placing.set(true)
     try {
-      if (!(await composerAdapter.writeDraft(text, openedAddress))) {
+      if (!(await composerAdapter.placeDraft(text, openedAddress))) {
         host.notify({ kind: 'error', message: tr('notify.placeFailed') })
         return
       }

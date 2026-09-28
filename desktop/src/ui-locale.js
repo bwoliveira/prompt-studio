@@ -87,6 +87,26 @@ const composerAdapter = {
     } catch {
       return false
     }
+  },
+
+  // Puts text into a conversation's composer without ever losing what is there: an empty composer gets the
+  // text, one that already holds other text gets it appended below. False when that composer is not on screen.
+  async placeDraft(text, address) {
+    if (!this.available() || !String(text || '').trim()) return false
+    let current = null
+    try {
+      current = await host.composer.getDraft(address)
+    } catch {
+      current = null
+    }
+    const existing = typeof current === 'string' ? current.trim() : ''
+    if (!existing || existing === text.trim()) return this.writeDraft(text, address)
+    if (typeof host.composer.insertText !== 'function') return false
+    try {
+      return (await host.composer.insertText(address, text, { mode: 'block' })) === true
+    } catch {
+      return false
+    }
   }
 }
 

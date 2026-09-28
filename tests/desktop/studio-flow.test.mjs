@@ -147,25 +147,21 @@ export const host = {
     // Staged attachments live beside the text and are never touched by setDraft.
     // __promptStudioComposerGate: a promise the calls wait for (tests of calls still pending).
     // __promptStudioNoActiveComposer: getDraft answers null, as the SDK does when no composer is active.
-    async getDraft(sessionId) {
-      await globalThis.__promptStudioComposerGate
-      if (globalThis.__promptStudioNoActiveComposer) return null
-      return document.querySelector('[data-slot="composer-rich-input"]')?.textContent ?? null
-    },
-    async setDraft(sessionId, text) {
-      await globalThis.__promptStudioComposerGate
-      if (globalThis.__promptStudioSetDraftFails) return false
-      // A session address reaches only a mounted composer (the app answers false otherwise); the test
-      // composer element shows the focused session, so a write to another session does not touch it.
-      // 'new' = the fresh chat, shown only while no session is focused.
-      const shown = host.state.focusedSessionId.get() ?? 'new'
-      if (sessionId !== null && sessionId !== shown) {
-        if (globalThis.__promptStudioSessionUnmounted) return false
-        this.writes.push({ sessionId, text })
-        return true
-      }
-      this.writes.push({ sessionId, text })
+    // One composer per conversation, like the app: the test element is the composer of the conversation on
+    // screen (stored id, else runtime id, else 'new'); other conversations keep their text in offscreen, and are
+    // mounted unless __promptStudioSessionUnmounted. null = the composer in use.
+    offscreen: new Map(),
+    shown() { return host.state.focusedStoredSessionId.get() ?? host.state.focusedSessionId.get() ?? 'new' },
+    target(address) {
       const editor = document.querySelector('[data-slot="composer-rich-input"]')
+      if (address === null || address === this.shown() || address === host.state.focusedSessionId.get()) return { editor }
+      if (globalThis.__promptStudioSessionUnmounted) return null
+      return { key: address }
+    },
+    read(target) { return target.editor ? target.editor.textContent : (this.offscreen.get(target.key) ?? '') },
+    write(target, text) {
+      if (!target.editor) { this.offscreen.set(target.key, text); return }
+      const editor = target.editor
       editor.textContent = text
       // Like the app (use-composer-draft paintDraft -> focus request -> effect -> focusComposerInput):
       // after the reply, the composer takes the focus now, on the next frame and on a 0 ms timer.
@@ -175,16 +171,32 @@ export const host = {
         requestAnimationFrame(focus)
         setTimeout(focus, 0)
       }, 0)
+    },
+    async getDraft(sessionId) {
+      await globalThis.__promptStudioComposerGate
+      if (globalThis.__promptStudioNoActiveComposer) return null
+      const target = this.target(sessionId)
+      return target ? this.read(target) : null
+    },
+    async setDraft(sessionId, text) {
+      await globalThis.__promptStudioComposerGate
+      if (globalThis.__promptStudioSetDraftFails) return false
+      const target = this.target(sessionId)
+      if (!target) return false
+      this.writes.push({ sessionId, text })
+      this.write(target, text)
       return true
     },
     inserts: [],
-    // insertText appends a paragraph to the composer in use (block mode), keeping what is there.
+    // insertText appends a paragraph (block mode), keeping what is there.
     async insertText(sessionId, text, opts) {
       await globalThis.__promptStudioComposerGate
       if (globalThis.__promptStudioSetDraftFails) return false
+      const target = this.target(sessionId)
+      if (!target) return false
       this.inserts.push({ sessionId, text, mode: opts?.mode })
-      const editor = document.querySelector('[data-slot="composer-rich-input"]')
-      editor.textContent = editor.textContent ? editor.textContent + String.fromCharCode(10) + text : text
+      const before = this.read(target)
+      this.write(target, before ? before + String.fromCharCode(10) + text : text)
       return true
     },
     submit(sessionId, text) { this.submits.push({ sessionId, text }); return this.submitResult },
@@ -1587,7 +1599,7 @@ test('CX-1: language "pt" with Hermes in English shows Portuguese strings and qu
 
 // ---------------------------------------------------------------- final step: send now (F9) or edit first (Alt+E)
 const composer = () => ui.host.composer
-function resetComposer() { composer().submits.length = 0; composer().focuses.length = 0; composer().writes.length = 0; composer().inserts.length = 0; composer().submitResult = true }
+function resetComposer() { composer().submits.length = 0; composer().focuses.length = 0; composer().writes.length = 0; composer().inserts.length = 0; composer().offscreen.clear(); composer().submitResult = true }
 async function toPreview() {
   resetComposer()
   await freshSettings(null)
@@ -2114,6 +2126,37 @@ test('SDK composer: a dispose with the original conversation gone copies the dra
     assert.ok(ui.notifications.some(n => n.message === ui.i18n.bundles.en.notify.draftBackCopied))
   } finally {
     globalThis.__promptStudioSessionUnmounted = false
+    ui.host.state.focusedSessionId.set('sess-live')
+  }
+})
+
+test('SDK composer: text typed in the composer while the Studio is open is kept on Close and on dispose', { skip }, async () => {
+  for (const finish of ['close', 'dispose']) {
+    resetComposer()
+    await openStudio()
+    await ui.act(async () => { $('[data-slot="composer-rich-input"]').textContent = 'texto novo' })
+    if (finish === 'close') await click('[data-studio-cancel]')
+    else await hostReload()
+    await settle()
+    assert.equal(draft(), `texto novo\n${INTENT}`, `${finish}: the new text kept, the request added below`)
+  }
+})
+
+test('SDK composer: a saved conversation with no runtime id yet is addressed by its stored id, not as a new chat', { skip }, async () => {
+  resetComposer()
+  await freshSettings('stored-1')
+  ui.host.state.focusedSessionId.set(null)
+  try {
+    await openStudio(INTENT, 'off')
+    await click('[data-studio-generate]')
+    await waitFor(() => $('[data-studio-preview]'))
+    const prompt = $('[data-studio-preview-text]').textContent
+    await click('[data-studio-use-prompt]')
+    await waitFor(() => $('[data-studio-strip]') === null)
+    assert.equal(draft(), prompt, 'prompt placed in that conversation')
+    assert.deepEqual(composer().writes.at(-1), { sessionId: 'stored-1', text: prompt }, 'addressed by its stored id')
+  } finally {
+    ui.host.state.focusedStoredSessionId.set(null)
     ui.host.state.focusedSessionId.set('sess-live')
   }
 })
