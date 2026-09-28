@@ -2,6 +2,11 @@
 
 Versions come from the commit subjects; releases from 1.6.0 on are also git tags. Newest first.
 
+## Unreleased
+
+- Contributors: `AGENTS.md` now has the agent fire the Hermes `/review` itself and keep fixing the local Codex review
+  findings every five minutes until it approves, without the maintainer in the loop.
+
 ## 1.7.1
 
 - Desktop: the request deadline and the auto-suggestion delay now use the host-tracked `ctx.setTimeout`, so
