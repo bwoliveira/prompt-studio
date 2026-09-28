@@ -66,6 +66,11 @@ before(async () => {
   g.IS_REACT_ACT_ENVIRONMENT = true
   // Auto-mode suggestion debounce (SP-2): 0 ms keeps the other tests fast; the SP-2 test sets the real delay.
   g.__promptStudioAutoSuggestDelayMs = 0
+  // Frames run as 0 ms timers (jsdom paces them at 16 ms) and the studio waits 0 ms after the app's composer
+  // focus retries (real: 50 ms), so opening settles within settle(); the focus-retry test proves the order.
+  g.requestAnimationFrame = fn => setTimeout(() => fn(Date.now()), 0)
+  g.cancelAnimationFrame = id => clearTimeout(id)
+  g.__promptStudioFocusSettleMs = 0
   // React's scheduler and act() queue work on MessageChannel ports, which keep node:test from
   // exiting. Track every port so after() can close them.
   const RealChannel = globalThis.MessageChannel
@@ -151,7 +156,16 @@ export const host = {
       await globalThis.__promptStudioComposerGate
       if (globalThis.__promptStudioSetDraftFails) return false
       this.writes.push({ sessionId, text })
-      document.querySelector('[data-slot="composer-rich-input"]').textContent = text
+      const editor = document.querySelector('[data-slot="composer-rich-input"]')
+      editor.textContent = text
+      // Like the app (use-composer-draft paintDraft -> focus request -> effect -> focusComposerInput):
+      // after the reply, the composer takes the focus now, on the next frame and on a 0 ms timer.
+      setTimeout(() => {
+        const focus = () => { if (document.activeElement !== editor) editor.focus() }
+        focus()
+        requestAnimationFrame(focus)
+        setTimeout(focus, 0)
+      }, 0)
       return true
     },
     submit(sessionId, text) { this.submits.push({ sessionId, text }); return this.submitResult },
@@ -1874,5 +1888,18 @@ test('SDK composer: a second Alt+E or F9, or Close, while the prompt is being pl
   assert.deepEqual(composer().writes.map(w => w.text), [prompt], 'one write: the prompt, never the old draft')
   assert.equal(draft(), prompt)
   assert.equal(composer().submits.length, 0, 'F9 ignored while placing')
+})
+
+test('SDK composer: the composer focus retries after setDraft do not take the focus back from the studio', { skip }, async () => {
+  $('[data-slot="composer-rich-input"]').textContent = INTENT
+  $('[data-slot="composer-rich-input"]').focus()
+  await press('F4')
+  await waitFor(() => $('[data-studio-strip]'))
+  // Let every deferred retry (0 ms timers and animation frames) run.
+  await ui.act(async () => { await new Promise(resolve => setTimeout(resolve, 120)) })
+  await settle()
+  const strip = $('[data-studio-strip]')
+  assert.ok(strip && strip.contains(document.activeElement), 'focus stays in the studio')
+  await click('[data-studio-cancel]')
 })
 

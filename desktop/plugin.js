@@ -2065,6 +2065,17 @@ function askNext() {
 // Session focused when the Studio opened; F9 sends only there (see sendPreview).
 let openedSessionId = null
 
+// Resolves after two animation frames and a short timer: later than the app's deferred composer-focus
+// retries (the focus effect may run after a paint, then retries on the next frame and a 0 ms timer).
+const FOCUS_SETTLE_MS = 50
+function hostFocusSettled() {
+  return new Promise(resolve => {
+    const done = () => later(resolve, globalThis.__promptStudioFocusSettleMs ?? FOCUS_SETTLE_MS)
+    if (typeof requestAnimationFrame !== 'function') return done()
+    requestAnimationFrame(() => requestAnimationFrame(done))
+  })
+}
+
 // One opening and one placement at a time: host.composer calls are async.
 let starting = false
 let placing = false
@@ -2091,11 +2102,13 @@ async function startFromComposer() {
       host.notify({ kind: 'warning', message: tr('notify.short') })
       return
     }
-    // setDraft focuses the composer it paints; useStudioFocus then moves the focus into the studio.
     if (!(await composerAdapter.writeDraft(''))) {
       host.notify({ kind: 'error', message: tr('notify.clearFailed') })
       return
     }
+    // setDraft makes the app focus the composer it painted, now and again on a later frame and timer
+    // (focusComposerInput). The studio opens only after those retries, so its focus is not taken back.
+    await hostFocusSettled()
     if ($studio.get().status !== 'idle') return
     suggestionCache.clear()
     $helpOpen.set(false)
