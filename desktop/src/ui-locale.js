@@ -69,10 +69,11 @@ const composerAdapter = {
     }
   },
 
-  async writeDraft(text) {
+  // sessionId null = the composer in use; a session id = that session's composer (false when not mounted).
+  async writeDraft(text, sessionId = null) {
     if (!this.available()) return false
     try {
-      return (await host.composer.setDraft(null, text)) === true
+      return (await host.composer.setDraft(sessionId, text)) === true
     } catch {
       return false
     }

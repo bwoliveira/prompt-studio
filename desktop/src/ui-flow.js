@@ -40,6 +40,8 @@ async function startFromComposer() {
     return
   }
   starting = true
+  // F9 sends only into the session the Studio was opened in (see sendPreview): taken before any await.
+  const originSessionId = focusedSession()
   try {
     const draft = await composerAdapter.readDraft()
     if (draft === null) {
@@ -55,6 +57,7 @@ async function startFromComposer() {
       host.notify({ kind: 'warning', message: tr('notify.short') })
       return
     }
+    if (focusedSession() !== originSessionId) return
     if (!(await composerAdapter.writeDraft(''))) {
       host.notify({ kind: 'error', message: tr('notify.clearFailed') })
       return
@@ -63,18 +66,42 @@ async function startFromComposer() {
     // (focusComposerInput). The studio opens only after those retries, so its focus is not taken back.
     await hostFocusSettled()
     if ($studio.get().status !== 'idle') return
+    // The user switched conversations while it opened: the draft goes back where it came from, never
+    // into the conversation now on screen.
+    if (focusedSession() !== originSessionId) {
+      await returnDraftTo(originSessionId, draft)
+      return
+    }
     suggestionCache.clear()
     $helpOpen.set(false)
     // Settings are read from storage on every opening (storage is the source of truth).
     loadSettings()
-    // F9 sends only into the session the Studio was opened in (see sendPreview).
-    openedSessionId = host.state?.focusedSessionId?.get?.() ?? null
+    openedSessionId = originSessionId
     update({ type: 'START', intent })
     startContextRead()
     askNext()
   } finally {
     starting = false
   }
+}
+
+function focusedSession() {
+  return host.state?.focusedSessionId?.get?.() ?? null
+}
+
+// Back into its own session's composer; if that one is not on screen any more, to the clipboard.
+async function returnDraftTo(sessionId, draft) {
+  if (sessionId !== null && (await composerAdapter.writeDraft(draft, sessionId))) {
+    host.notify({ kind: 'info', message: tr('notify.sessionChanged') })
+    return
+  }
+  let copied = false
+  try {
+    copied = (await pluginContext?.os?.writeClipboard?.(draft)) === true
+  } catch {
+    copied = false
+  }
+  host.notify(copied ? { kind: 'warning', message: tr('notify.sessionChangedCopied') } : { kind: 'error', message: tr('notify.restoreFailed') })
 }
 
 function unknownOption(current) {

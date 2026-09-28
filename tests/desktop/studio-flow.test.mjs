@@ -155,6 +155,13 @@ export const host = {
     async setDraft(sessionId, text) {
       await globalThis.__promptStudioComposerGate
       if (globalThis.__promptStudioSetDraftFails) return false
+      // A session address reaches only a mounted composer (the app answers false otherwise); the test
+      // composer element shows the focused session, so a write to another session does not touch it.
+      if (sessionId !== null) {
+        if (globalThis.__promptStudioSessionUnmounted) return false
+        this.writes.push({ sessionId, text })
+        return true
+      }
       this.writes.push({ sessionId, text })
       const editor = document.querySelector('[data-slot="composer-rich-input"]')
       editor.textContent = text
@@ -220,7 +227,7 @@ export { jsx } from 'react/jsx-runtime'
   const realDocumentAdd = document.addEventListener
   window.addEventListener = (...args) => { addSpy.window += 1; return realWindowAdd(...args) }
   document.addEventListener = (...args) => { addSpy.document += 1; return realDocumentAdd.apply(document, args) }
-  mod.plugin.register({
+  const pluginContext = {
     i18n: { register(bundles) { Object.assign(mod.i18n.bundles, bundles); return () => {} }, t: mod.translate, onLocaleChange: () => () => {} },
     storage,
     addEventListener(target, type, listener, options) {
@@ -241,6 +248,7 @@ export { jsx } from 'react/jsx-runtime'
       return clear
     },
     onDispose(fn) { disposers.push(fn) },
+    os: { clipboard: [], async writeClipboard(text) { this.clipboard.push(text); return true } },
     registerMany(items) { for (const item of items) slots[item.area] = item },
     async rest(path, { body }) {
       backend.calls.push({ path, body })
@@ -248,7 +256,8 @@ export { jsx } from 'react/jsx-runtime'
       if (!handler) throw new Error(`HTTP 404 ${path}`)
       return handler(body)
     }
-  })
+  }
+  mod.plugin.register(pluginContext)
   window.addEventListener = realWindowAdd
   document.addEventListener = realDocumentAdd
   const roots = [mod.createRoot(document.getElementById('top')), mod.createRoot(document.getElementById('actions'))]
@@ -256,7 +265,7 @@ export { jsx } from 'react/jsx-runtime'
     roots[0].render(mod.jsx(() => slots.top.render(), {}))
     roots[1].render(mod.jsx(() => slots.actions.render(), {}))
   })
-  ui = { ...mod, roots, dom, storage, listeners, addSpy, slots, disposers, timers }
+  ui = { ...mod, roots, dom, storage, listeners, addSpy, slots, disposers, timers, pluginContext }
 })
 
 after(async () => {
@@ -1901,5 +1910,49 @@ test('SDK composer: the composer focus retries after setDraft do not take the fo
   const strip = $('[data-studio-strip]')
   assert.ok(strip && strip.contains(document.activeElement), 'focus stays in the studio')
   await click('[data-studio-cancel]')
+})
+
+// Switch the focused session while the Studio is opening (during the wait for the app's focus retries).
+async function openWhileSwitching() {
+  resetComposer()
+  backend.calls.length = 0
+  ui.notifications.length = 0
+  globalThis.__promptStudioFocusSettleMs = 40
+  try {
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    await press('F4')
+    ui.host.state.focusedSessionId.set('sess-other')
+    await ui.act(async () => { await new Promise(resolve => setTimeout(resolve, 120)) })
+    await settle()
+  } finally {
+    globalThis.__promptStudioFocusSettleMs = 0
+  }
+}
+
+test('SDK composer: switching conversations while the Studio opens returns the draft to its own conversation', { skip }, async () => {
+  try {
+    await openWhileSwitching()
+    assert.ok($('[data-studio-strip]') === null, 'studio not opened on the other conversation')
+    assert.deepEqual(composer().writes.at(-1), { sessionId: 'sess-live', text: INTENT }, 'draft back to its session')
+    assert.ok(ui.notifications.some(n => n.message === ui.i18n.bundles.en.notify.sessionChanged))
+    assert.equal(backend.calls.length, 0, 'no context read of the other conversation')
+  } finally {
+    ui.host.state.focusedSessionId.set('sess-live')
+  }
+})
+
+test('SDK composer: when the original conversation is not on screen any more the draft is copied to the clipboard', { skip }, async () => {
+  globalThis.__promptStudioSessionUnmounted = true
+  const clipboard = ui.pluginContext.os.clipboard
+  clipboard.length = 0
+  try {
+    await openWhileSwitching()
+    assert.ok($('[data-studio-strip]') === null, 'studio not opened')
+    assert.deepEqual(clipboard, [INTENT])
+    assert.ok(ui.notifications.some(n => n.message === ui.i18n.bundles.en.notify.sessionChangedCopied))
+  } finally {
+    globalThis.__promptStudioSessionUnmounted = false
+    ui.host.state.focusedSessionId.set('sess-live')
+  }
 })
 
