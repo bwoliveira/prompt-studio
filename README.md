@@ -32,7 +32,8 @@ The two prompt engines were written for this plugin from the official Anthropic 
 ## Requirements
 
 - Hermes 0.20.0 or later (`requires_hermes: ">=0.20.0"` in `plugin.yaml`), with Hermes Desktop.
-  Checked against the Desktop SDK exports of 0.20.0 through 0.21.5 (run for real on 0.21.5 only); on Desktops
+  Checked against the Desktop SDK export lists of 0.20.0 and 0.21.4 and a simulated older SDK, and run for real
+  on 0.21.5 only; on Desktops
   before 0.21.5, whose SDK lacks `ListRow`/`ToggleRow`, the Settings dialog uses built-in fallback rows.
 - The `hermes` CLI on `PATH`, or its path in `HERMES_BIN`.
 - Python 3.12 or later for the installer (set `PYTHON_BIN` to pick an interpreter).
@@ -48,7 +49,8 @@ Install it with the Hermes plugin command, run on the machine where the Hermes b
 hermes plugins install bwoliveira/prompt-studio --enable
 ```
 
-Without `--enable`, Hermes asks `Enable 'prompt-studio' now? [y/N]`; `--no-enable` installs it disabled.
+Without `--enable`, Hermes asks `Enable 'prompt-studio' now? [y/N]` in an interactive terminal (otherwise the
+plugin stays disabled); `--no-enable` installs it disabled.
 For a reproducible install, pin a full 40-character commit SHA (tags, branches and short SHAs are not
 accepted):
 
@@ -129,8 +131,8 @@ Every control shows its key next to its label. Keys work with the cursor in the 
 | F1 | Show or hide the list of shortcuts |
 | F3 | Settings: models, session context, language |
 | F5 | Accept the recommended choice, or confirm what you typed |
-| F6 | Skip / I don't have one |
-| F7 | Use the AI suggestion (it goes into the field; F5 then confirms it) |
+| F6 | Skip, I don't have one, or use the default |
+| F7 | Use the AI suggestion (text goes into the field for F5 to confirm; if the AI offers the default, F7 accepts it) |
 | F8 | Back / undo the edit / back to the steps |
 | F9 | Generate the prompt; on the preview, send it now |
 | F10 | Close and return the draft |
@@ -281,7 +283,14 @@ The two models need different prompts, and the engines follow each vendor's guid
 - **SDK only:** the Desktop half imports only `@hermes/plugin-sdk` and `react`.
 - **Host-tracked resources:** the key listener goes through `ctx.addEventListener`, preferences through
   `ctx.storage`, text through `ctx.i18n`, and colours through theme variables.
-- **Declared capabilities match reality:** no tools, hooks, middleware or environment variables.
+- **Declared capabilities match reality:** the agent half declares no tools, hooks, middleware or environment
+  variables; the Desktop half adds only a composer guard that blocks a blank send while the Studio is open.
+- **Model calls:** the backend delegates provider calls and credential resolution to Hermes's auxiliary client,
+  routed by the plugin's own `prompt_studio` task. Prompt Studio does not ask for API keys or store them in its own
+  settings. It does not use `ctx.llm`
+  yet: in Hermes 0.21.5 `ctx.llm.complete()` has no reasoning-effort option and denies a per-call `model=` unless
+  the operator sets `plugins.entries.prompt-studio.llm.allow_model_override`, so the questions and context models
+  chosen in Settings would stop working on a default install.
 - **No self-updating code:** updates come only through `hermes plugins update` or a new catalog pin.
 - **Installed with the Hermes CLI:** `hermes plugins install bwoliveira/prompt-studio`; `install.sh` changes
   configuration only through `hermes plugins enable` and `hermes config set`.
@@ -308,7 +317,7 @@ python3 scripts/docs_sources.py check --docs-dir <snapshot dir>   # every doc qu
 - The official doc snapshots used by `docs_sources.py` live outside the repository; see `docs/sources/README.md`.
 - `.gitattributes` keeps every text file with LF line endings, also on Windows checkouts, so
   `node scripts/build.mjs --check` compares the same bytes on every system.
-- Pull requests: `AGENTS.md` has the flow. First Bruno's `/review` in the Hermes session, then `bin/pr`, which runs
+- Pull requests: `AGENTS.md` has the flow. First the maintainer's `/review` in the Hermes session, then `bin/pr`, which runs
   the local Codex review (`bin/review`, Codex CLI); with no P0, P1 or P2 it pushes, opens the PR and merges it. Its tests:
   `node --test bin/lib/local-review.test.mjs`.
 - Secret scanning: run `gitleaks` over the full history. `.gitleaksignore` lists the only accepted findings,
