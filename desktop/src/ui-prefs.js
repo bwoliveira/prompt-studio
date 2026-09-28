@@ -113,7 +113,7 @@ const AUTO_SUGGEST_DELAY_MS = 400
 let autoSuggestTimer = null
 
 function cancelAutoSuggestion() {
-  if (autoSuggestTimer !== null) clearTimeout(autoSuggestTimer)
+  if (autoSuggestTimer !== null) autoSuggestTimer()
   autoSuggestTimer = null
 }
 
@@ -122,7 +122,7 @@ function scheduleAutoSuggestion() {
   const key = questionKey($studio.get())
   const delay = globalThis.__promptStudioAutoSuggestDelayMs ?? AUTO_SUGGEST_DELAY_MS
   const serial = suggestSerial
-  autoSuggestTimer = setTimeout(async () => {
+  autoSuggestTimer = later(async () => {
     autoSuggestTimer = null
     // A pending session context read comes first (it has its own deadline); manual asks never wait.
     if (contextPromise) await contextPromise

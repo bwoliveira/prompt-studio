@@ -134,3 +134,11 @@ export function reduceStudio(state, action) {
 const $studio = atom(initialStudioState())
 let pluginContext = null
 
+// Timers go through ctx.setTimeout so the host clears them on dispose (SDK pitfall: bare globals are
+// not tracked). It returns a disposer. Plain global only when the host has no ctx.setTimeout.
+function later(fn, ms) {
+  if (typeof pluginContext?.setTimeout === 'function') return pluginContext.setTimeout(fn, ms)
+  const id = setTimeout(fn, ms)
+  return () => clearTimeout(id)
+}
+
