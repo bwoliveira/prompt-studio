@@ -2,7 +2,7 @@
 
 Versions come from the commit subjects; releases from 1.6.0 on are also git tags. Newest first.
 
-## Unreleased
+## 1.7.1
 
 - Desktop: the request deadline and the auto-suggestion delay now use the host-tracked `ctx.setTimeout`, so
   Hermes clears them when the plugin is disabled or reloaded (it falls back to the global timer on hosts without it).
