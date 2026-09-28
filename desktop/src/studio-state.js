@@ -130,6 +130,9 @@ export function reduceStudio(state, action) {
 // @core-end
 
 const $studio = atom(initialStudioState())
+// True while the preview's prompt is being written into the composer (host.composer is async): the studio
+// is frozen until the write settles, so the placed prompt and the studio state cannot diverge.
+const $placing = atom(false)
 let pluginContext = null
 
 // Timers go through ctx.setTimeout so the host clears them on dispose (SDK pitfall: bare globals are

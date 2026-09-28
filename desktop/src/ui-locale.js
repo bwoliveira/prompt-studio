@@ -70,6 +70,16 @@ const composerAdapter = {
   },
 
   // sessionId null = the composer in use; a session id = that session's composer (false when not mounted).
+  // Appends to the composer in use (a paragraph after what is there): never replaces someone's draft.
+  async appendDraft(text) {
+    if (typeof host.composer?.insertText !== 'function') return false
+    try {
+      return (await host.composer.insertText(null, text, { mode: 'block' })) === true
+    } catch {
+      return false
+    }
+  },
+
   async writeDraft(text, sessionId = null) {
     if (!this.available()) return false
     try {
@@ -81,6 +91,7 @@ const composerAdapter = {
 }
 
 function update(action) {
+  if ($placing.get() && action.type !== 'RESET') return
   $studio.set(reduceStudio($studio.get(), action))
 }
 

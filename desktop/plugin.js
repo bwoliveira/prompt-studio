@@ -1249,7 +1249,7 @@ const UI_MESSAGES = {
       restoreFailed: 'Could not return the draft to the message field.',
       sessionChanged: 'You switched conversations while Prompt Studio was opening; the draft went back to its conversation.',
       sessionChangedCopied: 'You switched conversations while Prompt Studio was opening; the draft was copied to the clipboard.',
-      sessionChangedHere: 'You switched conversations while Prompt Studio was opening; the draft is in this message field, not sent.',
+      sessionChangedHere: 'You switched conversations while Prompt Studio was opening; the draft was added below the text in this message field, not sent.',
       sessionChangedLost: draft => `You switched conversations while Prompt Studio was opening and the draft could not be put back. Your draft: ${draft}`,
       placeFailed: 'Could not place the prompt in the message field.',
       placedNotSent: 'The prompt was placed in the message field but not sent (Hermes is busy). Send it when ready.',
@@ -1461,7 +1461,7 @@ const UI_MESSAGES = {
       restoreFailed: 'Não foi possível devolver o rascunho ao campo de mensagem.',
       sessionChanged: 'Você trocou de conversa enquanto o Prompt Studio abria; o rascunho voltou para a conversa dele.',
       sessionChangedCopied: 'Você trocou de conversa enquanto o Prompt Studio abria; o rascunho foi copiado para a área de transferência.',
-      sessionChangedHere: 'Você trocou de conversa enquanto o Prompt Studio abria; o rascunho está neste campo de mensagem, sem enviar.',
+      sessionChangedHere: 'Você trocou de conversa enquanto o Prompt Studio abria; o rascunho foi acrescentado abaixo do texto deste campo de mensagem, sem enviar.',
       sessionChangedLost: draft => `Você trocou de conversa enquanto o Prompt Studio abria e não foi possível devolver o rascunho. Seu rascunho: ${draft}`,
       placeFailed: 'Não foi possível colocar o prompt no campo de mensagem.',
       placedNotSent: 'O prompt foi colocado no campo de mensagem, mas não enviado (o Hermes está ocupado). Envie quando quiser.',
@@ -1784,6 +1784,9 @@ export function reduceStudio(state, action) {
 // @core-end
 
 const $studio = atom(initialStudioState())
+// True while the preview's prompt is being written into the composer (host.composer is async): the studio
+// is frozen until the write settles, so the placed prompt and the studio state cannot diverge.
+const $placing = atom(false)
 let pluginContext = null
 
 // Timers go through ctx.setTimeout so the host clears them on dispose (SDK pitfall: bare globals are
@@ -1866,6 +1869,16 @@ const composerAdapter = {
   },
 
   // sessionId null = the composer in use; a session id = that session's composer (false when not mounted).
+  // Appends to the composer in use (a paragraph after what is there): never replaces someone's draft.
+  async appendDraft(text) {
+    if (typeof host.composer?.insertText !== 'function') return false
+    try {
+      return (await host.composer.insertText(null, text, { mode: 'block' })) === true
+    } catch {
+      return false
+    }
+  },
+
   async writeDraft(text, sessionId = null) {
     if (!this.available()) return false
     try {
@@ -1877,6 +1890,7 @@ const composerAdapter = {
 }
 
 function update(action) {
+  if ($placing.get() && action.type !== 'RESET') return
   $studio.set(reduceStudio($studio.get(), action))
 }
 
@@ -2087,7 +2101,6 @@ function hostFocusSettled() {
 
 // One opening and one placement at a time: host.composer calls are async.
 let starting = false
-let placing = false
 
 async function startFromComposer() {
   if ($studio.get().status !== 'idle' || starting) return
@@ -2146,7 +2159,8 @@ function focusedSession() {
 }
 
 // The composer was already emptied, so the draft must land somewhere: its own session's composer; else the
-// clipboard; else the composer now in use (not sent); else the error notice carries the text itself.
+// clipboard; else appended to the composer now in use (its own draft kept, nothing sent); else the error
+// notice carries the text itself.
 async function returnDraftTo(sessionId, draft) {
   if (sessionId !== null && (await composerAdapter.writeDraft(draft, sessionId))) {
     host.notify({ kind: 'info', message: tr('notify.sessionChanged') })
@@ -2162,7 +2176,7 @@ async function returnDraftTo(sessionId, draft) {
     host.notify({ kind: 'warning', message: tr('notify.sessionChangedCopied') })
     return
   }
-  if (await composerAdapter.writeDraft(draft)) {
+  if (await composerAdapter.appendDraft(draft)) {
     host.notify({ kind: 'warning', message: tr('notify.sessionChangedHere') })
     return
   }
@@ -2231,7 +2245,7 @@ function goBack() {
 function cancelStudio() {
   const state = $studio.get()
   // While the prompt is being placed, Close would race it and put the old draft over the prompt.
-  if (state.status === 'idle' || placing) return
+  if (state.status === 'idle' || $placing.get()) return
   clearSuggestion()
   composeSerial += 1
   stopContextRead()
@@ -2381,15 +2395,15 @@ async function generatePrompt() {
 
 async function usePreview() {
   const state = $studio.get()
-  if (state.status !== 'preview' || !state.preview || placing) return
-  placing = true
+  if (state.status !== 'preview' || !state.preview || $placing.get()) return
+  $placing.set(true)
   try {
     if (!(await composerAdapter.writeDraft(state.preview[state.preview.showing]))) {
       host.notify({ kind: 'error', message: tr('notify.placeFailed') })
       return
     }
   } finally {
-    placing = false
+    $placing.set(false)
   }
   if ($studio.get() !== state) return
   stopContextRead()
@@ -2404,7 +2418,7 @@ async function usePreview() {
 // changed since opening, it is not sent either (it would land in another conversation).
 async function sendPreview() {
   const state = $studio.get()
-  if (state.status !== 'preview' || !state.preview || placing) return
+  if (state.status !== 'preview' || !state.preview || $placing.get()) return
   const text = state.preview[state.preview.showing]
   const sessionId = host.state?.focusedSessionId?.get?.() ?? null
   let sent = false
@@ -2414,14 +2428,14 @@ async function sendPreview() {
     sent = false
   }
   if (!sent) {
-    placing = true
+    $placing.set(true)
     try {
       if (!(await composerAdapter.writeDraft(text))) {
         host.notify({ kind: 'error', message: tr('notify.placeFailed') })
         return
       }
     } finally {
-      placing = false
+      $placing.set(false)
     }
     host.notify({ kind: 'info', message: tr('notify.placedNotSent') })
   }
@@ -3061,6 +3075,7 @@ function DoneRow() {
 
 function PreviewPanel({ state }) {
   const t = useT()
+  const placing = useValue($placing)
   const { ai, engine, showing, note, noteDetail } = state.preview
   const prompt = state.preview[showing]
   const failed = !ai && Boolean(note)
@@ -3081,19 +3096,20 @@ function PreviewPanel({ state }) {
       jsxs('div', {
         style: { display: 'flex', flexWrap: 'wrap', gap: '6px' },
         children: [
-          jsx(Button, { variant: 'primary', data: { 'data-studio-send-prompt': true }, onClick: sendPreview, title: t('preview.sendTitle'), keyHint: 'F9', children: t('preview.send') }),
-          jsx(Button, { data: { 'data-studio-use-prompt': true }, onClick: usePreview, title: t('preview.editTitle'), keyHint: 'Alt+E', children: t('preview.edit') }),
+          jsx(Button, { variant: 'primary', data: { 'data-studio-send-prompt': true }, onClick: sendPreview, disabled: placing, title: t('preview.sendTitle'), keyHint: 'F9', children: t('preview.send') }),
+          jsx(Button, { data: { 'data-studio-use-prompt': true }, onClick: usePreview, disabled: placing, title: t('preview.editTitle'), keyHint: 'Alt+E', children: t('preview.edit') }),
           ai && engine
             ? jsx(Button, {
                 data: { 'data-studio-switch-version': true },
+                disabled: placing,
                 onClick: () => update({ type: 'SHOW_VERSION', version: showing === 'ai' ? 'engine' : 'ai' }),
                 title: t('preview.switchTitle'),
                 keyHint: 'Alt+V',
                 children: showing === 'ai' ? t('preview.showEngine') : t('preview.showAi')
               })
             : null,
-          jsx(Button, { data: { 'data-studio-back-to-steps': true }, onClick: () => update({ type: 'BACK_TO_STEPS' }), keyHint: 'F8', children: t('preview.backToSteps') }),
-          jsx(Button, { data: { 'data-studio-cancel': true }, onClick: cancelStudio, title: t('actions.cancelTitle'), keyHint: 'F10', children: t('actions.cancel') })
+          jsx(Button, { data: { 'data-studio-back-to-steps': true }, disabled: placing, onClick: () => update({ type: 'BACK_TO_STEPS' }), keyHint: 'F8', children: t('preview.backToSteps') }),
+          jsx(Button, { data: { 'data-studio-cancel': true }, onClick: cancelStudio, disabled: placing, title: t('actions.cancelTitle'), keyHint: 'F10', children: t('actions.cancel') })
         ]
       }),
       // host.composer.submit sends text only; attachments stay in the composer (see sendPreview).

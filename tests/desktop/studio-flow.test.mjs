@@ -175,6 +175,16 @@ export const host = {
       }, 0)
       return true
     },
+    inserts: [],
+    // insertText appends a paragraph to the composer in use (block mode), keeping what is there.
+    async insertText(sessionId, text, opts) {
+      await globalThis.__promptStudioComposerGate
+      if (globalThis.__promptStudioSetDraftFails) return false
+      this.inserts.push({ sessionId, text, mode: opts?.mode })
+      const editor = document.querySelector('[data-slot="composer-rich-input"]')
+      editor.textContent = editor.textContent ? editor.textContent + String.fromCharCode(10) + text : text
+      return true
+    },
     submit(sessionId, text) { this.submits.push({ sessionId, text }); return this.submitResult },
     focus(sessionId) { this.focuses.push(sessionId) }
   },
@@ -1575,7 +1585,7 @@ test('CX-1: language "pt" with Hermes in English shows Portuguese strings and qu
 
 // ---------------------------------------------------------------- final step: send now (F9) or edit first (Alt+E)
 const composer = () => ui.host.composer
-function resetComposer() { composer().submits.length = 0; composer().focuses.length = 0; composer().writes.length = 0; composer().submitResult = true }
+function resetComposer() { composer().submits.length = 0; composer().focuses.length = 0; composer().writes.length = 0; composer().inserts.length = 0; composer().submitResult = true }
 async function toPreview() {
   resetComposer()
   await freshSettings(null)
@@ -1956,16 +1966,27 @@ test('SDK composer: when the original conversation is not on screen any more the
   }
 })
 
-test('SDK composer: original conversation gone and clipboard refused: the draft goes to the composer in use, not sent', { skip }, async () => {
+test('SDK composer: original conversation gone and clipboard refused: the draft is added below the other conversation draft', { skip }, async () => {
   globalThis.__promptStudioSessionUnmounted = true
   globalThis.__promptStudioClipboardFails = true
   try {
-    await openWhileSwitching()
+    resetComposer()
+    ui.notifications.length = 0
+    globalThis.__promptStudioFocusSettleMs = 40
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    await press('F4')
+    // The user lands on conversation B, which has its own unsent draft.
+    ui.host.state.focusedSessionId.set('sess-other')
+    await ui.act(async () => { $('[data-slot="composer-rich-input"]').textContent = 'rascunho da conversa B' })
+    await ui.act(async () => { await new Promise(resolve => setTimeout(resolve, 120)) })
+    await settle()
     assert.ok($('[data-studio-strip]') === null, 'studio not opened')
-    assert.equal(draft(), INTENT, 'draft in the composer on screen')
+    assert.equal(draft(), `rascunho da conversa B\n${INTENT}`, "B's draft kept, A's draft added below")
+    assert.deepEqual(composer().inserts, [{ sessionId: null, text: INTENT, mode: 'block' }])
     assert.equal(composer().submits.length, 0, 'not sent')
     assert.ok(ui.notifications.some(n => n.message === ui.i18n.bundles.en.notify.sessionChangedHere))
   } finally {
+    globalThis.__promptStudioFocusSettleMs = 0
     globalThis.__promptStudioSessionUnmounted = false
     globalThis.__promptStudioClipboardFails = false
     ui.host.state.focusedSessionId.set('sess-live')
@@ -1995,5 +2016,24 @@ test('SDK composer: when every place refuses the draft, the error notice carries
     globalThis.__promptStudioClipboardFails = false
     ui.host.state.focusedSessionId.set('sess-live')
   }
+})
+
+test('SDK composer: while the prompt is being placed, Alt+V and Back to steps do nothing and the buttons are disabled', { skip }, async () => {
+  backend.compose = () => ({ ok: true, prompt: 'PROMPT DA IA', notes: 'ok' })
+  await toPreview()
+  resetComposer()
+  const release = holdComposer()
+  const prompt = $('[data-studio-preview-text]').textContent
+  await press('Alt+E')
+  for (const sel of ['[data-studio-send-prompt]', '[data-studio-use-prompt]', '[data-studio-back-to-steps]', '[data-studio-cancel]']) {
+    assert.equal($(sel).disabled, true, `${sel} disabled while placing`)
+  }
+  if ($('[data-studio-switch-version]')) assert.equal($('[data-studio-switch-version]').disabled, true)
+  await press('Alt+V')
+  await press('F8')
+  await release()
+  await waitFor(() => $('[data-studio-strip]') === null)
+  assert.equal(draft(), prompt, 'the prompt shown when Alt+E was pressed is placed and the studio closed')
+  assert.deepEqual(composer().writes.map(w => w.text), [prompt])
 })
 
