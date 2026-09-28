@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Local Codex review before the push (bin/review): runs the Codex CLI over the branch diff against main and
-// blocks on P0, P1 or P2. Ported from the Compass project's bin/review; see AGENTS.md ("Two reviews before a PR").
+// blocks on P0, P1 or P2. Ported from the Compass project's bin/review; see AGENTS.md ("Pull requests").
 import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';

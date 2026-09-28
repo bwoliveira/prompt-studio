@@ -222,10 +222,19 @@ test('entry: a cached approval does not count if HEAD moved after it was capture
   assert.equal(r.calls.length, 0);
 });
 
-test('AGENTS.md asks Bruno for /review before the Codex review and sends fixes through bin/pr', () => {
+test('AGENTS.md has the agent fire /review and follow the Codex review itself, fixes through bin/pr', () => {
   const agents = readFileSync(new URL('../../AGENTS.md', import.meta.url), 'utf8');
-  assert.match(agents, /ask Bruno to type `\/review`/);
-  assert.match(agents, /does not replace it with a subagent review/);
+  assert.doesNotMatch(agents, /ask Bruno[^.]*`\/review`/);
+  assert.match(agents, /not live in the dashboard backend/);
+  assert.match(agents, /comes back a third time/);
+  const readme = readFileSync(new URL('../../README.md', import.meta.url), 'utf8');
+  assert.match(readme, /The agent fires the Hermes `\/review` itself/);
+  assert.match(agents, /fires `\/review` itself with\s+the `hermes-review` helper/);
+  assert.match(agents, /HERMES_SLASH_DIR/);
+  assert.match(agents, /when the helper is not installed or not executable/);
+  assert.match(agents, /skill `pr-review-autopilot`/);
+  assert.match(agents, /loop every five minutes/);
+  assert.match(agents, /until the review reports none and the PR is merged/);
   assert.match(agents, /never\s+a plain `git push`/);
   assert.match(agents, /merges it \(squash, only the reviewed commit\) without\s+waiting for Bruno/);
   const pr = readFileSync(new URL('../pr', import.meta.url), 'utf8');
