@@ -2284,3 +2284,20 @@ test('SDK composer: disabled while the composer is being cleared, a refused rest
   }
 })
 
+test('SDK composer: a composer whose draft cannot be read gets the prompt appended, never written over', { skip }, async () => {
+  await toPreview()
+  resetComposer()
+  const prompt = $('[data-studio-preview-text]').textContent
+  await ui.act(async () => { $('[data-slot="composer-rich-input"]').textContent = 'texto que ninguém leu' })
+  const getDraft = composer().getDraft
+  composer().getDraft = async () => null
+  try {
+    await click('[data-studio-use-prompt]')
+    await waitFor(() => $('[data-studio-strip]') === null)
+  } finally {
+    composer().getDraft = getDraft
+  }
+  assert.equal(draft(), `texto que ninguém leu\n${prompt}`, 'existing text kept, prompt below')
+  assert.equal(composer().writes.length, 0, 'no setDraft over unread text')
+})
+

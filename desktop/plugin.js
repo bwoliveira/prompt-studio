@@ -1917,8 +1917,10 @@ const composerAdapter = {
     } catch {
       current = null
     }
-    const existing = typeof current === 'string' ? current.trim() : ''
-    if (!existing || existing === text.trim()) return this.writeDraft(text, address)
+    // Replace only a composer read as empty (or already holding this text). An unreadable one (null) may
+    // hold a draft, so the text is appended, never written over it.
+    const existing = typeof current === 'string' ? current.trim() : null
+    if (existing === '' || existing === text.trim()) return this.writeDraft(text, address)
     if (typeof host.composer.insertText !== 'function') return false
     try {
       return (await host.composer.insertText(address, text, { mode: 'block' })) === true
