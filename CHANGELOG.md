@@ -6,6 +6,12 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
 
 - Desktop: the request deadline and the auto-suggestion delay now use the host-tracked `ctx.setTimeout`, so
   Hermes clears them when the plugin is disabled or reloaded (it falls back to the global timer on hosts without it).
+- README screenshots retaken from the current interface (question step, final preview, settings); the banner is now
+  a real capture at 1200x600 instead of an illustration with options the Studio does not have.
+- README: the SDK check names what was really checked (export lists of 0.20.0 and 0.21.4, a simulated older SDK,
+  a real run on 0.21.5); the install prompt appears only in an interactive terminal; F6 and F7 list every case
+  they handle; the capabilities note mentions the Desktop composer guard.
+- README: why model calls go through the Hermes auxiliary client and not `ctx.llm` yet.
 
 ## 1.7.0
 
