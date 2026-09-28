@@ -2037,3 +2037,46 @@ test('SDK composer: while the prompt is being placed, Alt+V and Back to steps do
   assert.deepEqual(composer().writes.map(w => w.text), [prompt])
 })
 
+// A host dispose (plugin disabled or hot reload): every tracked disposer runs (listeners, timers,
+// onDispose), then the plugin registers again, as the Desktop loader does on reload.
+async function hostReload() {
+  await ui.act(async () => {
+    for (const off of ui.disposers.splice(0)) off()
+    ui.plugin.register(ui.pluginContext)
+  })
+  await ui.act(async () => {
+    ui.roots[0].render(ui.jsx(() => ui.slots.top.render(), {}))
+    ui.roots[1].render(ui.jsx(() => ui.slots.actions.render(), {}))
+  })
+  await settle()
+}
+
+test('SDK composer: a dispose while the Studio is opening gives the draft back to the composer', { skip }, async () => {
+  resetComposer()
+  globalThis.__promptStudioFocusSettleMs = 40
+  try {
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    await press('F4')
+    assert.equal(draft(), '', 'composer emptied, studio not open yet')
+    await hostReload()
+    await ui.act(async () => { await new Promise(resolve => setTimeout(resolve, 120)) })
+    await settle()
+    assert.ok($('[data-studio-strip]') === null, 'the cut-short opening never continues')
+    assert.deepEqual(composer().writes.at(-1), { sessionId: 'sess-live', text: INTENT }, 'draft back in its composer')
+  } finally {
+    globalThis.__promptStudioFocusSettleMs = 0
+  }
+  await openStudio()
+  assert.ok($('[data-studio-strip]'), 'the reloaded plugin opens normally')
+  await click('[data-studio-cancel]')
+})
+
+test('SDK composer: a dispose while the Studio is open gives the draft back to the composer', { skip }, async () => {
+  resetComposer()
+  await openStudio()
+  assert.equal(draft(), '')
+  await hostReload()
+  assert.ok($('[data-studio-strip]') === null, 'studio closed by the dispose')
+  assert.deepEqual(composer().writes.at(-1), { sessionId: 'sess-live', text: INTENT }, 'draft back in its composer')
+})
+

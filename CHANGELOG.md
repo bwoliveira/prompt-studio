@@ -10,6 +10,8 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
 - Attachments are no longer copied by the plugin (the SDK has no attachment API): they stay in the message field.
   **Put in composer to edit** keeps them with the prompt; **Send now** sends only the text, and the preview says so
   in red.
+- The draft is never lost while the Studio opens: switching conversations, disabling or reloading the plugin puts
+  it back in its own conversation's message field (or the clipboard, or below the current draft, never over it).
 - Contributors: `AGENTS.md` now has the agent fire the Hermes `/review` itself and keep fixing the local Codex review
   findings every five minutes until it approves, without the maintainer in the loop.
 

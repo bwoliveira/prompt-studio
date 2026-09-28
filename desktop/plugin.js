@@ -2101,6 +2101,21 @@ function hostFocusSettled() {
 
 // One opening and one placement at a time: host.composer calls are async.
 let starting = false
+// The draft taken out of the composer while the Studio opens (not yet in $studio), and a counter bumped on
+// dispose so an opening cut short by disable or hot reload never continues (see disposeComposerFlow).
+let pendingDraft = null
+let lifecycle = 0
+
+// On dispose the composer gets its draft back, whether the Studio was opening or open.
+function disposeComposerFlow() {
+  lifecycle += 1
+  const state = $studio.get()
+  const lost = pendingDraft ?? (state.status !== 'idle' && state.intent ? { text: state.intent, sessionId: openedSessionId } : null)
+  pendingDraft = null
+  starting = false
+  $placing.set(false)
+  if (lost) composerAdapter.writeDraft(lost.text, lost.sessionId)
+}
 
 async function startFromComposer() {
   if ($studio.get().status !== 'idle' || starting) return
@@ -2109,6 +2124,7 @@ async function startFromComposer() {
     return
   }
   starting = true
+  const generation = lifecycle
   // F9 sends only into the session the Studio was opened in (see sendPreview): taken before any await.
   const originSessionId = focusedSession()
   try {
@@ -2126,15 +2142,25 @@ async function startFromComposer() {
       host.notify({ kind: 'warning', message: tr('notify.short') })
       return
     }
-    if (focusedSession() !== originSessionId) return
+    if (focusedSession() !== originSessionId || generation !== lifecycle) return
     if (!(await composerAdapter.writeDraft(''))) {
       host.notify({ kind: 'error', message: tr('notify.clearFailed') })
       return
     }
+    if (generation !== lifecycle) {
+      composerAdapter.writeDraft(draft, originSessionId)
+      return
+    }
+    pendingDraft = { text: draft, sessionId: originSessionId }
     // setDraft makes the app focus the composer it painted, now and again on a later frame and timer
     // (focusComposerInput). The studio opens only after those retries, so its focus is not taken back.
     await hostFocusSettled()
-    if ($studio.get().status !== 'idle') return
+    if (generation !== lifecycle) return
+    pendingDraft = null
+    if ($studio.get().status !== 'idle') {
+      composerAdapter.writeDraft(draft, originSessionId)
+      return
+    }
     // The user switched conversations while it opened: the draft goes back where it came from, never
     // into the conversation now on screen.
     if (focusedSession() !== originSessionId) {
@@ -3517,6 +3543,7 @@ export default {
   register(ctx) {
     pluginContext = ctx
     ctx.onDispose(() => {
+      disposeComposerFlow()
       cancelAutoSuggestion()
       suggestSerial += 1
       composeSerial += 1

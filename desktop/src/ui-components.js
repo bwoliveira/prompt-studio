@@ -1001,6 +1001,7 @@ export default {
   register(ctx) {
     pluginContext = ctx
     ctx.onDispose(() => {
+      disposeComposerFlow()
       cancelAutoSuggestion()
       suggestSerial += 1
       composeSerial += 1
