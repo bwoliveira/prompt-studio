@@ -109,7 +109,7 @@ after `git pull` to update.
 4. Generate. The preview shows the prompt; switch between the AI version and the version built without AI,
    then **Send now** (F9) to send it at once, or **Put in composer to edit** (Alt+E) to place it in the message field and edit it first.
 
-![The final prompt preview with the AI-written prompt and the Send now (F9), Put in composer to edit (Alt+E), See the version without AI, Back to steps and Cancel buttons](docs/images/step-preview.png)
+![The final prompt preview with the AI-written prompt, the Send now (F9), Put in composer to edit (Alt+E), See the version without AI, Back to steps and Cancel buttons, and the red note that attachments do not go with Send now](docs/images/step-preview.png)
 
 The AI mode (Auto, On request, Off) decides when step suggestions are requested.
 
