@@ -1874,13 +1874,15 @@ const composerAdapter = {
 
   // sessionId null = the composer in use; a session id = that session's composer (false when not mounted).
   // Appends to the composer in use (a paragraph after what is there): never replaces someone's draft.
-  async appendDraft(text) {
-    if (typeof host.composer?.insertText !== 'function') return false
-    try {
-      return (await host.composer.insertText(null, text, { mode: 'block' })) === true
-    } catch {
-      return false
-    }
+  appendDraft(text) {
+    return this.serial(async () => {
+      if (typeof host.composer?.insertText !== 'function') return false
+      try {
+        return (await host.composer.insertText(null, text, { mode: 'block' })) === true
+      } catch {
+        return false
+      }
+    })
   },
 
   async writeDraft(text, sessionId = null) {
@@ -1894,7 +1896,20 @@ const composerAdapter = {
 
   // Puts text into a conversation's composer without ever losing what is there: an empty composer gets the
   // text, one that already holds other text gets it appended below. False when that composer is not on screen.
-  async placeDraft(text, address) {
+  // Serialized with appendDraft: a read-then-write never interleaves with another one, so two placements
+  // (for example a dispose restore during a preview placement) cannot both see an empty composer.
+  placeDraft(text, address) {
+    return this.serial(() => this.placeNow(text, address))
+  },
+
+  queue: Promise.resolve(),
+  serial(task) {
+    const run = this.queue.then(task, task)
+    this.queue = run.then(() => undefined, () => undefined)
+    return run
+  },
+
+  async placeNow(text, address) {
     if (!this.available() || !String(text || '').trim()) return false
     let current = null
     try {
@@ -2130,17 +2145,24 @@ let starting = false
 // dispose so an opening cut short by disable or hot reload never continues (see disposeComposerFlow).
 let pendingDraft = null
 let lifecycle = 0
+// The preview placement in flight (a promise of its success), so a dispose waits for it (see disposeComposerFlow).
+let placement = null
 
 // On dispose the composer gets its draft back, whether the Studio was opening or open.
 function disposeComposerFlow() {
   lifecycle += 1
   const state = $studio.get()
   const lost = pendingDraft ?? (state.status !== 'idle' && state.intent ? { text: state.intent, address: openedAddress } : null)
+  const inFlight = placement
   pendingDraft = null
   starting = false
   $placing.set(false)
+  if (!lost) return
   // pluginContext is cleared right after this; the recovery keeps the clipboard it needs.
-  if (lost) returnDraftTo(lost.address, lost.text, { os: pluginContext?.os, reason: 'closed' })
+  const restore = () => returnDraftTo(lost.address, lost.text, { os: pluginContext?.os, reason: 'closed' })
+  // A prompt being placed wins: the request comes back only if that placement fails.
+  if (inFlight) inFlight.then(ok => { if (!ok) restore() })
+  else restore()
 }
 
 async function startFromComposer() {
@@ -2454,13 +2476,22 @@ async function generatePrompt() {
 // Preview accepted: the prompt goes to the composer (not sent). setDraft replaces only the text,
 // so attachments staged in the composer stay there and go with it.
 
+// The prompt goes into the conversation the Studio was opened in. Tracked in `placement` so a dispose during
+// the write waits for its outcome instead of racing it.
+function placePrompt(text) {
+  const run = composerAdapter.placeDraft(text, openedAddress)
+  placement = run
+  run.finally(() => { if (placement === run) placement = null })
+  return run
+}
+
 async function usePreview() {
   const state = $studio.get()
   if (state.status !== 'preview' || !state.preview || $placing.get()) return
   $placing.set(true)
   try {
     // Into the conversation the Studio was opened in; false (not on screen) keeps the preview open.
-    if (!(await composerAdapter.placeDraft(state.preview[state.preview.showing], openedAddress))) {
+    if (!(await placePrompt(state.preview[state.preview.showing]))) {
       host.notify({ kind: 'error', message: tr('notify.placeFailed') })
       return
     }
@@ -2491,7 +2522,7 @@ async function sendPreview() {
   if (!sent) {
     $placing.set(true)
     try {
-      if (!(await composerAdapter.placeDraft(text, openedAddress))) {
+      if (!(await placePrompt(text))) {
         host.notify({ kind: 'error', message: tr('notify.placeFailed') })
         return
       }

@@ -71,13 +71,15 @@ const composerAdapter = {
 
   // sessionId null = the composer in use; a session id = that session's composer (false when not mounted).
   // Appends to the composer in use (a paragraph after what is there): never replaces someone's draft.
-  async appendDraft(text) {
-    if (typeof host.composer?.insertText !== 'function') return false
-    try {
-      return (await host.composer.insertText(null, text, { mode: 'block' })) === true
-    } catch {
-      return false
-    }
+  appendDraft(text) {
+    return this.serial(async () => {
+      if (typeof host.composer?.insertText !== 'function') return false
+      try {
+        return (await host.composer.insertText(null, text, { mode: 'block' })) === true
+      } catch {
+        return false
+      }
+    })
   },
 
   async writeDraft(text, sessionId = null) {
@@ -91,7 +93,20 @@ const composerAdapter = {
 
   // Puts text into a conversation's composer without ever losing what is there: an empty composer gets the
   // text, one that already holds other text gets it appended below. False when that composer is not on screen.
-  async placeDraft(text, address) {
+  // Serialized with appendDraft: a read-then-write never interleaves with another one, so two placements
+  // (for example a dispose restore during a preview placement) cannot both see an empty composer.
+  placeDraft(text, address) {
+    return this.serial(() => this.placeNow(text, address))
+  },
+
+  queue: Promise.resolve(),
+  serial(task) {
+    const run = this.queue.then(task, task)
+    this.queue = run.then(() => undefined, () => undefined)
+    return run
+  },
+
+  async placeNow(text, address) {
     if (!this.available() || !String(text || '').trim()) return false
     let current = null
     try {

@@ -2180,3 +2180,39 @@ test('SDK composer: with two panes, F4 reads and clears the focused conversation
   }
 })
 
+test('SDK composer: a dispose while the prompt is being placed keeps the prompt and does not bring the request back over it', { skip }, async () => {
+  await toPreview()
+  resetComposer()
+  const prompt = $('[data-studio-preview-text]').textContent
+  const release = holdComposer()
+  await press('Alt+E')
+  await hostReload()
+  await release()
+  await settle()
+  assert.equal(draft(), prompt, 'the placed prompt, alone')
+  assert.ok(!draft().includes(INTENT) || prompt.includes(INTENT), 'the original request was not added')
+})
+
+test('SDK composer: a dispose while a placement that fails is pending brings the request back after it', { skip }, async () => {
+  await toPreview()
+  resetComposer()
+  const release = holdComposer()
+  await press('Alt+E')
+  // The placement is refused (its conversation left the screen); the restore that follows is accepted.
+  let refused = 0
+  const setDraft = composer().setDraft
+  composer().setDraft = async function (sessionId, text) {
+    if (text !== INTENT && refused === 0) { refused += 1; await globalThis.__promptStudioComposerGate; return false }
+    return setDraft.call(this, sessionId, text)
+  }
+  try {
+    await hostReload()
+    await release()
+    await settle()
+  } finally {
+    composer().setDraft = setDraft
+  }
+  assert.equal(refused, 1, 'the placement ran first and was refused')
+  assert.equal(draft(), INTENT, 'then the request came back, not lost')
+})
+
