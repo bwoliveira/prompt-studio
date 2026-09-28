@@ -18,7 +18,9 @@ function askNext() {
 // Session focused when the Studio opened; F9 sends only there (see sendPreview).
 let openedSessionId = null
 
+// One opening and one placement at a time: host.composer calls are async.
 let starting = false
+let placing = false
 
 async function startFromComposer() {
   if ($studio.get().status !== 'idle' || starting) return
@@ -42,7 +44,7 @@ async function startFromComposer() {
       host.notify({ kind: 'warning', message: tr('notify.short') })
       return
     }
-    // Focus goes to the studio (see useStudioFocus), never back to the empty composer.
+    // setDraft focuses the composer it paints; useStudioFocus then moves the focus into the studio.
     if (!(await composerAdapter.writeDraft(''))) {
       host.notify({ kind: 'error', message: tr('notify.clearFailed') })
       return
@@ -123,7 +125,8 @@ function goBack() {
 
 function cancelStudio() {
   const state = $studio.get()
-  if (state.status === 'idle') return
+  // While the prompt is being placed, Close would race it and put the old draft over the prompt.
+  if (state.status === 'idle' || placing) return
   clearSuggestion()
   composeSerial += 1
   stopContextRead()
@@ -270,7 +273,6 @@ async function generatePrompt() {
 
 // Preview accepted: the prompt goes to the composer (not sent). setDraft replaces only the text,
 // so attachments staged in the composer stay there and go with it.
-let placing = false
 
 async function usePreview() {
   const state = $studio.get()

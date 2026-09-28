@@ -140,8 +140,15 @@ export const host = {
     submitResult: true,
     // getDraft/setDraft answer from the test composer element, like the app's mounted surface.
     // Staged attachments live beside the text and are never touched by setDraft.
-    async getDraft(sessionId) { return document.querySelector('[data-slot="composer-rich-input"]')?.textContent ?? null },
+    // __promptStudioComposerGate: a promise the calls wait for (tests of calls still pending).
+    // __promptStudioNoActiveComposer: getDraft answers null, as the SDK does when no composer is active.
+    async getDraft(sessionId) {
+      await globalThis.__promptStudioComposerGate
+      if (globalThis.__promptStudioNoActiveComposer) return null
+      return document.querySelector('[data-slot="composer-rich-input"]')?.textContent ?? null
+    },
     async setDraft(sessionId, text) {
+      await globalThis.__promptStudioComposerGate
       if (globalThis.__promptStudioSetDraftFails) return false
       this.writes.push({ sessionId, text })
       document.querySelector('[data-slot="composer-rich-input"]').textContent = text
@@ -1817,5 +1824,55 @@ test('Attachments: the preview warns in the destructive color that Send now does
   assert.equal(note.textContent, ui.i18n.bundles.en.preview.attachmentsNote)
   assert.match(note.getAttribute('style'), /var\(--dt-destructive\)/)
   await click('[data-studio-cancel]')
+})
+
+test('SDK composer: no active composer (getDraft null) says so instead of "empty", and does not open', { skip }, async () => {
+  globalThis.__promptStudioNoActiveComposer = true
+  try {
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    ui.notifications.length = 0
+    await click('[data-studio-open]')
+    assert.ok($('[data-studio-strip]') === null, 'studio not opened')
+    assert.ok(ui.notifications.some(n => n.kind === 'error' && n.message === ui.i18n.bundles.en.notify.readFailed), 'read-failed note')
+    assert.ok(!ui.notifications.some(n => n.message === ui.i18n.bundles.en.notify.empty), 'not reported as empty')
+  } finally {
+    globalThis.__promptStudioNoActiveComposer = false
+  }
+})
+
+// Holds every host.composer call until release() runs.
+function holdComposer() {
+  let release
+  globalThis.__promptStudioComposerGate = new Promise(resolve => { release = resolve })
+  return async () => { globalThis.__promptStudioComposerGate = undefined; release(); await settle() }
+}
+
+test('SDK composer: F4 pressed again while the draft is being read opens the studio once', { skip }, async () => {
+  resetComposer()
+  $('[data-slot="composer-rich-input"]').textContent = INTENT
+  const release = holdComposer()
+  await press('F4')
+  await press('F4')
+  await release()
+  await waitFor(() => $('[data-studio-strip]'))
+  assert.equal(composer().writes.filter(w => w.text === '').length, 1, 'composer emptied once')
+  await click('[data-studio-cancel]')
+})
+
+test('SDK composer: a second Alt+E or F9, or Close, while the prompt is being placed does nothing', { skip }, async () => {
+  await toPreview()
+  resetComposer()
+  const prompt = $('[data-studio-preview-text]').textContent
+  const release = holdComposer()
+  await press('Alt+E')
+  await press('Alt+E')
+  await press('F10')
+  composer().submitResult = false
+  await press('F9')
+  await release()
+  await waitFor(() => $('[data-studio-strip]') === null)
+  assert.deepEqual(composer().writes.map(w => w.text), [prompt], 'one write: the prompt, never the old draft')
+  assert.equal(draft(), prompt)
+  assert.equal(composer().submits.length, 0, 'F9 ignored while placing')
 })
 

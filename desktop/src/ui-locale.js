@@ -58,10 +58,12 @@ const composerAdapter = {
     return typeof host.composer?.getDraft === 'function' && typeof host.composer?.setDraft === 'function'
   },
 
+  // null = no composer answered (none is active) or the call failed; '' = an empty composer.
   async readDraft() {
     if (!this.available()) return null
     try {
-      return (await host.composer.getDraft(null)) ?? ''
+      const text = await host.composer.getDraft(null)
+      return typeof text === 'string' ? text : null
     } catch {
       return null
     }
