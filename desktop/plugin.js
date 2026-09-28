@@ -2158,8 +2158,9 @@ function disposeComposerFlow() {
   starting = false
   $placing.set(false)
   if (!lost) return
-  // pluginContext is cleared right after this; the recovery keeps the clipboard it needs.
-  const restore = () => returnDraftTo(lost.address, lost.text, { os: pluginContext?.os, reason: 'closed' })
+  // pluginContext is cleared right after this, and restore may run later: take the clipboard API now.
+  const os = pluginContext?.os
+  const restore = () => returnDraftTo(lost.address, lost.text, { os, reason: 'closed' })
   // A prompt being placed wins: the request comes back only if that placement fails.
   if (inFlight) inFlight.then(ok => { if (!ok) restore() })
   else restore()
@@ -2173,6 +2174,8 @@ async function startFromComposer() {
   }
   starting = true
   const generation = lifecycle
+  // A dispose clears pluginContext; a recovery that runs after one still needs the clipboard.
+  const os = pluginContext?.os
   // F9 sends only into the session the Studio was opened in (see sendPreview): taken before any await.
   const originAddress = focusedAddress()
   try {
@@ -2198,7 +2201,7 @@ async function startFromComposer() {
       return
     }
     if (generation !== lifecycle) {
-      returnDraftTo(originAddress, draft, { reason: 'closed' })
+      returnDraftTo(originAddress, draft, { os, reason: 'closed' })
       return
     }
     pendingDraft = { text: draft, address: originAddress }

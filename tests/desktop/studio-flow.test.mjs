@@ -2216,3 +2216,71 @@ test('SDK composer: a dispose while a placement that fails is pending brings the
   assert.equal(draft(), INTENT, 'then the request came back, not lost')
 })
 
+// Disable without registering again: the host runs every disposer and the context is gone afterwards.
+async function hostDisable() {
+  await ui.act(async () => { for (const off of ui.disposers.splice(0)) off() })
+  await settle()
+}
+
+test('SDK composer: disabled while a refused placement is pending, the request still reaches the clipboard', { skip }, async () => {
+  await toPreview()
+  resetComposer()
+  const clipboard = ui.pluginContext.os.clipboard
+  clipboard.length = 0
+  const release = holdComposer()
+  await press('Alt+E')
+  // The conversation leaves the screen: the placement and the restore to it are both refused.
+  ui.host.state.focusedSessionId.set('sess-other')
+  globalThis.__promptStudioSessionUnmounted = true
+  try {
+    await hostDisable()
+    await release()
+    await settle()
+    assert.deepEqual(clipboard, [INTENT], 'the clipboard API taken at dispose time was used')
+  } finally {
+    globalThis.__promptStudioSessionUnmounted = false
+    ui.host.state.focusedSessionId.set('sess-live')
+    await ui.act(async () => { ui.plugin.register(ui.pluginContext) })
+    await ui.act(async () => {
+      ui.roots[0].render(ui.jsx(() => ui.slots.top.render(), {}))
+      ui.roots[1].render(ui.jsx(() => ui.slots.actions.render(), {}))
+    })
+    await settle()
+  }
+})
+
+test('SDK composer: disabled while the composer is being cleared, a refused restore still reaches the clipboard', { skip }, async () => {
+  resetComposer()
+  const clipboard = ui.pluginContext.os.clipboard
+  clipboard.length = 0
+  $('[data-slot="composer-rich-input"]').textContent = INTENT
+  // The clear ('') waits for release and succeeds; every later write is refused (the composer left the screen).
+  let release
+  const gate = new Promise(resolve => { release = resolve })
+  const setDraft = composer().setDraft
+  composer().setDraft = async function (sessionId, text) {
+    if (text !== '') return false
+    await gate
+    return setDraft.call(this, sessionId, text)
+  }
+  const insertText = composer().insertText
+  composer().insertText = async () => false
+  try {
+    await press('F4')
+    await hostDisable()
+    release()
+    await settle()
+    assert.equal(draft(), '', 'the draft left the composer')
+    assert.deepEqual(clipboard, [INTENT], 'the clipboard API taken before the await was used')
+  } finally {
+    composer().setDraft = setDraft
+    composer().insertText = insertText
+    await ui.act(async () => { ui.plugin.register(ui.pluginContext) })
+    await ui.act(async () => {
+      ui.roots[0].render(ui.jsx(() => ui.slots.top.render(), {}))
+      ui.roots[1].render(ui.jsx(() => ui.slots.actions.render(), {}))
+    })
+    await settle()
+  }
+})
+
