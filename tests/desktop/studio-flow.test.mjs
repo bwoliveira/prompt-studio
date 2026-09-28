@@ -154,6 +154,9 @@ export const host = {
     shown() { return host.state.focusedStoredSessionId.get() ?? host.state.focusedSessionId.get() ?? 'new' },
     target(address) {
       const editor = document.querySelector('[data-slot="composer-rich-input"]')
+      // null = the composer typed in last: the one on screen unless a test sets another pane's.
+      const active = globalThis.__promptStudioActiveComposer
+      if (address === null && active && active !== this.shown()) return { key: active }
       if (address === null || address === this.shown() || address === host.state.focusedSessionId.get()) return { editor }
       if (globalThis.__promptStudioSessionUnmounted) return null
       return { key: address }
@@ -1826,11 +1829,11 @@ test('SDK-1: the Settings rows use the SDK ListRow/ToggleRow when present and th
   await closeSettings()
 })
 
-test('SDK composer: the draft is read and written only through host.composer (null = the composer in use)', { skip }, async () => {
+test('SDK composer: the draft is read and written only through host.composer, addressed to its conversation', { skip }, async () => {
   resetComposer()
   await openStudio()
   assert.equal(draft(), '', 'composer emptied when the studio opens')
-  assert.deepEqual(composer().writes.at(-1), { sessionId: null, text: '' })
+  assert.deepEqual(composer().writes.at(-1), { sessionId: 'sess-live', text: '' })
   await click('[data-studio-cancel]')
   await waitFor(() => draft() === INTENT)
   assert.deepEqual(composer().writes.at(-1), { sessionId: 'sess-live', text: INTENT }, 'Close returns the draft to its own conversation through setDraft')
@@ -2158,6 +2161,22 @@ test('SDK composer: a saved conversation with no runtime id yet is addressed by 
   } finally {
     ui.host.state.focusedStoredSessionId.set(null)
     ui.host.state.focusedSessionId.set('sess-live')
+  }
+})
+
+test('SDK composer: with two panes, F4 reads and clears the focused conversation, never the other pane typed in last', { skip }, async () => {
+  resetComposer()
+  composer().offscreen.set('sess-a', 'rascunho do painel A')
+  globalThis.__promptStudioActiveComposer = 'sess-a'
+  try {
+    await openStudio('rascunho da conversa B em foco')
+    assert.match($('[data-studio-intent-row]').textContent, /rascunho da conversa B em foco/, 'the focused conversation draft')
+    assert.equal(composer().offscreen.get('sess-a'), 'rascunho do painel A', 'pane A untouched')
+    await click('[data-studio-cancel]')
+    await waitFor(() => draft() === 'rascunho da conversa B em foco')
+    assert.equal(composer().offscreen.get('sess-a'), 'rascunho do painel A', 'pane A still untouched after Close')
+  } finally {
+    globalThis.__promptStudioActiveComposer = undefined
   }
 })
 

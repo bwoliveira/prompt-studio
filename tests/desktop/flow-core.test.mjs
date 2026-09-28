@@ -107,7 +107,7 @@ test('RETARGET replaces the answered steps and asks again', () => {
 
 test('composer only through host.composer (no app DOM, no attachment reach-in); only F-keys/Alt chords are bound, never Tab/Enter/Esc', () => {
   assert.doesNotMatch(plugin, /data-slot="composer|composerAttachments|__HERMES_PLUGIN_SDK__|forwardAttachments/)
-  assert.match(plugin, /host\.composer\.getDraft\(null\)/)
+  assert.match(plugin, /host\.composer\.getDraft\(address\)/)
   assert.match(plugin, /host\.composer\.setDraft\(sessionId, text\)/)
   assert.doesNotMatch(plugin, /setDraft\((?!null, text|sessionId, text)/, "setDraft only through composerAdapter")
   assert.equal((plugin.match(/addEventListener\((window, )?['"]key(down|up)/g) || []).length, 1, 'one listener (the studio keys)')

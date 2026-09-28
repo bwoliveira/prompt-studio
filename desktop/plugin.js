@@ -1862,10 +1862,10 @@ const composerAdapter = {
   },
 
   // null = no composer answered (none is active) or the call failed; '' = an empty composer.
-  async readDraft() {
+  async readDraft(address = null) {
     if (!this.available()) return null
     try {
-      const text = await host.composer.getDraft(null)
+      const text = await host.composer.getDraft(address)
       return typeof text === 'string' ? text : null
     } catch {
       return null
@@ -2154,7 +2154,9 @@ async function startFromComposer() {
   // F9 sends only into the session the Studio was opened in (see sendPreview): taken before any await.
   const originAddress = focusedAddress()
   try {
-    const draft = await composerAdapter.readDraft()
+    // Read and cleared by the same address every later write uses: with two panes, the composer that was
+    // typed in last (null) can belong to another conversation than the focused one.
+    const draft = await composerAdapter.readDraft(originAddress)
     if (draft === null) {
       host.notify({ kind: 'error', message: tr('notify.readFailed') })
       return
@@ -2169,7 +2171,7 @@ async function startFromComposer() {
       return
     }
     if (focusedAddress() !== originAddress || generation !== lifecycle) return
-    if (!(await composerAdapter.writeDraft(''))) {
+    if (!(await composerAdapter.writeDraft('', originAddress))) {
       host.notify({ kind: 'error', message: tr('notify.clearFailed') })
       return
     }
