@@ -12,18 +12,18 @@ step uses the recommendation.
 
 | # | Step | Targets | Why it is asked | What it changes |
 |---|---|---|---|---|
-| 1 | What do you want to get at the end? (deliverable) | both | The deliverable decides which rule lines apply (act vs. read-only, evidence lines, subagent default). The engine detects it from the draft and shows it as the recommendation; asking lets the user correct a wrong guess. A choice that contradicts the draft is kept and reported in the notes. | Autonomy, DONE WHEN and subagent lines (O10, O28, A7, A8, A22-A26) |
-| 2 | Any reference text to paste? | both | Only the user knows they have third-party material; the AI is not asked to fill it. | THIRD-PARTY MATERIAL block with the injection note (O2-O6, A32-A33) |
-| 2b | Where did that text come from? | both, only after a paste | Anthropic: say what the content is and where it came from. | `Source, as described by the user` / `<source>` |
-| 3 | What context does the model need? | both | Facts, audience, stack, what exists and why it matters; the model cannot guess them. | CONTEXT section; empty context on hands-on Opus tasks adds the "explore first" line (O8) |
-| 4 | Which rules must not be broken? | both | Hard constraints are the user's. Help text: say what to do, not only what to avoid. | REQUIREMENTS section |
-| 5 | How will you know it is done? | both | A checkable definition of done replaces the engine's generic line. | DONE WHEN section |
-| 6 | Interface patterns to avoid | Opus, code tasks only | The Opus 5.5 page recommends naming the visual patterns to avoid; the list is a taste call. "Avoid nothing" drops the line. | REQUIREMENTS design line (O11) |
-| 7 | How much autonomy? | both (Opus adds "unattended") | How far the model may go without checking in depends on the user's situation, not the draft. | AUTONOMY section (O12-O15, A7-A13) |
-| 8 | Use subagents? | both | Team, model decides, or none. For Opus "model decides" is recommended (it carries the guide's delegation rule for hands-on work); team only when the user picks it, since delegation multiplies cost and time on small tasks. Astra also recommends "model decides" (the guide's own conditional delegation line plus the legibility line; nothing for a single text or answer); team (split + reviewer) only when the user picks it. | SUBAGENTS section (section 3 of the rule reference) |
-| 9 | Do you have an example of the result? | both, not for code or agent tasks | Examples steer format and tone; only the user has real ones. Several examples are separated by a `---` line. | EXAMPLE/EXAMPLES section |
-| 10 | Response format | both | Prose, steps, table or JSON is a use-case choice. Default: match the task (no line). | OUTPUT format line |
-| 11 | Response length | both | Concise vs. detailed is a reader preference. Default: balanced (no line). | OUTPUT length line |
+| 1 | What do you want to get at the end? (deliverable) | all three | The deliverable decides which rule lines apply (act vs. read-only, evidence lines, subagent default). The engine detects it from the draft and shows it as the recommendation; asking lets the user correct a wrong guess. A choice that contradicts the draft is kept and reported in the notes. | Autonomy, DONE WHEN and subagent lines (O10, O28, A7, A8, A22-A26) |
+| 2 | Any reference text to paste? | all three | Only the user knows they have third-party material; the AI is not asked to fill it. | THIRD-PARTY MATERIAL block with the injection note (O2-O6, A32-A33) |
+| 2b | Where did that text come from? | all three, only after a paste | Anthropic: say what the content is and where it came from. | `Source, as described by the user` / `<source>` |
+| 3 | What context does the model need? | all three | Facts, audience, stack, what exists and why it matters; the model cannot guess them. | CONTEXT section; empty context on hands-on Opus tasks adds the "explore first" line (O8) |
+| 4 | Which rules must not be broken? | all three | Hard constraints are the user's. Help text: say what to do, not only what to avoid. | REQUIREMENTS section |
+| 5 | How will you know it is done? | all three | A checkable definition of done replaces the engine's generic line. | DONE WHEN section |
+| 6 | Interface patterns to avoid | Opus and Sonnet, code tasks only | The Opus 5.5 page recommends naming the visual patterns to avoid (Sonnet: the Sonnet 5 frontend-aesthetics list); the list is a taste call. "Avoid nothing" drops the line. | REQUIREMENTS design line (O11, S12) |
+| 7 | How much autonomy? | all three (Opus and Sonnet add "unattended") | How far the model may go without checking in depends on the user's situation, not the draft. | AUTONOMY section (O12-O15, A7-A13) |
+| 8 | Use subagents? | all three | Team, model decides, or none. For Opus "model decides" is recommended (it carries the guide's delegation rule for hands-on work); team only when the user picks it, since delegation multiplies cost and time on small tasks. Sonnet also recommends "model decides" (the Anthropic subagent sample plus "no reviewer sub-agents unless the user asked for a review"). Astra also recommends "model decides" (the guide's own conditional delegation line plus the legibility line; nothing for a single text or answer); team (split + reviewer) only when the user picks it. | SUBAGENTS section (section 3 of the rule reference) |
+| 9 | Do you have an example of the result? | all three, not for code or agent tasks | Examples steer format and tone; only the user has real ones. Several examples are separated by a `---` line. | EXAMPLE/EXAMPLES section |
+| 10 | Response format | all three | Prose, steps, table or JSON is a use-case choice. Default: match the task (no line). | OUTPUT format line |
+| 11 | Response length | all three | Concise vs. detailed is a reader preference. Default: balanced (no line). | OUTPUT length line |
 
 ## Not asked, and why
 

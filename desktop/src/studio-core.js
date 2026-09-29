@@ -2,14 +2,16 @@
 // target's engine. Pure ESM; no DOM, no network. All display text comes from ./i18n-core.js.
 import { ENGINE as OPUS_ENGINE } from './engine-opus.js'
 import { ENGINE as ASTRA_ENGINE } from './engine-astra.js'
+import { ENGINE as SONNET_ENGINE } from './engine-sonnet.js'
 import { CORE_MESSAGES } from './i18n-core.js'
 
-const STUDIO_ENGINES = { opus: OPUS_ENGINE, astra: ASTRA_ENGINE }
+const STUDIO_ENGINES = { opus: OPUS_ENGINE, astra: ASTRA_ENGINE, sonnet: SONNET_ENGINE }
 export const TARGETS = [
   { id: 'opus', label: 'Opus', model: OPUS_ENGINE.model },
-  { id: 'astra', label: 'Astra', model: ASTRA_ENGINE.model }
+  { id: 'astra', label: 'Astra', model: ASTRA_ENGINE.model },
+  { id: 'sonnet', label: 'Sonnet', model: SONNET_ENGINE.model }
 ]
-const TARGET_NAME = { opus: 'Opus', astra: 'Astra' }
+const TARGET_NAME = { opus: 'Opus', astra: 'Astra', sonnet: 'Sonnet' }
 export const MESSAGES = CORE_MESSAGES
 // Skipped text answer. '(pulado)' is the marker saved before v1 and is still understood.
 export const SKIPPED = '(skipped)'
@@ -43,7 +45,7 @@ function engineOf(target) {
 //   thirdPartyText before context: AI suggestions for later steps already see the pasted text.
 //   Only the user knows whether they have something to paste, so it gets no AI suggestion (collapsed paste).
 //   thirdPartySource only after a paste ("Tell Claude what the content is and where it came from").
-//   designAvoid only for Opus interface work (the engine drops it otherwise); examples not for code or agents; subagents is always asked.
+//   designAvoid only for Opus and Sonnet interface work (the engine drops it otherwise); examples not for code or agents; subagents is always asked.
 const STEPS = [
   { id: 'deliverable', kind: 'enum' },
   { id: 'thirdPartyText', kind: 'text', paste: true, autoSuggest: false },
@@ -51,7 +53,7 @@ const STEPS = [
   { id: 'context', kind: 'text' },
   { id: 'requirements', kind: 'text' },
   { id: 'success', kind: 'text' },
-  { id: 'designAvoid', kind: 'design', targets: ['opus'], when: a => Boolean(a.interface) },
+  { id: 'designAvoid', kind: 'design', targets: ['opus', 'sonnet'], when: a => Boolean(a.interface) },
   { id: 'autonomy', kind: 'enum' },
   { id: 'subagents', kind: 'enum' },
   { id: 'examples', kind: 'text', when: a => !['code', 'agent'].includes(a.category) },
@@ -66,7 +68,9 @@ function stepApplies(step, target) {
 }
 
 export function defaultTarget(model) {
-  return /gpt|openai|astra|codex|\bo[1-9]\b/i.test(String(model || '')) ? 'astra' : 'opus'
+  const name = String(model || '')
+  if (/sonnet/i.test(name)) return 'sonnet'
+  return /gpt|openai|astra|codex|\bo[1-9]\b/i.test(name) ? 'astra' : 'opus'
 }
 
 export function fieldForTarget(fieldId, target) {

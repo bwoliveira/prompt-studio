@@ -53,7 +53,7 @@ MIN_PROMPT_CHARS = 20  # shorter compose output is treated as a failure
 # The prompt itself always follows the language of the user's draft.
 LOCALE_LANGUAGES = {"en": "English", "pt": "Brazilian Portuguese"}
 DEFAULT_LOCALE = "en"
-TARGET_NAMES = {"opus": "Claude Opus 5.5", "astra": "GPT-6 Astra"}
+TARGET_NAMES = {"opus": "Claude Opus 5.5", "astra": "GPT-6 Astra", "sonnet": "Claude Sonnet 5.5"}
 
 SUGGEST_SYSTEM = (
     "You help a user fill one field of a prompt-builder form. "
@@ -307,7 +307,7 @@ THIRD_PARTY_PREVIEW = 1500
 THIRD_PARTY_MARKER = "[[THIRD_PARTY_BLOCK]]"
 # The Studio's tagged block: header, then Opus's <pasted_content id="…"> (optionally after a
 # "Source, as described by the user:" line) or Astra's <document> with optional <source>, then
-# its handling lines up to the next blank line.
+# its handling lines up to the next blank line. Sonnet uses one of these two shapes.
 _THIRD_PARTY_RE = re.compile(
     r'THIRD-PARTY MATERIAL\n(?:'
     r'<document>\n.*?\n</document>'
@@ -467,6 +467,20 @@ COMPOSE_TARGET_RULES = {
         "- GPT-6 Astra already tests and checks its own work: do not add testing, re-checking or \"verify before reporting\" lines beyond the BASELINE's.\n"
         "- For research or exploration, say what to explore and where to stop, using only the scope the user gave.\n"
         "- Keep the BASELINE's lines quoted from OpenAI's docs word for word in English, even when the rest of the prompt is in another language."
+    ),
+    "sonnet": (
+        "- Keep any BASELINE lines about carrying the work through, keeping changes to what was asked, running a real check before reporting done, and the autonomy wording: they come from Anthropic's official Claude Sonnet 5.5 prompting guidance.\n"
+        # Prompting Claude Sonnet 5.5: "At lower effort, it sometimes checks in before a coding task is done."
+        "- Claude Sonnet 5.5 can stop to check in before a task is done at low or medium effort: do not add \"ask first\", \"confirm the plan\" or approval steps the user did not ask for, and keep any BASELINE line on carrying the work through.\n"
+        # Prompting Claude Sonnet 5.5: "The model tends to add tests, documentation, and small supporting files
+        # that fit your repository's conventions, even when you don't ask for them."
+        "- Claude Sonnet 5.5 adds tests, documentation and small supporting files on its own: do not ask for more of them; when the user wants only the requested change, keep any BASELINE scope line.\n"
+        # Prompting Claude Sonnet 5.5: "Claude Sonnet 5.5 generally checks its work before it reports a change as done."
+        # (at low effort it sometimes skips the check, so the BASELINE's real-check line stays)
+        "- Claude Sonnet 5.5 generally checks its own work: do not add extra verification, double-check or self-review steps beyond the BASELINE; where proof matters, ask for evidence (the commands run and what they returned) instead.\n"
+        # Prompting Claude Sonnet 5.5: "If your prompts ask the model to include its reasoning in the response,
+        # remove those instructions, because they invite reasoning_extraction declines."
+        "- Do not ask the model to write out or include its reasoning in the response."
     ),
 }
 # Both targets: the SUBAGENTS section is either the user's explicit team/direct choice or the default

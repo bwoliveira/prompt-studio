@@ -1,7 +1,7 @@
 # Official sources behind the prompt rules
 
 Local copies of the official vendor documentation quoted in `docs/PROMPT-DOCS-REVIEW.md`:
-Anthropic (Claude Opus 5.5) and OpenAI (GPT-6 Astra). `MANIFEST.json` lists each one with its URL,
+Anthropic (Claude Opus 5.5 and Claude Sonnet 5.5) and OpenAI (GPT-6 Astra). `MANIFEST.json` lists each one with its URL,
 the date it was copied and its SHA-256.
 
 The copies are kept **outside the plugin**, by default in `../prompt-builders/official-docs/<vendor>/<id>.md`
@@ -15,4 +15,4 @@ python3 scripts/docs_sources.py check   # check every quote in the review, word 
 ```
 
 For a future audit: run `diff`, re-read the review rows that cite each changed id (`[gpt6-using]`,
-`[opus55-prompting]`, …), then run `check`.
+`[opus55-prompting]`, `[sonnet55-prompting]`, …), then run `check`.

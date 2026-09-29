@@ -3,7 +3,7 @@
 ![Prompt Studio banner: guided prompt builder for Hermes Desktop](docs/images/banner.png)
 
 Prompt Studio is a Hermes Desktop plugin that turns a rough request into a well-built prompt for
-**Claude Opus 5.5** or **GPT-6 Astra**. It asks the few questions that change the result, one step at a
+**Claude Opus 5.5**, **Claude Sonnet 5.5** or **GPT-6 Astra**. It asks the few questions that change the result, one step at a
 time, with a recommended answer on each step. Then it writes the prompt and places it in the message
 field for you to review. It never sends anything on its own.
 
@@ -11,7 +11,7 @@ Each step can get a suggestion from a fast auxiliary model, and at the end that 
 prompt from your answers. When the AI is off, slow or unavailable, you still get a complete prompt,
 built locally by the plugin's own engine for the chosen model.
 
-The two prompt engines were written for this plugin from the official Anthropic and OpenAI documentation.
+The three prompt engines (Opus 5.5, Sonnet 5.5, GPT-6 Astra) were written for this plugin from the official Anthropic and OpenAI documentation.
 
 ## Contents
 
@@ -22,7 +22,7 @@ The two prompt engines were written for this plugin from the official Anthropic 
 - [Configuration](#configuration)
 - [Troubleshooting](#troubleshooting)
 - [Privacy and security](#privacy-and-security)
-- [Built for Claude Opus 5.5 and GPT-6 Astra](#built-for-claude-opus-55-and-gpt-6-astra)
+- [Built for Claude Opus 5.5, Claude Sonnet 5.5 and GPT-6 Astra](#built-for-claude-opus-55-claude-sonnet-55-and-gpt-6-astra)
 - [How it follows the Hermes plugin guidelines](#how-it-follows-the-hermes-plugin-guidelines)
 - [Development](#development)
 - [Repository layout](#repository-layout)
@@ -91,14 +91,14 @@ after `git pull` to update.
 
 1. Write your request in the message field and press **F4**, or click **✨ Prompt Studio**, or run
    *Prompt Studio* from the command palette.
-2. Pick the model (**Opus** or **Astra**). The first default follows the session's model.
+2. Pick the model (**Opus**, **Astra** or **Sonnet**). The first default follows the session's model.
 3. Answer the steps. Depending on the request, they are:
    - what you want to receive
    - reference text to paste, and where it came from
    - context
    - rules that cannot be broken
    - how you will know it is done
-   - interface patterns to avoid (Opus, code work)
+   - interface patterns to avoid (Opus and Sonnet, code work)
    - autonomy
    - subagents
    - an example of the result
@@ -142,7 +142,7 @@ Every control shows its key next to its label. Keys work with the cursor in the 
 | Alt+D | Discard the suggestion, or stop the AI |
 | Alt+M | Improve my text |
 | Alt+C | Paste text |
-| Alt+O / Alt+A | Write for Opus / Astra |
+| Alt+O / Alt+A / Alt+T | Write for Opus / Astra / Sonnet |
 | Alt+I | Next AI mode (Auto, On request, Off) |
 | Alt+V | Other version in the preview |
 | Alt+E | Put the prompt in the composer to edit before sending |
@@ -251,9 +251,9 @@ The REST routes and their request and response shapes are in `docs/CONTRACT.md`.
 - **Nothing is sent for you.** The finished prompt is placed in the message field; you decide whether to
   send it.
 
-## Built for Claude Opus 5.5 and GPT-6 Astra
+## Built for Claude Opus 5.5, Claude Sonnet 5.5 and GPT-6 Astra
 
-The two models need different prompts, and the engines follow each vendor's guidance:
+The three models need different prompts, and the engines follow each vendor's guidance:
 
 - **Claude Opus 5.5** (Anthropic, *Prompting Claude Opus 5.5* and the prompting best practices):
   - Pasted material goes in `<pasted_content>` tags with the documented note; long material goes above the task.
@@ -267,7 +267,12 @@ The two models need different prompts, and the engines follow each vendor's guid
   - Only the official testing line is used, without extra verification lines.
   - The plain-writing lines apply to text answers.
   - Pasted material goes last, inside `<document>` tags.
-- **Both models:**
+- **Claude Sonnet 5.5** (Anthropic, *Prompting Claude Sonnet 5.5*):
+  - Autonomy wording keeps it working through a long task: at low and medium effort it can stop to check in
+    before the work is done.
+  - Scope stays to what was asked: it tends to add tests, documentation and small supporting files on its own.
+  - The prompt never asks it to write out its reasoning in the answer.
+- **All three models:**
   - An optional **subagents** step. "Team" splits the task into independent parts that run in parallel,
     and names one reviewer who did not write any of the work and starts from a fresh context.
   - Examples go in `<example>` tags.

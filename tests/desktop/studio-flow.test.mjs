@@ -794,6 +794,8 @@ test('absolutely everything has a key: F4 opens, F10 closes, Alt+digit picks, Al
   // Alt+A / Alt+O switch the model, Alt+I cycles the AI mode.
   await press('Alt+A')
   assert.equal($('[data-studio-target-option="astra"]').getAttribute('aria-checked'), 'true')
+  await press('Alt+T')
+  assert.equal($('[data-studio-target-option="sonnet"]').getAttribute('aria-checked'), 'true')
   await press('Alt+O')
   assert.equal($('[data-studio-target-option="opus"]').getAttribute('aria-checked'), 'true')
   const mode = aiMode()

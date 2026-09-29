@@ -36,7 +36,7 @@ const SHORTCUT_MAP = [
   ['Alt+D', 'discard'],
   ['Alt+M', 'improve'],
   ['Alt+C', 'paste'],
-  ['Alt+O / Alt+A', 'model'],
+  ['Alt+O / Alt+A / Alt+T', 'model'],
   ['Alt+I', 'mode'],
   ['Alt+V', 'version'],
   ['Alt+E', 'editPrompt']
@@ -626,7 +626,7 @@ function StudioMotionStyles() {
   })
 }
 
-const TARGET_KEYS = { opus: 'Alt+O', astra: 'Alt+A' }
+const TARGET_KEYS = { opus: 'Alt+O', astra: 'Alt+A', sonnet: 'Alt+T' }
 
 // Exclusive choice: radiogroup + radio, like the AI mode selector.
 function TargetSwitch() {
@@ -1044,7 +1044,7 @@ export default {
           action: `${ID}.start`,
           detail: () => tr('palette.detailDraft'),
           id: `${ID}.start`,
-          keywords: ['prompt', 'studio', 'opus', 'astra'],
+          keywords: ['prompt', 'studio', 'opus', 'astra', 'sonnet'],
           label: tr('palette.label'),
           run: startFromComposer
         }
