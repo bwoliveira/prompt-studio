@@ -11,7 +11,7 @@ Each step can get a suggestion from a fast auxiliary model, and at the end that 
 prompt from your answers. When the AI is off, slow or unavailable, you still get a complete prompt,
 built locally by the plugin's own engine for the chosen model.
 
-The two prompt engines were written for this plugin from the official Anthropic and OpenAI documentation.
+The three prompt engines (Opus 5.5, Sonnet 5.5, GPT-6 Astra) were written for this plugin from the official Anthropic and OpenAI documentation.
 
 ## Contents
 
