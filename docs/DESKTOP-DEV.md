@@ -6,7 +6,8 @@
 |---|---|
 | `desktop/src/engine-opus.js` | Claude Opus 5.5 prompt engine. Pure ESM, no imports, no DOM, deterministic. |
 | `desktop/src/engine-astra.js` | GPT-6 Astra prompt engine. Same shape and rules. |
-| `desktop/src/studio-core.js` | Step flow (questions, recommendations, answers to brief). Imports only the two engines. |
+| `desktop/src/engine-sonnet.js` | Claude Sonnet 5.5 prompt engine. Same shape and rules. |
+| `desktop/src/studio-core.js` | Step flow (questions, recommendations, answers to brief). Imports only the three engines. |
 | `desktop/src/i18n-core.js` | Questions, help and option labels, `en` and `pt`. |
 | `desktop/src/i18n-ui.js` | Every string `plugin.js` shows (buttons, notes, errors, shortcut help), `en` and `pt`. |
 | `desktop/src/plugin-head.js` | The plugin's imports and `ID`; the only hand-written file allowed to import. |
@@ -52,7 +53,7 @@ headers and rule lines stay English, and the user's text is copied as written.
 
 The draft recognizers support Portuguese and English only. The keyword regexes live in
 `desktop/src/engine-astra.js` (`VERBS`, `UI_*`, `*_NOUN`, `*_ARTIFACT`, `ASK_FIRST`, subagent and
-format hints) and `desktop/src/engine-opus.js` (`CATEGORY_RULES`, `DELIVERABLE_RULES`, `*_VERB`,
+format hints) and `desktop/src/engine-opus.js` and `desktop/src/engine-sonnet.js` (`CATEGORY_RULES`, `DELIVERABLE_RULES`, `*_VERB`,
 `QUESTION_START`, `INTERFACE`); both lower-case the draft and strip diacritics first (`fold()` /
 `normalize()`), so the Portuguese words are written without accents. The dashboard's
 `REQUIRED_LINES` proof words and `_AUTONOMY_HEADERS` in `dashboard/suggest_engine.py` are also
@@ -86,7 +87,7 @@ English + Portuguese. Each pattern carries a `Languages:` comment; other languag
 | Alt+D | Discard |
 | Alt+M | Improve my text |
 | Alt+C | Paste |
-| Alt+O / Alt+A | Target model (Opus / Astra) |
+| Alt+O / Alt+A / Alt+T | Target model (Opus / Astra / Sonnet) |
 | Alt+I | AI mode |
 | Alt+V | Version |
 | Alt+E | Put in composer to edit |

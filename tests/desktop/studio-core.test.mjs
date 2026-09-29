@@ -6,11 +6,12 @@ import { fileURLToPath } from 'node:url'
 import * as core from '../../desktop/studio-core.mjs'
 import { ENGINE as OPUS } from '../../desktop/src/engine-opus.js'
 import { ENGINE as ASTRA } from '../../desktop/src/engine-astra.js'
+import { ENGINE as SONNET } from '../../desktop/src/engine-sonnet.js'
 import { CORE_MESSAGES } from '../../desktop/src/i18n-core.js'
 import { UI_MESSAGES } from '../../desktop/src/i18n-ui.js'
 
 const { SKIPPED, TARGETS, answerLabel, answerToValue, briefFromLadder, defaultTarget, fieldForTarget, nextQuestion, questionFor, stepCount, studioAnswers, studioPrompt } = core
-const ENGINES = { opus: OPUS, astra: ASTRA }
+const ENGINES = { opus: OPUS, astra: ASTRA, sonnet: SONNET }
 const repo = fileURLToPath(new URL('../../', import.meta.url))
 const CODE = 'Crie um dashboard web em React para acompanhar gastos mensais da casa'
 const WRITE = 'Escreva um e-mail para o cliente explicando o atraso na entrega'
@@ -31,8 +32,10 @@ function walk(target, intent, locale = 'en', answer = q => q.recommended || SKIP
 const keys = (obj, prefix = '') => Object.entries(obj).flatMap(([k, v]) => (v && typeof v === 'object' ? keys(v, `${prefix}${k}.`) : [`${prefix}${k}`])).sort()
 
 test('targets, default target, SKIPPED', () => {
-  assert.deepEqual(TARGETS.map(t => t.id), ['opus', 'astra'])
+  assert.deepEqual(TARGETS.map(t => t.id), ['opus', 'astra', 'sonnet'])
   assert.equal(defaultTarget('gpt-6-astra'), 'astra')
+  assert.equal(defaultTarget('claude-sonnet-5-5'), 'sonnet')
+  assert.equal(defaultTarget('anthropic/Claude Sonnet 5.5'), 'sonnet')
   assert.equal(defaultTarget('claude-opus-5-5'), 'opus')
   assert.equal(SKIPPED, '(skipped)')
 })
@@ -55,6 +58,28 @@ test('step order and conditions, both targets', () => {
     assert.equal(stepCount(target, VAGUE, ladder), order.length)
     assert.equal(stepCount(target, VAGUE, []), order.length)
   }
+})
+
+test('sonnet target: TARGETS entry, step walk, per-target help and prompt', () => {
+  const sonnet = TARGETS.find(t => t.id === 'sonnet')
+  assert.deepEqual([sonnet.label, sonnet.model], ['Sonnet', SONNET.model])
+  const pasted = q => (q.paste ? 'Some pasted mail' : q.recommended || SKIPPED)
+  const { order } = walk('sonnet', CODE, 'en', pasted)
+  assert.ok(order.includes('thirdPartySource') && order.includes('autonomy') && order.includes('subagents'))
+  assert.equal(order.includes('designAvoid'), fieldForTarget('designAvoid', 'sonnet'), 'design step follows the engine')
+  assert.equal(walk('sonnet', VAGUE).order[0], 'deliverable')
+  const { ladder, order: vague } = walk('sonnet', VAGUE)
+  assert.equal(stepCount('sonnet', VAGUE, ladder), vague.length)
+  assert.equal(questionFor('sonnet', CODE, [], 'autonomy', 'en').question, 'How much autonomy should Sonnet have?')
+  assert.equal(questionFor('sonnet', CODE, [], 'autonomy', 'pt').question, 'Quanta autonomia o Sonnet deve ter?')
+  assert.match(questionFor('sonnet', CODE, [], 'autonomy', 'en').help, /Sonnet can stop to check in/)
+  assert.match(questionFor('sonnet', CODE, [], 'autonomy', 'pt').help, /O Sonnet pode parar/)
+  assert.match(questionFor('sonnet', CODE, [], 'autonomy', 'en').guide, /Claude Sonnet 5\.5/)
+  assert.doesNotMatch(questionFor('opus', CODE, [], 'autonomy', 'en').help, /Sonnet/)
+  assert.doesNotMatch(questionFor('astra', CODE, [], 'autonomy', 'en').help, /Sonnet/)
+  const built = studioPrompt('sonnet', CODE, ladder)
+  assert.ok(typeof built.prompt === 'string' && built.prompt.length > 0)
+  assert.equal(studioAnswers('sonnet', CODE, walk('sonnet', CODE).ladder, 'en').length > 0, true)
 })
 
 test('question object shape, locale text and detected deliverable', () => {
@@ -175,7 +200,7 @@ test('core i18n: en and pt have identical keys; core and UI bundles never clobbe
     const clash = Object.keys(CORE_MESSAGES[locale]).filter(k => k in UI_MESSAGES[locale])
     assert.deepEqual(clash, [], `top-level keys shared by core and UI (${locale})`)
   }
-  for (const engine of [OPUS, ASTRA]) {
+  for (const engine of [OPUS, ASTRA, SONNET]) {
     for (const [field, values] of Object.entries(engine.options)) {
       for (const locale of ['en', 'pt']) for (const v of values) assert.ok(CORE_MESSAGES[locale].core.fields[field].options[v], `${locale} ${field}.${v}`)
     }
@@ -184,7 +209,7 @@ test('core i18n: en and pt have identical keys; core and UI bundles never clobbe
 
 test('studio-core.js imports only the engines and its i18n bundle', async () => {
   const src = await readFile(new URL('../../desktop/src/studio-core.js', import.meta.url), 'utf8')
-  assert.deepEqual([...src.matchAll(/from '([^']+)'/g)].map(m => m[1]).sort(), ['./engine-astra.js', './engine-opus.js', './i18n-core.js'])
+  assert.deepEqual([...src.matchAll(/from '([^']+)'/g)].map(m => m[1]).sort(), ['./engine-astra.js', './engine-opus.js', './engine-sonnet.js', './i18n-core.js'])
 })
 
 test('build drift check: plugin.js and studio-core.mjs match desktop/src (A3/C12)', () => {

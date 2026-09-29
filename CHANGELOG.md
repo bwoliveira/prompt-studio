@@ -2,6 +2,12 @@
 
 Versions come from the commit subjects; releases from 1.6.0 on are also git tags. Newest first.
 
+## Unreleased
+
+- New target: **Claude Sonnet 5.5** (Alt+T, or pick **Sonnet**), next to Opus and Astra. It has its own prompt engine,
+  question help and AI writer rules from Anthropic's Sonnet 5.5 prompting guide, and is the default when the
+  session's model is a Sonnet. Opus and Astra prompts do not change.
+
 ## 1.8.0
 
 - Desktop: the message field is read and written only through the SDK's `host.composer`; the plugin no longer

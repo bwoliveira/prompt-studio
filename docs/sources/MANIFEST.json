@@ -141,6 +141,41 @@
         "sha256": "211356a949f98a2005ccc5ca66d5366cffeae5849d3df7cdddd51c61d9455cea",
         "fetched": "2026-09-26",
         "chars": 53479
+      },
+      "sonnet55-prompting": {
+        "title": "Prompting Claude Sonnet 5.5",
+        "url": "https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-sonnet-5-5.md",
+        "sha256": "1e70fad582cca399acad4ceb526c327b1be12eeb7966567aae96b6c946a00d73",
+        "fetched": "2026-09-28",
+        "chars": 27423
+      },
+      "sonnet5-prompting": {
+        "title": "Prompting Claude Sonnet 5",
+        "url": "https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-sonnet-5.md",
+        "sha256": "07e7db846f96915a1d533fe6f62f7812790a966361b9982b6522557e74d08127",
+        "fetched": "2026-09-28",
+        "chars": 16478
+      },
+      "sonnet55-whats-new": {
+        "title": "What's new in Claude Sonnet 5.5",
+        "url": "https://platform.claude.com/docs/en/models/sonnet-5-5/whats-new-sonnet-5-5.md",
+        "sha256": "82a7edaf8327512c94de4d7c24a09ba8b75d0ad8d5f73f2f67c19ba8ae6cb0e6",
+        "fetched": "2026-09-28",
+        "chars": 22523
+      },
+      "sonnet55-overview": {
+        "title": "Claude Sonnet 5.5",
+        "url": "https://platform.claude.com/docs/en/models/sonnet-5-5/overview.md",
+        "sha256": "1a92ec375cea00cb29d21f9398745120967ed6f7857812a8ca817a633c5b79f1",
+        "fetched": "2026-09-28",
+        "chars": 13977
+      },
+      "sonnet55-migration": {
+        "title": "Migrating to Claude Sonnet 5.5",
+        "url": "https://platform.claude.com/docs/en/models/sonnet-5-5/migration-guide.md",
+        "sha256": "24b6beaf73ba7b9f915d57be591772dd1b2d8b0ebd27c32f3cf86c9587bd798f",
+        "fetched": "2026-09-28",
+        "chars": 55911
       }
     },
     "openai": {
