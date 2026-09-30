@@ -7,6 +7,9 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
 - New target: **Claude Sonnet 5.5** (Alt+T, or pick **Sonnet**), next to Opus and Astra. It has its own prompt engine,
   question help and AI writer rules from Anthropic's Sonnet 5.5 prompting guide, and is the default when the
   session's model is a Sonnet. Opus and Astra prompts do not change.
+- Fix: "Não foi possível usar a IA agora" / "Could not use the AI this time" on every step when Hermes hosts more
+  than one profile (the dashboard then refuses credential reads with no profile bound, `UnscopedSecretError` in
+  `agent.log`). Each model call now keeps the profile of the request that asked for it.
 
 ## 1.8.0
 

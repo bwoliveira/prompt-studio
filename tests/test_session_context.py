@@ -273,3 +273,22 @@ def test_payment_and_bad_request_get_their_own_codes(status, code):
 
     out = sc.context({"session_id": "s1"}, llm=failing, opener=_opener(FakeDB([msg("user", "hi")])))
     assert out["code"] == code and "sk-abc" not in json.dumps(out), out
+
+
+def test_model_call_keeps_the_request_profile_scope():
+    # Same as the suggest/compose routes: the context worker must see the request's Hermes profile scope.
+    import contextvars
+    sc = _load()
+    scope = contextvars.ContextVar("hermes_secret_scope_stub", default=None)
+    seen = []
+
+    def llm(messages, max_tokens, timeout, is_json=False):
+        seen.append(scope.get())
+        return "{\"summary\": \"ok\"}", "stub/ctx"
+
+    token = scope.set("secondary")
+    try:
+        assert sc.context({"session_id": "s1"}, llm=llm, opener=_opener(FakeDB([msg("user", "hi")])))["ok"]
+    finally:
+        scope.reset(token)
+    assert seen == ["secondary"]

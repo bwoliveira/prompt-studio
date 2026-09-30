@@ -8,6 +8,7 @@ The transcript is never logged or returned: only the model's summary and counts 
 from __future__ import annotations
 
 import concurrent.futures
+import contextvars
 import logging
 import re
 import time
@@ -162,8 +163,9 @@ def context(payload: Mapping[str, Any], llm: Callable[..., Any] | None = None, d
     messages = build_messages(build_transcript(turns, summary), str(payload.get("locale") or "en"))
     limit = deadline if deadline is not None else CONTEXT_DEADLINE
     label = _llm.get_model_label(choice)
-    future = _EXECUTOR.submit(_llm._invoke, llm, messages, max_tokens=CONTEXT_MAX_TOKENS, timeout=limit, is_json=True,
-                              hard_timeout=True, model_choice=choice)
+    # copy_context: the worker keeps the request's Hermes profile scope (see suggest_engine._run_with_deadline).
+    future = _EXECUTOR.submit(contextvars.copy_context().run, _llm._invoke, llm, messages, max_tokens=CONTEXT_MAX_TOKENS,
+                              timeout=limit, is_json=True, hard_timeout=True, model_choice=choice)
     finished, _ = concurrent.futures.wait([future], timeout=limit)
     if not finished:
         future.cancel()

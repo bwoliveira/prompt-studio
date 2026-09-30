@@ -941,3 +941,24 @@ def test_payment_and_bad_request_get_their_own_codes(fn, payload, exc, code, lab
                           llm=_failing(exc))
     assert out["code"] == code and out["error"] == label, out
     assert "sk-abc" not in json.dumps(out) and out["model"] == "commandcode/claude-opus-5.5"
+
+
+def test_model_call_keeps_the_request_profile_scope():
+    # Hermes binds the ?profile= secret scope in a ContextVar for the request; the model call runs on the Studio's
+    # own pools, which must carry it (a bare submit drops it: UnscopedSecretError, or another profile's key).
+    import contextvars
+    se = _load()
+    scope = contextvars.ContextVar("hermes_secret_scope_stub", default=None)
+    seen = []
+
+    def llm(messages, max_tokens, timeout, is_json=False):
+        seen.append(scope.get())
+        return json.dumps({"value": "Equilibrada", "reason": "ok", "prompt": "Crie um app de gastos.", "notes": ""}), "stub/model"
+
+    token = scope.set("secondary")
+    try:
+        assert se.suggest({**BASE, "field": ENUM}, llm=llm)["ok"]
+        assert se.compose(COMPOSE, llm=llm)["ok"]
+    finally:
+        scope.reset(token)
+    assert seen == ["secondary", "secondary"]

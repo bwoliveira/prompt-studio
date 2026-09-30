@@ -14,6 +14,7 @@ engine prompt. Nothing falls back to a fake answer.
 """
 from __future__ import annotations
 
+import contextvars
 import logging
 import re
 import concurrent.futures
@@ -224,7 +225,9 @@ def _run_with_deadline(
     timeout raised inside the worker would look the same; wait() tells "deadline passed" apart
     from "worker failed".
     """
-    future = executor.submit(_llm._invoke, llm, messages, max_tokens=max_tokens, timeout=limit, is_json=True, hard_timeout=True, use_config_timeout=use_config_timeout, model_choice=model_choice)
+    # copy_context: the worker keeps the request's Hermes profile scope (a bare submit drops it, and a
+    # multi-profile Hermes then refuses the credential read with UnscopedSecretError).
+    future = executor.submit(contextvars.copy_context().run, _llm._invoke, llm, messages, max_tokens=max_tokens, timeout=limit, is_json=True, hard_timeout=True, use_config_timeout=use_config_timeout, model_choice=model_choice)
     finished, _ = concurrent.futures.wait([future], timeout=limit)
     if not finished:
         future.cancel()  # no-op once running; the worker finishes in the background and is discarded
