@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 from typing import Any, Callable, Mapping
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,9 @@ def _strip_thinking(text: str) -> str:
         return ""
     return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
+
+# A JSON-mode retry needs at least this much of the budget left; less would only time out.
+RETRY_MIN_SECONDS = 1.0
 
 DEFAULT_EFFORT = "low"  # used when neither auxiliary.prompt_studio nor the Settings pick sets an effort
 
@@ -200,19 +204,50 @@ def _default_llm(
         # provider call ends on its own instead of pinning a worker thread past the deadline.
         timeout = min(timeout, float(cfg_timeout)) if hard_timeout else max(timeout, float(cfg_timeout))
 
-    response = call_llm(
-        task=task,
-        messages=messages,
-        max_tokens=max_tokens,
-        timeout=timeout,
-        route_info=route,
-        extra_body=extra_body or None,
-        reasoning_config=reasoning_config,
-        **explicit,
-    )
+    deadline = time.monotonic() + timeout
+
+    def _call(body: dict[str, Any], budget: float) -> Any:
+        return call_llm(
+            task=task,
+            messages=messages,
+            max_tokens=max_tokens,
+            timeout=budget,
+            route_info=route,
+            extra_body=body or None,
+            reasoning_config=reasoning_config,
+            **explicit,
+        )
+
+    try:
+        response = _call(extra_body, timeout)
+    except Exception as exc:
+        # Some routes refuse JSON mode (e.g. a provider that only takes json_schema). The prompts already ask
+        # for JSON and _json_object reads it from plain text, so retry once without JSON mode, within what is
+        # left of the same budget (a retry never restarts the deadline).
+        remaining = deadline - time.monotonic()
+        if "response_format" not in extra_body or not _rejects_json_mode(exc) or remaining < RETRY_MIN_SECONDS:
+            raise
+        logger.info("Prompt Studio: route refused JSON mode, retrying without it")
+        retry_body = {k: v for k, v in extra_body.items() if k != "response_format"}
+        if isinstance(configured_extra, dict) and "response_format" in configured_extra:
+            # Hermes merges auxiliary.<task>.extra_body back into every request, so dropping the key would
+            # bring the configured format back; an explicit plain-text format overrides it instead.
+            retry_body["response_format"] = {"type": "text"}
+        response = _call(retry_body, remaining)
     resolved_provider = route.get("provider", provider or "auto")
     resolved_model = route.get("model", model or "default")
     return Reply(extract_content_or_reasoning(response), f"{resolved_provider}/{resolved_model}", _finish_reason(response))
+
+
+_JSON_MODE_TEXT = ("response_format", "json_object", "structured output", "json_schema", "json mode")
+
+
+def _rejects_json_mode(exc: BaseException) -> bool:
+    """The route refused the JSON-mode request itself (local ValueError or a 400 naming the JSON format)."""
+    if not (isinstance(exc, ValueError) or is_provider_bad_request(exc)):
+        return False
+    text = str(exc).lower()
+    return any(marker in text for marker in _JSON_MODE_TEXT)
 
 
 def is_model_not_found(exc: BaseException) -> bool:

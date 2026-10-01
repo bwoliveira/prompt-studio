@@ -375,3 +375,72 @@ def test_provider_error_code_precedence():
     assert adapter.provider_error_code(_status_exc(429)) == "unavailable"
     assert adapter.provider_error_code(_status_exc(500)) == "unavailable"
     assert adapter.provider_error_code(TimeoutError()) == "unavailable"
+
+
+def _fake_refusing_json(monkeypatch, error, config=None, timeouts=None, refuse_after=0.0):
+    calls = []
+    configured = config or {}
+    captured = _fake_hermes(monkeypatch, "claude-subscription-directsdk-experimental", configured)
+    fake = sys.modules["agent.auxiliary_client"]
+
+    def call_llm(**kw):
+        calls.append(kw.get("extra_body"))
+        if timeouts is not None:
+            timeouts.append(kw["timeout"])
+        # Like Hermes' _prepare_aux_request: the task's configured extra_body, then the call's overrides.
+        effective = dict(configured.get("extra_body") or {}) if kw.get("task") else {}
+        effective.update(kw.get("extra_body") or {})
+        if effective.get("response_format", {}).get("type") not in (None, "text"):
+            if refuse_after:
+                adapter.time.sleep(refuse_after)
+            raise error
+        kw["route_info"].update({"provider": "routed", "model": "rm"})
+        return {"choices": []}
+
+    fake.call_llm = call_llm
+    return calls
+
+
+def test_route_that_refuses_json_mode_is_retried_without_response_format(monkeypatch):
+    calls = _fake_refusing_json(monkeypatch, ValueError("Only json_schema structured output is supported"))
+    assert _call(is_json=True) == ("out", "routed/rm")
+    assert calls == [{"response_format": {"type": "json_object"}}, None]
+
+
+def test_400_naming_response_format_is_retried_without_it(monkeypatch):
+    err = type("BadRequestError", (Exception,), {})("response_format json_object is not supported by this model")
+    calls = _fake_refusing_json(monkeypatch, err)
+    assert _call(is_json=True) == ("out", "routed/rm")
+    assert len(calls) == 2 and calls[1] is None
+
+
+def test_other_failures_are_not_retried(monkeypatch):
+    calls = _fake_refusing_json(monkeypatch, ValueError("model not found"))
+    with pytest.raises(ValueError):
+        _call(is_json=True)
+    assert len(calls) == 1
+
+
+def test_configured_json_format_is_overridden_on_retry_not_just_dropped(monkeypatch):
+    config = {"extra_body": {"response_format": {"type": "json_object"}, "top_k": 3}}
+    calls = _fake_refusing_json(monkeypatch, ValueError("Only json_schema structured output is supported"), config)
+    assert _call(is_json=True) == ("out", "routed/rm")
+    assert calls[1] == {"top_k": 3, "response_format": {"type": "text"}}
+
+
+def test_retry_gets_only_the_rest_of_the_budget(monkeypatch):
+    timeouts = []
+    _fake_refusing_json(monkeypatch, ValueError("Only json_schema structured output is supported"),
+                        timeouts=timeouts, refuse_after=0.3)
+    adapter._default_llm(messages=[], max_tokens=10, timeout=5, is_json=True)
+    assert timeouts[0] == 5 and timeouts[1] <= 5 - 0.3
+
+
+def test_no_retry_once_the_budget_is_spent(monkeypatch):
+    timeouts = []
+    calls = _fake_refusing_json(monkeypatch, ValueError("Only json_schema structured output is supported"),
+                                timeouts=timeouts, refuse_after=0.3)
+    monkeypatch.setattr(adapter, "RETRY_MIN_SECONDS", 1.0)
+    with pytest.raises(ValueError):
+        adapter._default_llm(messages=[], max_tokens=10, timeout=1.2, is_json=True)
+    assert len(calls) == 1

@@ -10,6 +10,9 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
 - Fix: "Não foi possível usar a IA agora" / "Could not use the AI this time" on every step when Hermes hosts more
   than one profile (the dashboard then refuses credential reads with no profile bound, `UnscopedSecretError` in
   `agent.log`). Each model call now keeps the profile of the request that asked for it.
+- Fix: questions and suggestions stopped loading after picking, in Settings, a model whose route refuses JSON mode
+  (for example the Claude subscription provider, `Only json_schema structured output is supported` in `agent.log`).
+  The Studio now retries that call once without JSON mode and reads the JSON from the reply text.
 
 ## 1.8.0
 
