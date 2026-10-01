@@ -200,19 +200,42 @@ def _default_llm(
         # provider call ends on its own instead of pinning a worker thread past the deadline.
         timeout = min(timeout, float(cfg_timeout)) if hard_timeout else max(timeout, float(cfg_timeout))
 
-    response = call_llm(
-        task=task,
-        messages=messages,
-        max_tokens=max_tokens,
-        timeout=timeout,
-        route_info=route,
-        extra_body=extra_body or None,
-        reasoning_config=reasoning_config,
-        **explicit,
-    )
+    def _call(body: dict[str, Any]) -> Any:
+        return call_llm(
+            task=task,
+            messages=messages,
+            max_tokens=max_tokens,
+            timeout=timeout,
+            route_info=route,
+            extra_body=body or None,
+            reasoning_config=reasoning_config,
+            **explicit,
+        )
+
+    try:
+        response = _call(extra_body)
+    except Exception as exc:
+        # Some routes refuse JSON mode (e.g. a provider that only takes json_schema). The prompts already ask
+        # for JSON and _json_object reads it from plain text, so retry once without response_format.
+        if "response_format" not in extra_body or not _rejects_json_mode(exc):
+            raise
+        logger.info("Prompt Studio: route refused JSON mode, retrying without response_format")
+        extra_body = {k: v for k, v in extra_body.items() if k != "response_format"}
+        response = _call(extra_body)
     resolved_provider = route.get("provider", provider or "auto")
     resolved_model = route.get("model", model or "default")
     return Reply(extract_content_or_reasoning(response), f"{resolved_provider}/{resolved_model}", _finish_reason(response))
+
+
+_JSON_MODE_TEXT = ("response_format", "json_object", "structured output", "json_schema", "json mode")
+
+
+def _rejects_json_mode(exc: BaseException) -> bool:
+    """The route refused the JSON-mode request itself (local ValueError or a 400 naming the JSON format)."""
+    if not (isinstance(exc, ValueError) or is_provider_bad_request(exc)):
+        return False
+    text = str(exc).lower()
+    return any(marker in text for marker in _JSON_MODE_TEXT)
 
 
 def is_model_not_found(exc: BaseException) -> bool:

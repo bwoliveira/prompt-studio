@@ -375,3 +375,39 @@ def test_provider_error_code_precedence():
     assert adapter.provider_error_code(_status_exc(429)) == "unavailable"
     assert adapter.provider_error_code(_status_exc(500)) == "unavailable"
     assert adapter.provider_error_code(TimeoutError()) == "unavailable"
+
+
+def _fake_refusing_json(monkeypatch, error):
+    calls = []
+    captured = _fake_hermes(monkeypatch, "claude-subscription-directsdk-experimental", {})
+    fake = sys.modules["agent.auxiliary_client"]
+
+    def call_llm(**kw):
+        calls.append(kw.get("extra_body"))
+        if kw.get("extra_body") and "response_format" in kw["extra_body"]:
+            raise error
+        kw["route_info"].update({"provider": "routed", "model": "rm"})
+        return {"choices": []}
+
+    fake.call_llm = call_llm
+    return calls
+
+
+def test_route_that_refuses_json_mode_is_retried_without_response_format(monkeypatch):
+    calls = _fake_refusing_json(monkeypatch, ValueError("Only json_schema structured output is supported"))
+    assert _call(is_json=True) == ("out", "routed/rm")
+    assert calls == [{"response_format": {"type": "json_object"}}, None]
+
+
+def test_400_naming_response_format_is_retried_without_it(monkeypatch):
+    err = type("BadRequestError", (Exception,), {})("response_format json_object is not supported by this model")
+    calls = _fake_refusing_json(monkeypatch, err)
+    assert _call(is_json=True) == ("out", "routed/rm")
+    assert len(calls) == 2 and calls[1] is None
+
+
+def test_other_failures_are_not_retried(monkeypatch):
+    calls = _fake_refusing_json(monkeypatch, ValueError("model not found"))
+    with pytest.raises(ValueError):
+        _call(is_json=True)
+    assert len(calls) == 1
