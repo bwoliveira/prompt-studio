@@ -325,13 +325,20 @@ const QUESTION_HEAD = /\b(?:do|does|did|can|could|should|would|will|may|might|is
 const CONTEXT_WINDOW = 120
 // "I need a script to write log files": the artifact asked for sits before the verb that tells its purpose; with the
 // request opener ("I need", "preciso de") it also decides the deliverable ("I need a script to configure nginx").
-const REQUESTED_ARTIFACT = /((?:(?:i|we) (?:need|want|would like)|i'd like|we'd like|give me|send me|preciso de|precisamos de|quero|queremos|gostaria de|gostariamos de|me de|me passe|me envie|me mande|what (?:i|we) (?:need|want|would like) is|o que (?:eu|nos) (?:preciso|precisamos|quero|queremos) e)\s+(?:me\s+)?)?(?:a|an|the|um|uma|o|os|as|some|algum|alguma|alguns|algumas)\s+(?:(?!(?:to|for|and|or|that|which|para|que|e|ou)\s)[\w-]+\s+){1,3}(?:to|that|which|para|que)\s+$/
+const REQUESTED_ARTIFACT = /((?:(?:i|we) (?:need|want|would like)|i'd like|we'd like|give me|send me|preciso de|precisamos de|quero|queremos|gostaria de|gostariamos de|me de|me passe|me envie|me mande|what (?:i|we) (?:need|want|would like) is|o que (?:eu|nos) (?:preciso|precisamos|quero|queremos) e)\s+(?:me\s+)?)?(?:a|an|the|um|uma|o|os|as|some|algum|alguma|alguns|algumas)\s+(?:(?!(?:to|for|and|or|that|which|para|que|e|ou)\s)[\w-]+\s+){1,3}(?:to|that|which|para|que)\s+(?:(?:will|would|can|could|should|must|might|may|shall|vai|va|pode|possa|deve|deva|ira|iria|consiga|safely|quickly|carefully|properly|automatically|reliably|correctly|fully|gently|kindly|please|\w+ly|\w+mente)\s+){0,2}$/
 // "and fix the login bug", "e corrigir o bug": a coordinator followed by an order inside an explanation request.
+// "how to configure nginx and deploy the app", "the architecture and how to configure nginx": a topic, not an order.
+const TOPIC_TAIL = /\b(?:how to|como)\s+\w+[^.!?,;]*$/
+const TOPIC_HEAD = /^\s*(?:how|what|why|when|where|which|whether|como|o que|por que|quando|onde|qual|quais)\b/
 const ORDER_JOIN = /\b(?:and|then|e|depois|entao)\s+(?:then\s+|depois\s+)?/g
 function coordinatedOrder(text) {
   ORDER_JOIN.lastIndex = 0
   for (let n = 0, m; n < 8 && (m = ORDER_JOIN.exec(text)); n++) {
+    const before = text.slice(Math.max(0, m.index - CONTEXT_WINDOW), m.index)
     const rest = text.slice(m.index + m[0].length, m.index + m[0].length + CONTEXT_WINDOW)
+    // "how to configure nginx and deploy the app": the coordinator extends the topic, not the request; "and then" orders.
+    const sequence = /\b(?:then|depois|entao)\b/.test(m[0])
+    if (TOPIC_HEAD.test(rest) || (!sequence && TOPIC_TAIL.test(before))) continue
     if (firstSignal(rest).verb) return m.index
   }
   return -1
