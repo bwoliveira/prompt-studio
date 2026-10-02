@@ -1,0 +1,66 @@
+# Checks of every pull request and every push to main. bin/pr waits for them before it merges.
+# The Codex review is not here: it runs locally (AGENTS.md).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node:
+    name: Build check and Node tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install the pinned dev dependencies
+        run: npm ci
+      - name: desktop/plugin.js and studio-core.mjs are up to date
+        run: node scripts/build.mjs --check
+      - name: UI and engine tests (fail, never skip, when a dependency is missing)
+        run: npm test
+      - name: Review-script tests
+        run: npm run test:bin
+
+  python:
+    name: Python tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - name: Install the declared test dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Tests
+        run: pytest -q tests
+
+  gitleaks:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # the whole history, as .gitleaksignore expects
+      - uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: "false"
+          # GITLEAKS_LICENSE is only required for organizations; this repository is a personal one.

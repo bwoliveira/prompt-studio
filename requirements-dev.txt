@@ -1,0 +1,8 @@
+# Python test dependencies, used by the local command and by .github/workflows/ci.yml:
+#   uvx --with-requirements requirements-dev.txt pytest -q tests
+#   pip install -r requirements-dev.txt && pytest -q tests
+# The plugin itself declares no Python dependencies (plugin.yaml python_dependencies: []).
+pytest==9.1.1
+fastapi==0.142.2
+httpx==0.28.1
+pyyaml==6.0.3
