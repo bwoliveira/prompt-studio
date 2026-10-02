@@ -281,6 +281,7 @@ const NEGATED = /(?:^|[\s,;:(])(?:(?:do not|don't|dont|does not|doesn't|never|no
 // The prohibition covers the verbs coordinated with the negated one ("do not build or deploy anything", "never
 // install, configure or deploy"): a coordinator or a list comma leads back to the previous word.
 const COORDINATED = /\b(\w+)\s*(?:,|,?\s+(?:or|nor|and|ou|nem|e))\s*$/
+const PREDICATE_NEGATION = /\b(?:is|are|was|were|am|be|been|being|'s|'re|seems|looks|esta|estao|estava|estavam|e|era|eram|foi|foram|fica|ficou|parece)\s+(?:not|nao|never|nunca)(?:\s+\w+)?\s*$/
 // A mark-less question may carry a comma only when what precedes the comma already reads as a question ("How do
 // I configure nginx, with TLS."): a role opener ("Como especialista em redes, escreva ...") is not one.
 const QUESTION_HEAD = /\b(?:do|does|did|can|could|should|would|will|may|might|is|are|was|were|am|have|has|posso|devo|consigo|faco|funciona|funcionam|deveria|poderia|sao|esta|estao|ha)\b/
@@ -316,7 +317,8 @@ function contextBefore(text, at) {
 // deploy", "never install, configure or deploy"); the walk back is bounded.
 function prohibited(text, at, hops = 0) {
   const before = contextBefore(text, at)
-  if (NEGATED.test(before)) return true
+  // A negated predicate ("The API is not ready, review the code") forbids nothing coordinated after it.
+  if (NEGATED.test(before)) return hops === 0 || !PREDICATE_NEGATION.test(before)
   const chain = hops < 5 && COORDINATED.exec(before)
   return chain ? prohibited(text, at - before.length + chain.index, hops + 1) : false
 }
@@ -324,7 +326,7 @@ function prohibited(text, at, hops = 0) {
 // A yes/no question, closed by its mark ("Can I configure nginx?", "Posso reiniciar o servidor?"). "Can you ..." and
 // "Voce pode ..." are requests, not questions, unless they ask what the reader thinks, knows or can tell; "Do not ..." is a
 // prohibition, and the question ends at its own sentence, so a later request is read on its own.
-const YESNO_FORM = /^(?:(?:voce|voces)\s+(?:pode|podem|poderia|poderiam|consegue|conseguem|sabe|sabem)\s+(?:me\s+)?(?:dizer|explicar|mostrar|contar|descrever|esclarecer|ajudar|orientar|indicar)|(?:can|could|should|would|will|may|might|shall|must|do|does|did|is|are|was|were|am|have|has|posso|podemos|devo|devemos|consigo|conseguimos|preciso|precisamos|existe|existem|ha|tem como|da para|e possivel|e preciso|e necessario|e seguro|e melhor|sera que|vale)(?!\s+(?:you|voce|voces)\b(?!\s+(?:think|know|believe|recommend|suggest|mean|see|tell|say|explain|describe|clarify|show|walk|help|acha|sabe|recomenda|sugere|conhece|me dizer|me explicar|me mostrar|me contar|me descrever|me esclarecer|me ajudar|me orientar|dizer|explicar|mostrar|contar|descrever|esclarecer)\b))(?!\s+not\b|n't\b))\b(?:[^.?!\n]|\.(?=\S)|\n(?![ \t]*\n))*\?/
+const YESNO_FORM = /^(?:(?:voce|voces)\s+(?:pode|podem|poderia|poderiam|consegue|conseguem|sabe|sabem)\s+(?:por favor\s+)?(?:me\s+)?(?:dizer|explicar|mostrar|contar|descrever|esclarecer|ajudar|orientar|indicar)|(?:can|could|should|would|will|may|might|shall|must|do|does|did|is|are|was|were|am|have|has|posso|podemos|devo|devemos|consigo|conseguimos|preciso|precisamos|existe|existem|ha|tem como|da para|e possivel|e preciso|e necessario|e seguro|e melhor|sera que|vale)(?!\s+(?:you|voce|voces)\b(?!(?:\s+(?:please|kindly|por favor|gentilmente))?\s+(?:think|know|believe|recommend|suggest|mean|see|tell|say|explain|describe|clarify|show|walk|help|acha|sabe|recomenda|sugere|conhece|me dizer|me explicar|me mostrar|me contar|me descrever|me esclarecer|me ajudar|me orientar|dizer|explicar|mostrar|contar|descrever|esclarecer)\b))(?!\s+not\b|n't\b))\b(?:[^.?!\n]|\.(?=\S)|\n(?![ \t]*\n))*\?/
 // The question form, unless its comma follows something that is not a question ("Como especialista, escreva").
 function isQuestion(goal) {
   const yesNo = YESNO_FORM.exec(goal)
@@ -353,8 +355,10 @@ function firstSignal(text) {
       const before = contextBefore(text, m.index)
       const end = m.index + m[0].length
       const after = text.slice(end, end + CONTEXT_WINDOW)
-      const requested = REQUESTED_NOUN.test(before) && !COPULA.test(after)
-      const isNoun = NOUN_SIGNAL.test(word) && !SENTENCE_START.test(before) && !INFINITIVE_MARK.test(before) && !VERB_OBJECT.test(after) && !requested
+      // A copula after the word makes it context wherever it sits ("Plan is ready. Build ...", "CSV is attached.").
+      const copula = COPULA.test(after)
+      const requested = REQUESTED_NOUN.test(before) && !copula
+      const isNoun = NOUN_SIGNAL.test(word) && (copula || (!SENTENCE_START.test(before) && !INFINITIVE_MARK.test(before) && !VERB_OBJECT.test(after) && !requested))
       if (isNoun) { if (m.index < nounAt) { noun = id; nounAt = m.index }; continue }
       if (m.index < at) { signal = id; at = m.index }
       break
@@ -821,6 +825,7 @@ const NEGATED = /(?:^|[\s,;:(])(?:(?:do not|don't|dont|does not|doesn't|never|no
 // The prohibition covers the verbs coordinated with the negated one ("do not build or deploy anything", "never
 // install, configure or deploy"): a coordinator or a list comma leads back to the previous word.
 const COORDINATED = /\b(\w+)\s*(?:,|,?\s+(?:or|nor|and|ou|nem|e))\s*$/
+const PREDICATE_NEGATION = /\b(?:is|are|was|were|am|be|been|being|'s|'re|seems|looks|esta|estao|estava|estavam|e|era|eram|foi|foram|fica|ficou|parece)\s+(?:not|nao|never|nunca)(?:\s+\w+)?\s*$/
 // A mark-less question may carry a comma only when what precedes the comma already reads as a question ("How do
 // I configure nginx, with TLS."): a role opener ("Como especialista em redes, escreva ...") is not one.
 const QUESTION_HEAD = /\b(?:do|does|did|can|could|should|would|will|may|might|is|are|was|were|am|have|has|posso|devo|consigo|faco|funciona|funcionam|deveria|poderia|sao|esta|estao|ha)\b/
@@ -856,7 +861,8 @@ function contextBefore(text, at) {
 // deploy", "never install, configure or deploy"); the walk back is bounded.
 function prohibited(text, at, hops = 0) {
   const before = contextBefore(text, at)
-  if (NEGATED.test(before)) return true
+  // A negated predicate ("The API is not ready, review the code") forbids nothing coordinated after it.
+  if (NEGATED.test(before)) return hops === 0 || !PREDICATE_NEGATION.test(before)
   const chain = hops < 5 && COORDINATED.exec(before)
   return chain ? prohibited(text, at - before.length + chain.index, hops + 1) : false
 }
@@ -864,7 +870,7 @@ function prohibited(text, at, hops = 0) {
 // A yes/no question, closed by its mark ("Can I configure nginx?", "Posso reiniciar o servidor?"). "Can you ..." and
 // "Voce pode ..." are requests, not questions, unless they ask what the reader thinks, knows or can tell; "Do not ..." is a
 // prohibition, and the question ends at its own sentence, so a later request is read on its own.
-const YESNO_FORM = /^(?:(?:voce|voces)\s+(?:pode|podem|poderia|poderiam|consegue|conseguem|sabe|sabem)\s+(?:me\s+)?(?:dizer|explicar|mostrar|contar|descrever|esclarecer|ajudar|orientar|indicar)|(?:can|could|should|would|will|may|might|shall|must|do|does|did|is|are|was|were|am|have|has|posso|podemos|devo|devemos|consigo|conseguimos|preciso|precisamos|existe|existem|ha|tem como|da para|e possivel|e preciso|e necessario|e seguro|e melhor|sera que|vale)(?!\s+(?:you|voce|voces)\b(?!\s+(?:think|know|believe|recommend|suggest|mean|see|tell|say|explain|describe|clarify|show|walk|help|acha|sabe|recomenda|sugere|conhece|me dizer|me explicar|me mostrar|me contar|me descrever|me esclarecer|me ajudar|me orientar|dizer|explicar|mostrar|contar|descrever|esclarecer)\b))(?!\s+not\b|n't\b))\b(?:[^.?!\n]|\.(?=\S)|\n(?![ \t]*\n))*\?/
+const YESNO_FORM = /^(?:(?:voce|voces)\s+(?:pode|podem|poderia|poderiam|consegue|conseguem|sabe|sabem)\s+(?:por favor\s+)?(?:me\s+)?(?:dizer|explicar|mostrar|contar|descrever|esclarecer|ajudar|orientar|indicar)|(?:can|could|should|would|will|may|might|shall|must|do|does|did|is|are|was|were|am|have|has|posso|podemos|devo|devemos|consigo|conseguimos|preciso|precisamos|existe|existem|ha|tem como|da para|e possivel|e preciso|e necessario|e seguro|e melhor|sera que|vale)(?!\s+(?:you|voce|voces)\b(?!(?:\s+(?:please|kindly|por favor|gentilmente))?\s+(?:think|know|believe|recommend|suggest|mean|see|tell|say|explain|describe|clarify|show|walk|help|acha|sabe|recomenda|sugere|conhece|me dizer|me explicar|me mostrar|me contar|me descrever|me esclarecer|me ajudar|me orientar|dizer|explicar|mostrar|contar|descrever|esclarecer)\b))(?!\s+not\b|n't\b))\b(?:[^.?!\n]|\.(?=\S)|\n(?![ \t]*\n))*\?/
 // The question form, unless its comma follows something that is not a question ("Como especialista, escreva").
 function isQuestion(goal) {
   const yesNo = YESNO_FORM.exec(goal)
@@ -893,8 +899,10 @@ function firstSignal(text) {
       const before = contextBefore(text, m.index)
       const end = m.index + m[0].length
       const after = text.slice(end, end + CONTEXT_WINDOW)
-      const requested = REQUESTED_NOUN.test(before) && !COPULA.test(after)
-      const isNoun = NOUN_SIGNAL.test(word) && !SENTENCE_START.test(before) && !INFINITIVE_MARK.test(before) && !VERB_OBJECT.test(after) && !requested
+      // A copula after the word makes it context wherever it sits ("Plan is ready. Build ...", "CSV is attached.").
+      const copula = COPULA.test(after)
+      const requested = REQUESTED_NOUN.test(before) && !copula
+      const isNoun = NOUN_SIGNAL.test(word) && (copula || (!SENTENCE_START.test(before) && !INFINITIVE_MARK.test(before) && !VERB_OBJECT.test(after) && !requested))
       if (isNoun) { if (m.index < nounAt) { noun = id; nounAt = m.index }; continue }
       if (m.index < at) { signal = id; at = m.index }
       break
@@ -1425,6 +1433,7 @@ const NEGATED = /(?:^|[\s,;:(])(?:(?:do not|don't|dont|does not|doesn't|never|no
 // The prohibition covers the verbs coordinated with the negated one ("do not build or deploy anything", "never
 // install, configure or deploy"): a coordinator or a list comma leads back to the previous word.
 const COORDINATED = /\b(\w+)\s*(?:,|,?\s+(?:or|nor|and|ou|nem|e))\s*$/
+const PREDICATE_NEGATION = /\b(?:is|are|was|were|am|be|been|being|'s|'re|seems|looks|esta|estao|estava|estavam|e|era|eram|foi|foram|fica|ficou|parece)\s+(?:not|nao|never|nunca)(?:\s+\w+)?\s*$/
 // A mark-less question may carry a comma only when what precedes the comma already reads as a question ("How do
 // I configure nginx, with TLS."): a role opener ("Como especialista em redes, escreva ...") is not one.
 const QUESTION_HEAD = /\b(?:do|does|did|can|could|should|would|will|may|might|is|are|was|were|am|have|has|posso|devo|consigo|faco|funciona|funcionam|deveria|poderia|sao|esta|estao|ha)\b/
@@ -1460,7 +1469,8 @@ function contextBefore(text, at) {
 // deploy", "never install, configure or deploy"); the walk back is bounded.
 function prohibited(text, at, hops = 0) {
   const before = contextBefore(text, at)
-  if (NEGATED.test(before)) return true
+  // A negated predicate ("The API is not ready, review the code") forbids nothing coordinated after it.
+  if (NEGATED.test(before)) return hops === 0 || !PREDICATE_NEGATION.test(before)
   const chain = hops < 5 && COORDINATED.exec(before)
   return chain ? prohibited(text, at - before.length + chain.index, hops + 1) : false
 }
@@ -1468,7 +1478,7 @@ function prohibited(text, at, hops = 0) {
 // A yes/no question, closed by its mark ("Can I configure nginx?", "Posso reiniciar o servidor?"). "Can you ..." and
 // "Voce pode ..." are requests, not questions, unless they ask what the reader thinks, knows or can tell; "Do not ..." is a
 // prohibition, and the question ends at its own sentence, so a later request is read on its own.
-const YESNO_FORM = /^(?:(?:voce|voces)\s+(?:pode|podem|poderia|poderiam|consegue|conseguem|sabe|sabem)\s+(?:me\s+)?(?:dizer|explicar|mostrar|contar|descrever|esclarecer|ajudar|orientar|indicar)|(?:can|could|should|would|will|may|might|shall|must|do|does|did|is|are|was|were|am|have|has|posso|podemos|devo|devemos|consigo|conseguimos|preciso|precisamos|existe|existem|ha|tem como|da para|e possivel|e preciso|e necessario|e seguro|e melhor|sera que|vale)(?!\s+(?:you|voce|voces)\b(?!\s+(?:think|know|believe|recommend|suggest|mean|see|tell|say|explain|describe|clarify|show|walk|help|acha|sabe|recomenda|sugere|conhece|me dizer|me explicar|me mostrar|me contar|me descrever|me esclarecer|me ajudar|me orientar|dizer|explicar|mostrar|contar|descrever|esclarecer)\b))(?!\s+not\b|n't\b))\b(?:[^.?!\n]|\.(?=\S)|\n(?![ \t]*\n))*\?/
+const YESNO_FORM = /^(?:(?:voce|voces)\s+(?:pode|podem|poderia|poderiam|consegue|conseguem|sabe|sabem)\s+(?:por favor\s+)?(?:me\s+)?(?:dizer|explicar|mostrar|contar|descrever|esclarecer|ajudar|orientar|indicar)|(?:can|could|should|would|will|may|might|shall|must|do|does|did|is|are|was|were|am|have|has|posso|podemos|devo|devemos|consigo|conseguimos|preciso|precisamos|existe|existem|ha|tem como|da para|e possivel|e preciso|e necessario|e seguro|e melhor|sera que|vale)(?!\s+(?:you|voce|voces)\b(?!(?:\s+(?:please|kindly|por favor|gentilmente))?\s+(?:think|know|believe|recommend|suggest|mean|see|tell|say|explain|describe|clarify|show|walk|help|acha|sabe|recomenda|sugere|conhece|me dizer|me explicar|me mostrar|me contar|me descrever|me esclarecer|me ajudar|me orientar|dizer|explicar|mostrar|contar|descrever|esclarecer)\b))(?!\s+not\b|n't\b))\b(?:[^.?!\n]|\.(?=\S)|\n(?![ \t]*\n))*\?/
 // The question form, unless its comma follows something that is not a question ("Como especialista, escreva").
 function isQuestion(goal) {
   const yesNo = YESNO_FORM.exec(goal)
@@ -1497,8 +1507,10 @@ function firstSignal(text) {
       const before = contextBefore(text, m.index)
       const end = m.index + m[0].length
       const after = text.slice(end, end + CONTEXT_WINDOW)
-      const requested = REQUESTED_NOUN.test(before) && !COPULA.test(after)
-      const isNoun = NOUN_SIGNAL.test(word) && !SENTENCE_START.test(before) && !INFINITIVE_MARK.test(before) && !VERB_OBJECT.test(after) && !requested
+      // A copula after the word makes it context wherever it sits ("Plan is ready. Build ...", "CSV is attached.").
+      const copula = COPULA.test(after)
+      const requested = REQUESTED_NOUN.test(before) && !copula
+      const isNoun = NOUN_SIGNAL.test(word) && (copula || (!SENTENCE_START.test(before) && !INFINITIVE_MARK.test(before) && !VERB_OBJECT.test(after) && !requested))
       if (isNoun) { if (m.index < nounAt) { noun = id; nounAt = m.index }; continue }
       if (m.index < at) { signal = id; at = m.index }
       break
