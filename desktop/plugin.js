@@ -301,7 +301,7 @@ const NOUN_SIGNAL = /^(plano|planos|plan|roadmap|cronograma|estrategia|strategy|
 // one-word opener and its comma ("First, plan ..."), a polite prefix ("Please plan ...", "Por favor, planeje") or a
 // request prefix ("Can you plan ...", "I need you to plan ...", "Preciso que voce planeje ...").
 // A noun-signal word there names the request ("Plan the steps ...", "Plano de acao para ..."), not context.
-const SENTENCE_START = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:can|could|would|will) you|(?:i|we) (?:need|want) you to|voce pode|preciso que voce|precisamos que voce|quero que voce|queremos que voce)\s+(?:please\s+)?)?(?:(?:\w+ly|\w+mente|first|then|now|next|also|just|again|primeiro|depois|agora|entao|tambem|so|ja)\s+)?$/
+const SENTENCE_START = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:can|could|would|will) you|(?:i|we) (?:need|want) you to|voce pode|preciso que voce|precisamos que voce|quero que voce|queremos que voce|(?:please\s+)?help (?:me|us)(?: to)?|(?:me|nos) (?:ajude|ajudem|ajuda) a|(?:ajude|ajudem) (?:me|nos) a)\s+(?:please\s+)?)?(?:(?:\w+ly|\w+mente|first|then|now|next|also|just|again|primeiro|depois|agora|entao|tambem|so|ja)\s+)?$/
 // A noun-signal word after an infinitive or modal marker is the verb ("we need to plan before ...", "let's plan").
 const INFINITIVE_MARK = /\b(?:(?:need|needs|needed|want|wants|wanted|have|has|had|going|ought|able|like|try|trying|time|ready|how)\s+to|let'?s|let us|(?:we|you|i|they)\s+(?:should|must|will|can|could|shall|may|might)(?:\s+(?:also|first|then|now|just))?|precisamos|devemos|vamos|queremos|preciso|quero|devo|vou)\s*$/
 // A noun-signal word that heads a requested noun phrase ("A plan to configure nginx", "Preciso de um plano para ...")
@@ -329,6 +329,8 @@ const QUESTION_HEAD = /\b(?:do|does|did|can|could|should|would|will|may|might|is
 // Only this many characters around a match are inspected, so the scan stays linear on long drafts; the prefixes
 // NEGATED and SENTENCE_START look for are far shorter than this.
 const CONTEXT_WINDOW = 120
+// "I need a script to write log files": the artifact asked for sits before the verb that tells its purpose.
+const REQUESTED_ARTIFACT = /(?:a|an|the|um|uma|o|os|as|some|algum|alguma|alguns|algumas)\s+(?:(?!(?:to|for|and|or|that|which|para|que|e|ou)\s)[\w-]+\s+){1,3}(?:to|that|which|para|que)\s+$/
 const INTRO_CLAUSE = /^([^.!?,:;\n]{1,60}),\s+/
 // "The configure script is broken", "I tried to configure nginx yesterday": the verb names a thing or tells the past.
 const MODIFIER_USE = /\b(?:the|a|an|this|that|these|those|my|our|your|o|os|a|as|um|uma|este|esta|esse|essa|meu|minha|nosso|nossa|seu|sua)\s+$/
@@ -378,7 +380,7 @@ function prohibited(text, at, hops = 0) {
 const YESNO_FORM = /^(?:(?:voce|voces)\s+(?:pode|podem|poderia|poderiam|consegue|conseguem|sabe|sabem)\s+(?:por favor\s+)?(?:me\s+)?(?:dizer|explicar|mostrar|contar|descrever|esclarecer|ajudar a (?:entender|compreender|saber|decidir|escolher)|orientar|indicar)|(?:(?:should|must|do|does|did|is|are|was|were|am|have|has|posso|podemos|devo|devemos|consigo|conseguimos|preciso|precisamos|existe|existem|ha|tem como|da para|e possivel|e preciso|e necessario|e seguro|e melhor|sera que|vale)\b|(?:can|could|would|will|may|might|shall)(?!\s+(?:you|voce|voces)\b(?!(?:\s+(?:please|kindly|por favor|gentilmente))?\s+(?:think|know|believe|recommend|suggest|mean|see|tell|say|explain|describe|clarify|show|walk|help (?:me |us )?(?:to )?(?:understand|figure out|learn|know|see|grasp|decide|choose)|acha|sabe|recomenda|sugere|conhece|me dizer|me explicar|me mostrar|me contar|me descrever|me esclarecer|me ajudar a (?:entender|compreender|saber|decidir|escolher)|me orientar|dizer|explicar|mostrar|contar|descrever|esclarecer)\b)))(?!\s+not\b|n't\b))\b(?:[^.?!\n]|\.(?=\S)|\n(?![ \t]*\n))*\?/
 // "Can you tell me how to configure nginx", "Tell me how to ...", "Me diga como ...": an explanation is asked for,
 // whether or not a question mark closes it; the request ends with its sentence.
-const EXPLAIN_FORM = /^(?:(?:(?:please|por favor),?\s+)?(?:(?:tell|show|explain to|describe to|walk) (?:me|us)|(?:me|nos) (?:diga|digam|explique|expliquem|mostre|mostrem|conte|contem|descreva|descrevam|esclareca|esclarecam)|(?:diga|digam|explique|expliquem|mostre|mostrem|conte|contem|descreva|descrevam|esclareca|esclarecam) (?:me|nos|pra mim|para mim|para nos))|(?:can|could|would|will) you (?:(?:please|kindly) )?(?:tell|say|explain|describe|clarify|show|walk|help (?:me |us )?(?:to )?(?:understand|figure out|learn|know|see|grasp|decide|choose))|(?:voce|voces) (?:pode|podem|poderia|poderiam|consegue|conseguem|sabe|sabem) (?:por favor )?(?:me )?(?:dizer|explicar|mostrar|contar|descrever|esclarecer|ajudar a (?:entender|compreender|saber|decidir|escolher)|orientar|indicar))\b(?:[^.?!\n]|\.(?=\S)|\n(?![ \t]*\n))*(?:\?|\.(?!\S)|$|(?=\n[ \t]*\n))/
+const EXPLAIN_FORM = /^(?:(?:(?:please|por favor),?\s+)?(?:(?:tell|show|explain to|describe to|walk) (?:me|us)|help (?:me|us) (?:to )?(?:understand|figure out|learn|know|see|grasp|decide|choose)|(?:me|nos) (?:ajude|ajudem) a (?:entender|compreender|saber|decidir|escolher)|(?:ajude|ajudem)(?:-| )(?:me|nos) a (?:entender|compreender|saber|decidir|escolher)|(?:me|nos) (?:diga|digam|explique|expliquem|mostre|mostrem|conte|contem|descreva|descrevam|esclareca|esclarecam)|(?:diga|digam|explique|expliquem|mostre|mostrem|conte|contem|descreva|descrevam|esclareca|esclarecam) (?:me|nos|pra mim|para mim|para nos))|(?:can|could|would|will) you (?:(?:please|kindly) )?(?:tell|say|explain|describe|clarify|show|walk|help (?:me |us )?(?:to )?(?:understand|figure out|learn|know|see|grasp|decide|choose))|(?:voce|voces) (?:pode|podem|poderia|poderiam|consegue|conseguem|sabe|sabem) (?:por favor )?(?:me )?(?:dizer|explicar|mostrar|contar|descrever|esclarecer|ajudar a (?:entender|compreender|saber|decidir|escolher)|orientar|indicar))\b(?:[^.?!\n]|\.(?=\S)|\n(?![ \t]*\n))*(?:\?|\.(?!\S)|$|(?=\n[ \t]*\n))/
 // The question form, unless its comma follows something that is not a question ("Como especialista, escreva").
 function isQuestion(goal) {
   const direct = questionAt(goal)
@@ -465,7 +467,8 @@ function detect(b) {
   const request = Number.isFinite(at) ? text.slice(at) : text
   // Only the verb that fired can make a code artifact: a later "write" does not turn an analysis into code.
   const verbWord = (request.match(/^\s*(\w+)/) || [])[1] || ''
-  const artifact = pickArtifact(request)
+  const requestedArtifact = Number.isFinite(at) && REQUESTED_ARTIFACT.exec(text.slice(Math.max(0, at - CONTEXT_WINDOW), at))
+  const artifact = pickArtifact(requestedArtifact ? text.slice(at - requestedArtifact[0].length) : request)
   const codeWins = artifact === 'code'
   const textWins = artifact === 'text'
   if ((signal === 'data' || signal === 'text') && MAKE_VERB.test(verbWord) && codeWins) { signal = 'implementation'; category = 'code' }
@@ -871,7 +874,7 @@ const NOUN_SIGNAL = /^(plano|planos|plan|roadmap|cronograma|estrategia|strategy|
 // one-word opener and its comma ("First, plan ..."), a polite prefix ("Please plan ...", "Por favor, planeje") or a
 // request prefix ("Can you plan ...", "I need you to plan ...", "Preciso que voce planeje ...").
 // A noun-signal word there names the request ("Plan the steps ...", "Plano de acao para ..."), not context.
-const SENTENCE_START = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:can|could|would|will) you|(?:i|we) (?:need|want) you to|voce pode|preciso que voce|precisamos que voce|quero que voce|queremos que voce)\s+(?:please\s+)?)?(?:(?:\w+ly|\w+mente|first|then|now|next|also|just|again|primeiro|depois|agora|entao|tambem|so|ja)\s+)?$/
+const SENTENCE_START = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:can|could|would|will) you|(?:i|we) (?:need|want) you to|voce pode|preciso que voce|precisamos que voce|quero que voce|queremos que voce|(?:please\s+)?help (?:me|us)(?: to)?|(?:me|nos) (?:ajude|ajudem|ajuda) a|(?:ajude|ajudem) (?:me|nos) a)\s+(?:please\s+)?)?(?:(?:\w+ly|\w+mente|first|then|now|next|also|just|again|primeiro|depois|agora|entao|tambem|so|ja)\s+)?$/
 // A noun-signal word after an infinitive or modal marker is the verb ("we need to plan before ...", "let's plan").
 const INFINITIVE_MARK = /\b(?:(?:need|needs|needed|want|wants|wanted|have|has|had|going|ought|able|like|try|trying|time|ready|how)\s+to|let'?s|let us|(?:we|you|i|they)\s+(?:should|must|will|can|could|shall|may|might)(?:\s+(?:also|first|then|now|just))?|precisamos|devemos|vamos|queremos|preciso|quero|devo|vou)\s*$/
 // A noun-signal word that heads a requested noun phrase ("A plan to configure nginx", "Preciso de um plano para ...")
@@ -899,6 +902,8 @@ const QUESTION_HEAD = /\b(?:do|does|did|can|could|should|would|will|may|might|is
 // Only this many characters around a match are inspected, so the scan stays linear on long drafts; the prefixes
 // NEGATED and SENTENCE_START look for are far shorter than this.
 const CONTEXT_WINDOW = 120
+// "I need a script to write log files": the artifact asked for sits before the verb that tells its purpose.
+const REQUESTED_ARTIFACT = /(?:a|an|the|um|uma|o|os|as|some|algum|alguma|alguns|algumas)\s+(?:(?!(?:to|for|and|or|that|which|para|que|e|ou)\s)[\w-]+\s+){1,3}(?:to|that|which|para|que)\s+$/
 const INTRO_CLAUSE = /^([^.!?,:;\n]{1,60}),\s+/
 // "The configure script is broken", "I tried to configure nginx yesterday": the verb names a thing or tells the past.
 const MODIFIER_USE = /\b(?:the|a|an|this|that|these|those|my|our|your|o|os|a|as|um|uma|este|esta|esse|essa|meu|minha|nosso|nossa|seu|sua)\s+$/
@@ -948,7 +953,7 @@ function prohibited(text, at, hops = 0) {
 const YESNO_FORM = /^(?:(?:voce|voces)\s+(?:pode|podem|poderia|poderiam|consegue|conseguem|sabe|sabem)\s+(?:por favor\s+)?(?:me\s+)?(?:dizer|explicar|mostrar|contar|descrever|esclarecer|ajudar a (?:entender|compreender|saber|decidir|escolher)|orientar|indicar)|(?:(?:should|must|do|does|did|is|are|was|were|am|have|has|posso|podemos|devo|devemos|consigo|conseguimos|preciso|precisamos|existe|existem|ha|tem como|da para|e possivel|e preciso|e necessario|e seguro|e melhor|sera que|vale)\b|(?:can|could|would|will|may|might|shall)(?!\s+(?:you|voce|voces)\b(?!(?:\s+(?:please|kindly|por favor|gentilmente))?\s+(?:think|know|believe|recommend|suggest|mean|see|tell|say|explain|describe|clarify|show|walk|help (?:me |us )?(?:to )?(?:understand|figure out|learn|know|see|grasp|decide|choose)|acha|sabe|recomenda|sugere|conhece|me dizer|me explicar|me mostrar|me contar|me descrever|me esclarecer|me ajudar a (?:entender|compreender|saber|decidir|escolher)|me orientar|dizer|explicar|mostrar|contar|descrever|esclarecer)\b)))(?!\s+not\b|n't\b))\b(?:[^.?!\n]|\.(?=\S)|\n(?![ \t]*\n))*\?/
 // "Can you tell me how to configure nginx", "Tell me how to ...", "Me diga como ...": an explanation is asked for,
 // whether or not a question mark closes it; the request ends with its sentence.
-const EXPLAIN_FORM = /^(?:(?:(?:please|por favor),?\s+)?(?:(?:tell|show|explain to|describe to|walk) (?:me|us)|(?:me|nos) (?:diga|digam|explique|expliquem|mostre|mostrem|conte|contem|descreva|descrevam|esclareca|esclarecam)|(?:diga|digam|explique|expliquem|mostre|mostrem|conte|contem|descreva|descrevam|esclareca|esclarecam) (?:me|nos|pra mim|para mim|para nos))|(?:can|could|would|will) you (?:(?:please|kindly) )?(?:tell|say|explain|describe|clarify|show|walk|help (?:me |us )?(?:to )?(?:understand|figure out|learn|know|see|grasp|decide|choose))|(?:voce|voces) (?:pode|podem|poderia|poderiam|consegue|conseguem|sabe|sabem) (?:por favor )?(?:me )?(?:dizer|explicar|mostrar|contar|descrever|esclarecer|ajudar a (?:entender|compreender|saber|decidir|escolher)|orientar|indicar))\b(?:[^.?!\n]|\.(?=\S)|\n(?![ \t]*\n))*(?:\?|\.(?!\S)|$|(?=\n[ \t]*\n))/
+const EXPLAIN_FORM = /^(?:(?:(?:please|por favor),?\s+)?(?:(?:tell|show|explain to|describe to|walk) (?:me|us)|help (?:me|us) (?:to )?(?:understand|figure out|learn|know|see|grasp|decide|choose)|(?:me|nos) (?:ajude|ajudem) a (?:entender|compreender|saber|decidir|escolher)|(?:ajude|ajudem)(?:-| )(?:me|nos) a (?:entender|compreender|saber|decidir|escolher)|(?:me|nos) (?:diga|digam|explique|expliquem|mostre|mostrem|conte|contem|descreva|descrevam|esclareca|esclarecam)|(?:diga|digam|explique|expliquem|mostre|mostrem|conte|contem|descreva|descrevam|esclareca|esclarecam) (?:me|nos|pra mim|para mim|para nos))|(?:can|could|would|will) you (?:(?:please|kindly) )?(?:tell|say|explain|describe|clarify|show|walk|help (?:me |us )?(?:to )?(?:understand|figure out|learn|know|see|grasp|decide|choose))|(?:voce|voces) (?:pode|podem|poderia|poderiam|consegue|conseguem|sabe|sabem) (?:por favor )?(?:me )?(?:dizer|explicar|mostrar|contar|descrever|esclarecer|ajudar a (?:entender|compreender|saber|decidir|escolher)|orientar|indicar))\b(?:[^.?!\n]|\.(?=\S)|\n(?![ \t]*\n))*(?:\?|\.(?!\S)|$|(?=\n[ \t]*\n))/
 // The question form, unless its comma follows something that is not a question ("Como especialista, escreva").
 function isQuestion(goal) {
   const direct = questionAt(goal)
@@ -1029,7 +1034,8 @@ function detect(goal, requirements) {
   const request = Number.isFinite(at) ? text.slice(at) : text
   // Only the verb that fired can make a code artifact: a later "write" does not turn an analysis into code.
   const verbWord = (request.match(/^\s*(\w+)/) || [])[1] || ''
-  const artifact = pickArtifact(request)
+  const requestedArtifact = Number.isFinite(at) && REQUESTED_ARTIFACT.exec(text.slice(Math.max(0, at - CONTEXT_WINDOW), at))
+  const artifact = pickArtifact(requestedArtifact ? text.slice(at - requestedArtifact[0].length) : request)
   const codeWins = artifact === 'code'
   const textWins = artifact === 'text'
   if ((kind === 'text' || kind === 'data' || kind === 'analysis') && MAKE_VERB.test(verbWord) && codeWins) kind = 'implementation'
@@ -1505,7 +1511,7 @@ const NOUN_SIGNAL = /^(plano|planos|plan|roadmap|cronograma|estrategia|strategy|
 // one-word opener and its comma ("First, plan ..."), a polite prefix ("Please plan ...", "Por favor, planeje") or a
 // request prefix ("Can you plan ...", "I need you to plan ...", "Preciso que voce planeje ...").
 // A noun-signal word there names the request ("Plan the steps ...", "Plano de acao para ..."), not context.
-const SENTENCE_START = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:can|could|would|will) you|(?:i|we) (?:need|want) you to|voce pode|preciso que voce|precisamos que voce|quero que voce|queremos que voce)\s+(?:please\s+)?)?(?:(?:\w+ly|\w+mente|first|then|now|next|also|just|again|primeiro|depois|agora|entao|tambem|so|ja)\s+)?$/
+const SENTENCE_START = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:can|could|would|will) you|(?:i|we) (?:need|want) you to|voce pode|preciso que voce|precisamos que voce|quero que voce|queremos que voce|(?:please\s+)?help (?:me|us)(?: to)?|(?:me|nos) (?:ajude|ajudem|ajuda) a|(?:ajude|ajudem) (?:me|nos) a)\s+(?:please\s+)?)?(?:(?:\w+ly|\w+mente|first|then|now|next|also|just|again|primeiro|depois|agora|entao|tambem|so|ja)\s+)?$/
 // A noun-signal word after an infinitive or modal marker is the verb ("we need to plan before ...", "let's plan").
 const INFINITIVE_MARK = /\b(?:(?:need|needs|needed|want|wants|wanted|have|has|had|going|ought|able|like|try|trying|time|ready|how)\s+to|let'?s|let us|(?:we|you|i|they)\s+(?:should|must|will|can|could|shall|may|might)(?:\s+(?:also|first|then|now|just))?|precisamos|devemos|vamos|queremos|preciso|quero|devo|vou)\s*$/
 // A noun-signal word that heads a requested noun phrase ("A plan to configure nginx", "Preciso de um plano para ...")
@@ -1533,6 +1539,8 @@ const QUESTION_HEAD = /\b(?:do|does|did|can|could|should|would|will|may|might|is
 // Only this many characters around a match are inspected, so the scan stays linear on long drafts; the prefixes
 // NEGATED and SENTENCE_START look for are far shorter than this.
 const CONTEXT_WINDOW = 120
+// "I need a script to write log files": the artifact asked for sits before the verb that tells its purpose.
+const REQUESTED_ARTIFACT = /(?:a|an|the|um|uma|o|os|as|some|algum|alguma|alguns|algumas)\s+(?:(?!(?:to|for|and|or|that|which|para|que|e|ou)\s)[\w-]+\s+){1,3}(?:to|that|which|para|que)\s+$/
 const INTRO_CLAUSE = /^([^.!?,:;\n]{1,60}),\s+/
 // "The configure script is broken", "I tried to configure nginx yesterday": the verb names a thing or tells the past.
 const MODIFIER_USE = /\b(?:the|a|an|this|that|these|those|my|our|your|o|os|a|as|um|uma|este|esta|esse|essa|meu|minha|nosso|nossa|seu|sua)\s+$/
@@ -1582,7 +1590,7 @@ function prohibited(text, at, hops = 0) {
 const YESNO_FORM = /^(?:(?:voce|voces)\s+(?:pode|podem|poderia|poderiam|consegue|conseguem|sabe|sabem)\s+(?:por favor\s+)?(?:me\s+)?(?:dizer|explicar|mostrar|contar|descrever|esclarecer|ajudar a (?:entender|compreender|saber|decidir|escolher)|orientar|indicar)|(?:(?:should|must|do|does|did|is|are|was|were|am|have|has|posso|podemos|devo|devemos|consigo|conseguimos|preciso|precisamos|existe|existem|ha|tem como|da para|e possivel|e preciso|e necessario|e seguro|e melhor|sera que|vale)\b|(?:can|could|would|will|may|might|shall)(?!\s+(?:you|voce|voces)\b(?!(?:\s+(?:please|kindly|por favor|gentilmente))?\s+(?:think|know|believe|recommend|suggest|mean|see|tell|say|explain|describe|clarify|show|walk|help (?:me |us )?(?:to )?(?:understand|figure out|learn|know|see|grasp|decide|choose)|acha|sabe|recomenda|sugere|conhece|me dizer|me explicar|me mostrar|me contar|me descrever|me esclarecer|me ajudar a (?:entender|compreender|saber|decidir|escolher)|me orientar|dizer|explicar|mostrar|contar|descrever|esclarecer)\b)))(?!\s+not\b|n't\b))\b(?:[^.?!\n]|\.(?=\S)|\n(?![ \t]*\n))*\?/
 // "Can you tell me how to configure nginx", "Tell me how to ...", "Me diga como ...": an explanation is asked for,
 // whether or not a question mark closes it; the request ends with its sentence.
-const EXPLAIN_FORM = /^(?:(?:(?:please|por favor),?\s+)?(?:(?:tell|show|explain to|describe to|walk) (?:me|us)|(?:me|nos) (?:diga|digam|explique|expliquem|mostre|mostrem|conte|contem|descreva|descrevam|esclareca|esclarecam)|(?:diga|digam|explique|expliquem|mostre|mostrem|conte|contem|descreva|descrevam|esclareca|esclarecam) (?:me|nos|pra mim|para mim|para nos))|(?:can|could|would|will) you (?:(?:please|kindly) )?(?:tell|say|explain|describe|clarify|show|walk|help (?:me |us )?(?:to )?(?:understand|figure out|learn|know|see|grasp|decide|choose))|(?:voce|voces) (?:pode|podem|poderia|poderiam|consegue|conseguem|sabe|sabem) (?:por favor )?(?:me )?(?:dizer|explicar|mostrar|contar|descrever|esclarecer|ajudar a (?:entender|compreender|saber|decidir|escolher)|orientar|indicar))\b(?:[^.?!\n]|\.(?=\S)|\n(?![ \t]*\n))*(?:\?|\.(?!\S)|$|(?=\n[ \t]*\n))/
+const EXPLAIN_FORM = /^(?:(?:(?:please|por favor),?\s+)?(?:(?:tell|show|explain to|describe to|walk) (?:me|us)|help (?:me|us) (?:to )?(?:understand|figure out|learn|know|see|grasp|decide|choose)|(?:me|nos) (?:ajude|ajudem) a (?:entender|compreender|saber|decidir|escolher)|(?:ajude|ajudem)(?:-| )(?:me|nos) a (?:entender|compreender|saber|decidir|escolher)|(?:me|nos) (?:diga|digam|explique|expliquem|mostre|mostrem|conte|contem|descreva|descrevam|esclareca|esclarecam)|(?:diga|digam|explique|expliquem|mostre|mostrem|conte|contem|descreva|descrevam|esclareca|esclarecam) (?:me|nos|pra mim|para mim|para nos))|(?:can|could|would|will) you (?:(?:please|kindly) )?(?:tell|say|explain|describe|clarify|show|walk|help (?:me |us )?(?:to )?(?:understand|figure out|learn|know|see|grasp|decide|choose))|(?:voce|voces) (?:pode|podem|poderia|poderiam|consegue|conseguem|sabe|sabem) (?:por favor )?(?:me )?(?:dizer|explicar|mostrar|contar|descrever|esclarecer|ajudar a (?:entender|compreender|saber|decidir|escolher)|orientar|indicar))\b(?:[^.?!\n]|\.(?=\S)|\n(?![ \t]*\n))*(?:\?|\.(?!\S)|$|(?=\n[ \t]*\n))/
 // The question form, unless its comma follows something that is not a question ("Como especialista, escreva").
 function isQuestion(goal) {
   const direct = questionAt(goal)
@@ -1669,7 +1677,8 @@ function detect(b) {
   const request = Number.isFinite(at) ? text.slice(at) : text
   // Only the verb that fired can make a code artifact: a later "write" does not turn an analysis into code.
   const verbWord = (request.match(/^\s*(\w+)/) || [])[1] || ''
-  const artifact = pickArtifact(request)
+  const requestedArtifact = Number.isFinite(at) && REQUESTED_ARTIFACT.exec(text.slice(Math.max(0, at - CONTEXT_WINDOW), at))
+  const artifact = pickArtifact(requestedArtifact ? text.slice(at - requestedArtifact[0].length) : request)
   const codeWins = artifact === 'code'
   const textWins = artifact === 'text'
   if ((signal === 'data' || signal === 'text') && MAKE_VERB.test(verbWord) && codeWins) { signal = 'implementation'; category = 'code' }
