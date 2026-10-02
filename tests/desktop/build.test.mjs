@@ -443,10 +443,10 @@ test('CLI --check fails when the README shortcut table is stale, and a plain bui
     assert.equal(await readFile(join(dir, 'README.md'), 'utf8'), stale, '--check writes nothing')
     // Same through the map: the key moves in the source, the README keeps the old one.
     await writeFile(join(dir, 'README.md'), fresh)
-    const ui = await readFile(join(dir, 'desktop/src/ui-components.js'), 'utf8')
-    await writeFile(join(dir, 'desktop/src/ui-components.js'), ui.replace("generate: 'F9'", "generate: 'F11'"))
+    const ui = await readFile(join(dir, SHORTCUTS_SOURCE), 'utf8')
+    await writeFile(join(dir, SHORTCUTS_SOURCE), ui.replace("generate: 'F9'", "generate: 'F11'"))
     assert.equal(run(dir, '--check').status, 1)
-    await writeFile(join(dir, 'desktop/src/ui-components.js'), ui)
+    await writeFile(join(dir, SHORTCUTS_SOURCE), ui)
     await writeFile(join(dir, 'README.md'), stale)
     assert.equal(run(dir).status, 0)
     assert.equal(await readFile(join(dir, 'README.md'), 'utf8'), fresh)
