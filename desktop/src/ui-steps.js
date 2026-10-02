@@ -110,7 +110,7 @@ function Ladder({ ladder, canEdit, editing }) {
       const style = { ...typeStyle, alignItems: 'center', background: 'transparent', border: `1px solid ${isEditing ? 'var(--ui-accent)' : 'transparent'}`, borderRadius: '6px', columnGap: '8px', display: 'grid', gridTemplateColumns: '16px minmax(0, 1fr) minmax(0, 0.8fr) auto', lineHeight: '16px', minHeight: '24px', minWidth: 0, padding: '2px 4px', width: '100%' }
       if (isEditing || !canEdit) return jsx('div', { className: 'studio-rung-enter', 'data-studio-rung': true, 'data-studio-rung-editing': isEditing || undefined, style, children: cells }, `edit-${rung.question}`)
       return jsx('button', {
-        'aria-label': t('step.editAria', position + 1, rung.question),
+        'aria-label': t('step.editAria', position + 1, rung.question, rung.answer),
         className: 'studio-rung-enter studio-rung-button',
         'data-studio-rung': true,
         'data-studio-rung-edit': index,
@@ -342,8 +342,8 @@ const segmentStyle = selected => ({
   padding: '2px 8px'
 })
 
-// Visible three-way choice instead of a button that cycles through hidden states. Alt+I belongs
-// to the group (aria-keyshortcuts); it moves to the next mode (Auto → On request → Off → Auto).
+// Visible three-way choice instead of a button that cycles through hidden states (see TargetSwitch for why these are
+// aria-pressed buttons). Alt+I belongs to the group (aria-keyshortcuts); it moves to the next mode (Auto → On request → Off → Auto).
 function AiToggle() {
   const t = useT()
   const mode = useValue($aiMode)
@@ -353,17 +353,16 @@ function AiToggle() {
     'aria-label': t('ai.group'),
     'data-studio-ai-toggle': true,
     'data-studio-ai-state': mode,
-    role: 'radiogroup',
+    role: 'group',
     style: { ...typeStyle, alignItems: 'center', display: 'inline-flex', fontSize: '12px', gap: '4px' },
     children: [
       jsxs('span', { style: { alignItems: 'center', display: 'inline-flex', marginRight: '2px' }, title: t('ai.cycle', displayCombo(SHORTCUTS.mode)), children: [t('ai.label'), jsx(KeyCap, { combo: SHORTCUTS.mode })] }),
       ...AI_MODES.map(item => jsx('button', {
         ...(item === next ? { 'data-studio-shortcut': SHORTCUTS.mode } : {}),
-        'aria-checked': item === mode,
+        'aria-pressed': item === mode,
         'data-studio-ai-mode-option': item,
         onClick: event => { event.preventDefault(); setAiMode(item) },
         onMouseDown: event => event.preventDefault(),
-        role: 'radio',
         style: segmentStyle(item === mode),
         title: t(`ai.modeTitle.${item}`),
         type: 'button',
@@ -412,17 +411,21 @@ function PreviewPanel({ state }) {
   // Resolved at render time from the active locale, so a language switch (F3) translates them too.
   const warnings = state.preview.warnings ? studioWarnings(state.preview.warnings.target, state.intent, state.preview.warnings.ladder, localeOf(t)) : []
   return jsxs('div', {
+    'aria-label': t('preview.region'),
     'data-studio-preview': true,
+    role: 'region',
     style: { display: 'grid', marginTop: '14px', rowGap: '8px' },
     children: [
       jsx('span', { 'data-studio-preview-title': true, style: { color: 'var(--ui-text-primary, inherit)', fontFamily: 'var(--dt-font-sans, inherit)', fontSize: '14px', fontWeight: 500 }, children: showing === 'ai' ? t('preview.ai') : t('preview.engine') }),
       // Answer/draft conflicts apply to both versions, so they stay whichever one is shown.
       ...warnings.map(text => jsx('span', { role: 'note', 'data-studio-preview-warning': true, style: { color: 'var(--ui-text-primary)', fontSize: '12px', lineHeight: '16px' }, children: text })),
       note && (showing === 'ai' || failed)
-        ? jsx('span', { 'aria-live': 'polite', 'data-studio-preview-note': true, style: { color: failed ? 'var(--ui-text-primary)' : 'var(--ui-text-secondary)', fontSize: '12px', lineHeight: '16px' }, title: noteDetail || undefined, children: note })
+        ? jsx('span', { 'data-studio-preview-note': true, style: { color: failed ? 'var(--ui-text-primary)' : 'var(--ui-text-secondary)', fontSize: '12px', lineHeight: '16px' }, title: noteDetail || undefined, children: note })
         : null,
       jsx('pre', {
+        'aria-label': t('preview.text'),
         'data-studio-preview-text': true,
+        role: 'document',
         style: { border: '1px solid var(--ui-stroke-secondary)', borderRadius: '8px', color: 'var(--ui-text-primary, inherit)', fontFamily: 'var(--dt-font-mono, monospace)', fontSize: '12px', lineHeight: '18px', margin: 0, maxHeight: '260px', overflow: 'auto', padding: '8px 10px', whiteSpace: 'pre-wrap', wordBreak: 'break-word' },
         tabIndex: 0,
         children: prompt
@@ -476,24 +479,26 @@ function StudioMotionStyles() {
   })
 }
 
-// Exclusive choice: radiogroup + radio, like the AI mode selector.
+// Exclusive choice, drawn like the AI mode selector: a named group of aria-pressed toggle buttons. Not a radiogroup:
+// that pattern moves the selection with the arrow keys, and here a selection re-asks steps (target) or starts model
+// calls (AI mode). Pressed buttons change only on Enter, Space or a click, stay in the tab order and leave every arrow
+// key to the app.
 function TargetSwitch() {
   const t = useT()
   const target = useValue($target) || currentTarget()
   return jsxs('div', {
     'aria-label': t('target.group'),
     'data-studio-target': true,
-    role: 'radiogroup',
+    role: 'group',
     style: { ...typeStyle, alignItems: 'center', display: 'flex', fontSize: '12px', gap: '6px', lineHeight: '16px', marginTop: '8px' },
     children: [
       jsx('span', { children: t('target.label') }),
       ...TARGETS.map(item => jsx('button', {
         ...keyProps(t, SHORTCUTS.model[item.id], t('target.title', item.model)),
-        'aria-checked': item.id === target,
+        'aria-pressed': item.id === target,
         'data-studio-target-option': item.id,
         onClick: () => setTarget(item.id),
         onMouseDown: event => event.preventDefault(),
-        role: 'radio',
         style: { ...segmentStyle(item.id === target), alignItems: 'center', display: 'inline-flex', padding: '2px 10px' },
         type: 'button',
         children: SHORTCUTS.model[item.id] ? jsxs(Fragment, { children: [item.label, jsx(KeyCap, { combo: SHORTCUTS.model[item.id] })] }) : item.label
@@ -530,6 +535,25 @@ function useStudioFocus(state) {
   }, [suggestion?.status, suggestion?.key])
 }
 
+// Live regions are mounted empty and filled one commit later: a screen reader announces a change inside a region it
+// already knows, not text that arrives together with the region (a region that appears with its text is silent).
+// `renderText` wraps the text in its own element when the caller wants one (the context note).
+function LiveRegion({ text, renderText, ...props }) {
+  const [shown, setShown] = useState('')
+  useEffect(() => { setShown(text) }, [text])
+  return jsx('span', { 'aria-live': 'polite', role: 'status', ...props, children: shown ? (renderText ? renderText(shown) : shown) : null })
+}
+
+// What the studio's one step region says: the question on screen, or the preview that just opened (which version, and
+// the note that explains why it is the engine one). The glyph in front of a title is decoration.
+function announcement(t, state, reading) {
+  if (state.status === 'active' && state.current && !reading) return t('step.announce', state.editing ? state.editing.index + 1 : state.ladder.length + 1, state.current.question)
+  if (state.status !== 'preview' || !state.preview) return ''
+  const { ai, showing, note } = state.preview
+  const title = (showing === 'ai' ? t('preview.ai') : t('preview.engine')).replace(/^\p{Extended_Pictographic}\uFE0F?\s*/u, '')
+  return [title, note && (showing === 'ai' || !ai) ? note : ''].filter(Boolean).join('. ')
+}
+
 function StudioLadder() {
   const t = useT()
   const state = useValue($studio)
@@ -537,7 +561,6 @@ function StudioLadder() {
   useStudioFocus(state)
   if (state.status === 'idle') return null
   const canEdit = ['active', 'done'].includes(state.status)
-  const number = state.editing ? state.editing.index + 1 : state.ladder.length + 1
   // While this session is read, the steps (which use it) are not shown: only the loading state and Cancel.
   const reading = context?.status === 'reading' && canEdit
   const body =
@@ -563,7 +586,8 @@ function StudioLadder() {
     tabIndex: -1,
     children: [
       jsx(StudioMotionStyles, {}),
-      jsx('span', { 'aria-live': 'polite', 'data-studio-announce': true, style: visuallyHidden, children: !reading && state.status === 'active' && state.current ? t('step.announce', number, state.current.question) : '' }),
+      jsx(LiveRegion, { 'data-studio-announce': true, style: visuallyHidden, text: announcement(t, state, reading) }),
+      jsx(AiStatus, { reading, state }),
       jsxs('div', {
         'data-studio-intent-row': true,
         style: { alignItems: 'center', display: 'flex', gap: '6px', lineHeight: '18px', minWidth: 0 },

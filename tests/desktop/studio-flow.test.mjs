@@ -683,7 +683,7 @@ test('UI hierarchy: one primary action per step, Generate secondary until the en
   for (const sel of ['[data-studio-target-option]', '[data-studio-generate]']) {
     assert.match($(sel).getAttribute('style'), /min-height: 24px/, `${sel} target >= 24px`)
   }
-  assert.equal($('[data-studio-ai-mode-option="auto"]').getAttribute('aria-checked'), 'true', 'AI mode is a visible radio choice')
+  assert.equal($('[data-studio-ai-mode-option="auto"]').getAttribute('aria-pressed'), 'true', 'AI mode is a visible pressed-button choice')
   await click('[data-studio-cancel]')
   assert.ok($('[data-studio-open]'), 'composer button back after closing')
 })
@@ -907,11 +907,11 @@ test('absolutely everything has a key: F4 opens, F10 closes, Alt+digit picks, Al
   assert.ok($('[data-studio-rung-editing]') === null)
   // Alt+A / Alt+O switch the model, Alt+I cycles the AI mode.
   await press(K().model.astra)
-  assert.equal($('[data-studio-target-option="astra"]').getAttribute('aria-checked'), 'true')
+  assert.equal($('[data-studio-target-option="astra"]').getAttribute('aria-pressed'), 'true')
   await press(K().model.sonnet)
-  assert.equal($('[data-studio-target-option="sonnet"]').getAttribute('aria-checked'), 'true')
+  assert.equal($('[data-studio-target-option="sonnet"]').getAttribute('aria-pressed'), 'true')
   await press(K().model.opus)
-  assert.equal($('[data-studio-target-option="opus"]').getAttribute('aria-checked'), 'true')
+  assert.equal($('[data-studio-target-option="opus"]').getAttribute('aria-pressed'), 'true')
   const mode = aiMode()
   await press(K().mode)
   assert.notEqual(aiMode(), mode)
@@ -957,7 +957,7 @@ test('overlay guard: with Settings open F-key actions and Alt chords do nothing 
     assert.equal((await press(combo)).defaultPrevented, false, `${combo} not taken`)
   }
   assert.equal(aiMode(), mode, 'Alt+I did not cycle the AI mode')
-  assert.equal($('[data-studio-target-option="astra"]').getAttribute('aria-checked'), 'false', 'Alt+A did not switch the target')
+  assert.equal($('[data-studio-target-option="astra"]').getAttribute('aria-pressed'), 'false', 'Alt+A did not switch the target')
   // F1 / F3 class: F1 still toggles the help list, F3 closes Settings.
   await press(K().help)
   assert.ok($('[data-studio-shortcuts-list]'), 'F1 handled behind Settings')
@@ -967,7 +967,7 @@ test('overlay guard: with Settings open F-key actions and Alt chords do nothing 
   assert.ok($('[data-studio-settings-dialog]') === null, 'F3 closed Settings')
   // Overlay gone: the studio's keys work again.
   await press(K().model.astra)
-  assert.equal($('[data-studio-target-option="astra"]').getAttribute('aria-checked'), 'true')
+  assert.equal($('[data-studio-target-option="astra"]').getAttribute('aria-pressed'), 'true')
   await press(K().generate)
   assert.ok($('[data-studio-preview]'), 'F9 generates once nothing is open')
 })
@@ -1411,7 +1411,7 @@ test('U9: failures read as plain words; the technical detail is only in the tool
   assert.match($('[data-studio-ai-error]').textContent, /Restart Hermes Desktop/)
 })
 
-test('U10/U11/U12/U15: labelled region, small live status, labelled answer field, radiogroups, labelled "Another"', { skip }, async () => {
+test('U10/U11/U12/U15: labelled region, small live status, labelled answer field, button groups, labelled "Another"', { skip }, async () => {
   await openStudio()
   await pasteStep('')
   await waitFor(aiReady)
@@ -1428,7 +1428,7 @@ test('U10/U11/U12/U15: labelled region, small live status, labelled answer field
   const target = $('[data-studio-target]')
   assert.equal(target.getAttribute('role'), 'radiogroup')
   assert.equal($('[data-studio-target-option="opus"]').getAttribute('role'), 'radio')
-  assert.equal($('[data-studio-target-option="opus"]').getAttribute('aria-checked'), 'true')
+  assert.equal($('[data-studio-target-option="opus"]').getAttribute('aria-pressed'), 'true')
   assert.equal($('[data-studio-ai-toggle]').getAttribute('aria-keyshortcuts'), K().mode, 'Alt+I belongs to the group')
   for (const b of document.querySelectorAll('[data-studio-ai-mode-option]')) assert.equal(b.hasAttribute('aria-keyshortcuts'), false)
   const another = $('[data-studio-ai-retry]')
@@ -3481,6 +3481,322 @@ test('CLOSE-1: a dispose with Settings open closes both, and the reloaded plugin
   assert.ok($('[data-studio-settings-dialog]') === null, 'Settings closed with it')
   assert.deepEqual(composer().writes.at(-1), { sessionId: 'sess-live', text: INTENT }, 'the draft is back in its composer')
   await reopenAndExpectNoSettings('the reloaded plugin starts without Settings')
+})
+
+// ---------------------------------------------------------------- #39 accessibility
+// The AI-mode and target switches are groups of aria-pressed toggle buttons, not radiogroups. A radiogroup
+// needs arrow keys that move the selection, and here a selection has a price: a target switch re-asks the steps
+// the new target does not share, an AI mode starts or stops model calls. Pressed buttons change only on
+// Enter/Space/click, every option stays in the tab order, and the key listener has no arrow key to share.
+const GROUPS = [
+  { name: 'target', group: '[data-studio-target]', option: id => `[data-studio-target-option="${id}"]`, ids: ['opus', 'sonnet', 'astra'], initial: 'opus' },
+  { name: 'AI mode', group: '[data-studio-ai-toggle]', option: id => `[data-studio-ai-mode-option="${id}"]`, ids: ['auto', 'manual', 'off'], initial: 'auto' }
+]
+
+test('#39: the target and AI-mode switches are named groups of aria-pressed buttons, all in the tab order', { skip }, async () => {
+  await openStudio(INTENT, 'auto')
+  for (const { name, group, option, ids, initial } of GROUPS) {
+    const el = $(group)
+    assert.equal(el.getAttribute('role'), 'group', `${name}: role=group`)
+    assert.ok((el.getAttribute('aria-label') || '').trim(), `${name}: the group has a name`)
+    for (const id of ids) {
+      const button = $(option(id))
+      assert.equal(button.tagName, 'BUTTON', `${name}/${id}: a real button`)
+      assert.equal(button.hasAttribute('role'), false, `${name}/${id}: no radio role`)
+      assert.equal(button.hasAttribute('aria-checked'), false, `${name}/${id}: no aria-checked`)
+      assert.equal(button.hasAttribute('tabindex'), false, `${name}/${id}: stays in the tab order (no roving tabindex)`)
+      assert.equal(button.getAttribute('aria-pressed'), String(id === initial), `${name}/${id}: aria-pressed`)
+    }
+  }
+})
+
+test('#39: pressing a switch button moves aria-pressed; the other buttons of the group are released', { skip }, async () => {
+  await openStudio(INTENT, 'auto')
+  for (const { name, option, ids } of GROUPS) {
+    for (const id of [ids[1], ids[2], ids[0]]) {
+      await click(option(id))
+      for (const other of ids) assert.equal($(option(other)).getAttribute('aria-pressed'), String(other === id), `${name}: after pressing ${id}, ${other}`)
+    }
+  }
+  assert.equal(aiMode(), 'auto')
+  assert.equal(ui.storage.get('target'), 'opus')
+})
+
+test('#39: arrow keys inside a switch group are left alone (no selection change, not prevented, not stopped)', { skip }, async () => {
+  await openStudio(INTENT, 'auto')
+  for (const { name, option, ids } of GROUPS) {
+    const button = $(option(ids[1]))
+    button.focus()
+    for (const key of ['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp', 'Home', 'End']) {
+      const reached = []
+      const probe = event => reached.push(event.key)
+      document.body.addEventListener('keydown', probe)
+      const event = await press(key, button)
+      document.body.removeEventListener('keydown', probe)
+      assert.equal(event.defaultPrevented, false, `${name}: ${key} not prevented`)
+      assert.deepEqual(reached, [key], `${name}: ${key} still reaches the app`)
+    }
+    assert.ok(document.activeElement === button, `${name}: focus did not move`)
+    assert.equal($(option(ids[0])).getAttribute('aria-pressed'), 'true', `${name}: selection unchanged`)
+  }
+})
+
+test('#39: the studio key shortcuts still switch the pressed button (Alt+I, Alt+letter for the target)', { skip }, async () => {
+  await openStudio(INTENT, 'auto')
+  await press(K().mode)
+  assert.equal($('[data-studio-ai-mode-option="manual"]').getAttribute('aria-pressed'), 'true')
+  assert.equal($('[data-studio-ai-mode-option="auto"]').getAttribute('aria-pressed'), 'false')
+  await press(K().model.sonnet)
+  assert.equal($('[data-studio-target-option="sonnet"]').getAttribute('aria-pressed'), 'true')
+  assert.equal($('[data-studio-target-option="opus"]').getAttribute('aria-pressed'), 'false')
+})
+
+test('#39: a ladder edit button is named with its question and its current answer, en and pt', { skip }, async () => {
+  await openStudio()
+  await pasteStep('')
+  for (let i = 0; i < 2; i += 1) { await waitFor(aiReady); await answerStep() }
+  await waitFor(aiReady)
+  const edits = [...document.querySelectorAll('[data-studio-rung-edit]')]
+  assert.ok(edits.length >= 4, `edit buttons on screen: ${edits.length}`)
+  const parts = button => ({ question: button.children[1].textContent, answer: button.children[2].textContent })
+  edits.forEach((button, index) => {
+    const { question, answer } = parts(button)
+    const name = button.getAttribute('aria-label')
+    assert.ok(question && answer, 'the row shows a question and an answer')
+    assert.ok(name.startsWith(`Edit answer ${index + 1}: `) && name.includes(question) && name.includes(answer), `en name carries the question and the answer: ${name}`)
+  })
+  const context = $('[data-studio-rung-edit="2"]')
+  assert.ok(context.getAttribute('aria-label').includes('sugestão para context'), 'the AI-suggested answer is in the name')
+  // The skipped paste step is named by what the row shows.
+  const skipped = parts($('[data-studio-rung-edit="1"]')).answer
+  assert.ok($('[data-studio-rung-edit="1"]').getAttribute('aria-label').includes(skipped))
+  // An edited answer is the new name.
+  await click('[data-studio-rung-edit="2"]')
+  await typeAnswer('Contexto novo')
+  await click('[data-studio-confirm]')
+  assert.ok($('[data-studio-rung-edit="2"]').getAttribute('aria-label').includes('Contexto novo'), 'the name follows the answer')
+  ui.i18n.locale = 'pt'
+  try {
+    await ui.act(async () => { ui.$locale.set('pt') })
+    await waitFor(() => /^Editar a resposta 3: /.test($('[data-studio-rung-edit="2"]')?.getAttribute('aria-label') || ''))
+    const pt = $('[data-studio-rung-edit="2"]')
+    const { question, answer } = parts(pt)
+    assert.ok(pt.getAttribute('aria-label').includes(question) && pt.getAttribute('aria-label').includes(answer) && /resposta atual/.test(pt.getAttribute('aria-label')), pt.getAttribute('aria-label'))
+  } finally {
+    ui.i18n.locale = 'en'
+    await ui.act(async () => { ui.$locale.set('en') })
+  }
+})
+
+test('#39: the preview is a named region and its scrollable text has a name', { skip }, async () => {
+  await toPreview()
+  const preview = $('[data-studio-preview]')
+  assert.equal(preview.getAttribute('role'), 'region')
+  assert.equal(preview.getAttribute('aria-label'), 'Prompt preview')
+  assert.ok(accessibleName($('[data-studio-preview-text]')), 'the focusable prompt text is named')
+  ui.i18n.locale = 'pt'
+  try {
+    await ui.act(async () => { ui.$locale.set('pt') })
+    await waitFor(() => $('[data-studio-preview]')?.getAttribute('aria-label') !== 'Prompt preview')
+    assert.equal($('[data-studio-preview]').getAttribute('aria-label'), 'Prévia do prompt')
+  } finally {
+    ui.i18n.locale = 'en'
+    await ui.act(async () => { ui.$locale.set('en') })
+  }
+})
+
+// Live regions are mounted empty and filled afterwards: a screen reader announces a change inside a region it
+// already knows, not text that arrives together with the region. A DOM-insertion spy records the text each live
+// region holds at the moment it is attached.
+const LIVE_REGION = '[aria-live],[role="status"],[role="alert"],[role="log"]'
+function watchLiveRegions() {
+  const proto = ui.dom.window.Node.prototype
+  const original = { appendChild: proto.appendChild, insertBefore: proto.insertBefore }
+  const attached = []
+  const inspect = node => {
+    if (node?.nodeType !== 1) return
+    for (const region of [...(node.matches(LIVE_REGION) ? [node] : []), ...node.querySelectorAll(LIVE_REGION)]) {
+      attached.push({ name: region.getAttributeNames().find(n => n.startsWith('data-studio-')) || region.tagName, text: region.textContent })
+    }
+  }
+  proto.appendChild = function (node) { inspect(node); return original.appendChild.call(this, node) }
+  proto.insertBefore = function (node, before) { inspect(node); return original.insertBefore.call(this, node, before) }
+  return { attached, stop() { proto.appendChild = original.appendChild; proto.insertBefore = original.insertBefore } }
+}
+
+test('#39: every live region is attached empty and filled afterwards (step, AI status, context note, preview)', { skip }, async () => {
+  await freshSettings('sess-1')
+  backend.compose = () => ({ ok: false, error: 'boom', code: 'provider_timeout' })
+  const watch = watchLiveRegions()
+  try {
+    await openStudio(INTENT, 'auto')
+    await waitFor(() => $('[data-studio-context-status]'))
+    await pasteStep('')
+    await waitFor(aiReady)
+    await click('[data-studio-generate]')
+    await waitFor(() => $('[data-studio-preview]'))
+    await settle()
+    const names = new Set(watch.attached.map(entry => entry.name))
+    for (const expected of ['data-studio-announce', 'data-studio-ai-status', 'data-studio-context-live']) assert.ok(names.has(expected), `${expected} is a live region (seen: ${[...names].join(', ')})`)
+    const filled = watch.attached.filter(entry => entry.text !== '')
+    assert.deepEqual(filled, [], 'no live region was attached with text in it')
+    assert.ok($('[data-studio-announce]').textContent.length > 0, 'the step region was filled afterwards')
+    assert.ok(/version without AI/.test($('[data-studio-announce]').textContent), `the preview note is announced: ${$('[data-studio-announce]').textContent}`)
+    assert.ok($('[data-studio-preview-note]').hasAttribute('aria-live') === false, 'the note is read through the one mounted region, not a region of its own')
+  } finally {
+    watch.stop()
+  }
+})
+
+test('#39: the context note is announced through a region that stays mounted while the text changes', { skip }, async () => {
+  await freshSettings('sess-1')
+  await openStudio(INTENT, 'auto')
+  await click('[data-studio-cancel]')
+  let release
+  backend.context = () => new Promise(resolve => { release = () => resolve({ ok: true, summary: 'RESUMO', model: 'm-ctx', ms: 10 }) })
+  $('[data-slot="composer-rich-input"]').textContent = INTENT
+  await click('[data-studio-open]')
+  assert.ok($('[data-studio-context-loading]'), 'the session is still being read')
+  const region = $('[data-studio-context-live]')
+  assert.ok(region, 'the region exists while the session is still read')
+  assert.equal(region.textContent, '', 'and is empty')
+  assert.ok(region.getAttribute('aria-live') === 'polite' && region.getAttribute('role') === 'status')
+  release()
+  await waitFor(() => /m-ctx/.test($('[data-studio-context-status]')?.textContent))
+  assert.ok($('[data-studio-context-live]') === region, 'the same element, filled afterwards')
+  assert.ok(region.contains($('[data-studio-context-status]')))
+})
+
+// ---- every tabbable element has an accessible name
+function textAlternative(node) {
+  if (node.nodeType === 3) return node.textContent
+  if (node.nodeType !== 1 || node.getAttribute('aria-hidden') === 'true' || node.hasAttribute('hidden')) return ''
+  const label = node.getAttribute('aria-label')?.trim()
+  if (label) return label
+  if (node.tagName === 'IMG') return node.getAttribute('alt') || ''
+  return [...node.childNodes].map(textAlternative).join('')
+}
+// aria-labelledby, then aria-label, then a <label>, then the content. No title fallback: a tooltip is no name.
+function accessibleName(el) {
+  const ids = (el.getAttribute('aria-labelledby') || '').split(/\s+/).filter(Boolean)
+  const referenced = ids.map(id => document.getElementById(id)).filter(Boolean).map(textAlternative).join(' ').trim()
+  if (referenced) return referenced
+  const label = el.getAttribute('aria-label')?.trim()
+  if (label) return label
+  if (el.labels?.length) return [...el.labels].map(textAlternative).join(' ').trim()
+  return textAlternative(el).replace(/\s+/g, ' ').trim()
+}
+function isRendered(el) {
+  const view = el.ownerDocument.defaultView
+  for (let node = el; node; node = node.parentElement) {
+    if (node.hasAttribute('hidden') || node.getAttribute('aria-hidden') === 'true') return false
+    const style = view.getComputedStyle(node)
+    if (style.display === 'none' || style.visibility === 'hidden') return false
+  }
+  return true
+}
+const TABBABLE = 'a[href],button,input:not([type="hidden"]),select,textarea,summary,[tabindex],[contenteditable="true"]'
+function tabbables() {
+  return [...document.querySelectorAll('#top, #actions')].flatMap(root => [...root.querySelectorAll(TABBABLE)])
+    .filter(el => !el.disabled && !(el.hasAttribute('tabindex') && Number(el.getAttribute('tabindex')) < 0) && isRendered(el))
+}
+function assertAllTabbablesNamed(screen) {
+  const found = tabbables()
+  assert.ok(found.length > 0, `${screen}: something to tab to`)
+  const unnamed = found.filter(el => !accessibleName(el)).map(el => el.outerHTML.slice(0, 120))
+  assert.deepEqual(unnamed, [], `${screen}: tabbable elements without an accessible name`)
+  return found.length
+}
+
+test('#39: the accessible-name walker itself: names come from aria-labelledby, aria-label, a label or content, never from title or an aria-hidden key cap', { skip }, () => {
+  const host = document.createElement('div')
+  host.innerHTML = '<span id="n39">Named by id</span><button id="a" aria-labelledby="n39"></button><button id="b" aria-label="Aria"></button><button id="c"><kbd aria-hidden="true">F5</kbd></button><button id="d" title="Only a tooltip"></button><button id="e">Text<kbd aria-hidden="true">F5</kbd></button>'
+  document.body.append(host)
+  try {
+    const name = id => accessibleName(host.querySelector(`#${id}`))
+    assert.deepEqual([name('a'), name('b'), name('c'), name('d'), name('e')], ['Named by id', 'Aria', '', '', 'Text'])
+  } finally {
+    host.remove()
+  }
+})
+
+test('#39: no tabbable element lacks an accessible name on any studio screen', { skip }, async () => {
+  const counts = {}
+  const walk = (screen) => { counts[screen] = assertAllTabbablesNamed(screen) }
+  await freshSettings('sess-1')
+  await openStudio(INTENT, 'auto') // the AI mode is remembered across openings: set it, then start clean
+  await click('[data-studio-cancel]')
+  backend.calls.length = 0
+  walk('closed (entry button)') // the entry button lives in the composer actions
+  $('[data-slot="composer-rich-input"]').textContent = INTENT
+
+  // Reading the session: the loading state and Cancel.
+  let release
+  backend.context = () => new Promise(resolve => { release = () => resolve({ ok: true, summary: 'RESUMO', model: 'm', ms: 10 }) })
+  await click('[data-studio-open]')
+  assert.ok($('[data-studio-context-loading]'))
+  walk('reading the session')
+  release()
+  await waitFor(() => $('[data-studio-options]'))
+
+  // Choice step: the AI loads (Auto), then its pick is ready.
+  await waitFor(aiReady)
+  walk('choice step, AI ready')
+  await press(K().help)
+  walk('shortcut list open')
+  await press(K().help)
+  await openSettings()
+  await pickModel('helper', 'claude-haiku-5', 'anthropic', 'low')
+  walk('Settings open, a model set')
+  await closeSettings()
+
+  await click('[data-studio-recommend]') // deliverable
+  await waitFor(() => field() === 'thirdPartyText')
+  walk('paste step, collapsed')
+  await click('[data-studio-paste-open]')
+  await typeAnswer('Texto colado')
+  walk('paste step, field open with text')
+  backend.suggest = () => { throw new Error('HTTP 500') }
+  await click('[data-studio-confirm]')
+  await waitFor(() => $('[data-studio-ai-error]'))
+  walk('next step, AI error')
+  backend.suggest = body => ({ ok: true, value: body.field.kind === 'enum' ? body.field.recommended : `sugestão para ${body.field.id}`, reason: 'teste' })
+  await click('[data-studio-ai-retry-error]')
+  await waitFor(aiReady)
+  walk('next step, AI suggestion ready')
+  while (!$('[data-studio-answer-input]')) { await waitFor(aiReady); await answerStep() }
+  await waitFor(aiReady)
+  walk('text step, AI suggestion ready')
+  await typeAnswer('Algo digitado')
+  walk('text step, typed answer (Improve)')
+  await click('[data-studio-rung-edit="0"]')
+  walk('editing an earlier answer')
+  await click('[data-studio-back]')
+
+  await click('[data-studio-ai-mode-option="off"]')
+  for (let i = 0; i < 20 && $('[data-studio-step]'); i += 1) await press($('[data-studio-skip]') ? K().skip : K().accept)
+  assert.ok(!$('[data-studio-step]'), 'every step answered')
+  walk('all steps answered')
+
+  backend.compose = () => new Promise(() => {})
+  await click('[data-studio-ai-mode-option="auto"]')
+  await click('[data-studio-generate]')
+  walk('the AI writes the prompt')
+  await click('[data-studio-cancel]')
+
+  backend.compose = body => ({ ok: true, prompt: 'PROMPT DA IA', notes: 'nota' })
+  await freshSettings(null)
+  await openStudio(INTENT, 'auto')
+  await click('[data-studio-generate]')
+  await waitFor(() => $('[data-studio-preview]'))
+  walk('preview, AI version')
+  await click('[data-studio-switch-version]')
+  walk('preview, version without AI')
+  await openSettings()
+  walk('preview with Settings open')
+  await closeSettings()
+  await click('[data-studio-cancel]')
+  assert.ok(Object.keys(counts).length >= 14, JSON.stringify(counts))
 })
 
 // Last on purpose: it reads what every test above made the UI ask the SDK to translate (a screen that renders a key

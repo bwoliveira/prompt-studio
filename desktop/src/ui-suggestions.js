@@ -63,6 +63,18 @@ function mySuggestion(state, suggestion) {
   return suggestion && suggestion.key === questionKey(state) ? suggestion : null
 }
 
+// The short status line of the suggestion (loading / error / ready), read through a live region that lives as long as
+// the strip, not the row: the row is rebuilt on every step, and a region built with its text is not announced. The
+// buttons are not live and are not re-read on every change.
+function AiStatus({ state, reading }) {
+  const t = useT()
+  const mode = useValue($aiMode)
+  const mine = mySuggestion(state, useValue($suggestion))
+  const shown = !reading && state.status === 'active' && state.current && !state.current.paste && mode !== 'off'
+  const key = shown && mine && mine.status !== 'dismissed' ? mine.status : ''
+  return jsx(LiveRegion, { 'data-studio-ai-status': true, style: visuallyHidden, text: key ? t(`ai.status.${key}`) : '' })
+}
+
 function SuggestionRow({ state }) {
   const t = useT()
   const mode = useValue($aiMode)
@@ -73,11 +85,9 @@ function SuggestionRow({ state }) {
   const isEnum = state.current.kind === 'enum'
   const improving = mine?.mode === 'improve'
   const children = []
-  let status = ''
   if (!mine || mine.status === 'dismissed') {
     children.push(jsx(Button, { data: { 'data-studio-ai-suggest': true }, onClick: () => requestSuggestion('suggest'), keyHint: SHORTCUTS.ask, children: isEnum ? t('ai.askEnum') : t('ai.askText') }))
   } else if (mine.status === 'loading') {
-    status = t('ai.status.loading')
     children.push(jsxs('span', {
       'data-studio-ai-loading': true,
       style: { ...typeStyle, alignItems: 'center', display: 'inline-flex', fontSize: '12px', gap: '6px' },
@@ -85,12 +95,10 @@ function SuggestionRow({ state }) {
     }))
     children.push(jsx(Button, { data: { 'data-studio-ai-stop': true }, onClick: clearSuggestion, keyHint: SHORTCUTS.discard, children: t('ai.stop') }))
   } else if (mine.status === 'error') {
-    status = t('ai.status.error')
     // Plain words on screen; the technical detail only in the tooltip.
     children.push(jsx('span', { 'data-studio-ai-error': true, style: { color: 'var(--dt-destructive)', fontSize: '12px' }, title: mine.detail || undefined, children: t(`ai.${mine.errorKey || 'failed'}`) }))
     children.push(jsx(Button, { data: { 'data-studio-ai-retry-error': true }, onClick: () => requestSuggestion(mine.mode), keyHint: SHORTCUTS.ask, children: t('ai.retry') }))
   } else {
-    status = t('ai.status.ready')
     const empty = !mine.value
     const hasDefault = Boolean(state.current.recommended)
     let headline
@@ -134,8 +142,6 @@ function SuggestionRow({ state }) {
       }))
     }
   }
-  // Only the short status line is live; the buttons are not re-read on every change.
-  children.push(jsx('span', { 'aria-live': 'polite', 'data-studio-ai-status': true, role: 'status', style: visuallyHidden, children: status }))
   // Static list built with push: jsxs (not jsx) so React does not ask for keys.
   return jsxs('div', {
     'data-studio-ai-row': true,

@@ -13,6 +13,15 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
   recommendation is now the same everywhere: the AI suggestion, the guide behind it and the docs all recommend "The
   model decides", the default of every engine (a team only when you pick it or the draft asks for one). One prompt
   snapshot per target (`tests/desktop/fixtures/prompt-snapshots/`) locks the wording.
+- Accessibility: the target and AI-mode switches are named groups of pressed/not-pressed buttons (`aria-pressed`), not
+  radio groups: every option stays in the tab order and changes only on Enter, Space or a click, so an arrow key never
+  re-asks the steps or starts model calls by accident (and the studio's key listener still takes no arrow, Enter, Tab,
+  Esc or Ctrl/Super key). A ladder edit button is now named with its question and its current answer ("Edit answer 3:
+  … (current answer: …)", also in Portuguese). The preview is a named region ("Prompt preview") and its scrollable
+  text has a name. The step, AI-status, session-context and preview announcements go through live regions that are
+  mounted empty and filled afterwards, so a screen reader reads them (before, a region that appeared together with its
+  text stayed silent; the preview's note and which version it shows are now announced when it opens). A test walks every
+  tabbable element of each studio screen and requires an accessible name.
 - Feature: a provider failure now says what happened. A wrong or expired API key (401) is `auth_failed`, a model or plan
   the provider refuses (403) stays `provider_refused` (its text no longer mentions the key), a rate limit (429) is
   `rate_limited` and a provider call that timed out on its own (client timeout, 408, 504) is `provider_timeout`; each has its own
