@@ -231,10 +231,11 @@ function TextAnswer({ state, placeholder }) {
   // Auto mode, step with a default, AI text ready: the AI text is the recommended action (F5) and the
   // default becomes a plain option (F6). Before it is ready or on failure: the default is recommended.
   const aiText = mode === 'auto' && hasDefault && mine?.status === 'ready' && mine.mode === 'suggest' && mine.value ? mine.value : ''
-  // One primary action per step: Confirm once something is typed, otherwise Recommended / Skip.
+  // One primary action per step (textStepPrimary): Confirm once something is typed, otherwise Recommended / Skip.
   const typed = Boolean(String(state.answer || '').trim())
   // Auto: the recommended button may become the AI text, so it waits for the suggestion.
   const waiting = mode === 'auto' && hasDefault && mine?.status === 'loading' && mine.mode === 'suggest'
+  const primary = textStepPrimary({ typed, hasDefault, aiText: Boolean(aiText), waiting })
   return jsxs('div', {
     style: { marginTop: '8px' },
     children: [
@@ -255,17 +256,17 @@ function TextAnswer({ state, placeholder }) {
       jsxs('div', {
         style: { display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' },
         children: [
-          jsx(Button, { variant: typed ? 'primary' : 'default', data: { 'data-studio-confirm': true }, disabled: !typed, onClick: () => commitAnswer(state.answer), keyHint: SHORTCUTS.accept, reserveKey: SHORTCUTS.accept, children: t('answer.confirm') }),
+          jsx(Button, { variant: primary === 'confirm' ? 'primary' : 'default', data: { 'data-studio-confirm': true }, disabled: !typed, onClick: () => commitAnswer(state.answer), keyHint: SHORTCUTS.accept, reserveKey: SHORTCUTS.accept, children: t('answer.confirm') }),
           aiText
-            ? jsx(Button, { variant: typed ? 'default' : 'primary', data: { 'data-studio-recommend': true, 'data-studio-ai-pick': 'true' }, onClick: () => commitAnswer(aiText), title: t('ai.pickTitle'), keyHint: typed ? undefined : SHORTCUTS.accept, reserveKey: SHORTCUTS.accept, children: t('answer.useAi') })
+            ? jsx(Button, { variant: primary === 'ai' ? 'primary' : 'default', data: { 'data-studio-recommend': true, 'data-studio-ai-pick': 'true' }, onClick: () => commitAnswer(aiText), title: t('ai.pickTitle'), keyHint: typed ? undefined : SHORTCUTS.accept, reserveKey: SHORTCUTS.accept, children: t('answer.useAi') })
             : null,
           aiText
             ? jsx(Button, { data: { 'data-studio-use-default': true }, onClick: () => commitAnswer(''), title: current.hint || '', keyHint: SHORTCUTS.skip, children: t('answer.useDefault', current.recommended) })
             : waiting
             ? null
             : hasDefault
-            ? jsx(Button, { variant: typed ? 'default' : 'primary', data: { 'data-studio-recommend': true }, onClick: () => commitAnswer(''), title: current.hint || '', keyHint: typed ? undefined : SHORTCUTS.accept, reserveKey: SHORTCUTS.accept, children: t('answer.recommended', current.recommended) })
-            : jsx(Button, { variant: typed ? 'default' : 'primary', data: { 'data-studio-skip': true }, onClick: () => commitAnswer(''), keyHint: SHORTCUTS.skip, children: t('answer.skip') }),
+            ? jsx(Button, { variant: primary === 'recommended' ? 'primary' : 'default', data: { 'data-studio-recommend': true }, onClick: () => commitAnswer(''), title: current.hint || '', keyHint: typed ? undefined : SHORTCUTS.accept, reserveKey: SHORTCUTS.accept, children: t('answer.recommended', current.recommended) })
+            : jsx(Button, { variant: primary === 'skip' ? 'primary' : 'default', data: { 'data-studio-skip': true }, onClick: () => commitAnswer(''), keyHint: SHORTCUTS.skip, children: t('answer.skip') }),
           ...(current.options || []).map((option, index) => jsx(Button, { data: { 'data-studio-option': option }, onClick: () => commitAnswer(option), keyHint: index < 9 ? digitCombo('pick', index + 1) : undefined, children: option }, option)),
           jsx(ImproveButton, { state })
         ]

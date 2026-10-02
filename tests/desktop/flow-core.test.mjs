@@ -11,7 +11,7 @@ const plugin = await readFile(new URL('../../desktop/plugin.js', import.meta.url
 const coreSource = plugin.slice(plugin.indexOf('// @core-start'), plugin.indexOf('// @core-end'))
 const dir = await mkdtemp(join(tmpdir(), 'flow-core-'))
 await writeFile(join(dir, 'core.mjs'), coreSource)
-const { initialStudioState, reduceStudio } = await import(pathToFileURL(join(dir, 'core.mjs')).href)
+const { initialStudioState, reduceStudio, textStepPrimary } = await import(pathToFileURL(join(dir, 'core.mjs')).href)
 after(() => rm(dir, { recursive: true, force: true }))
 
 const Q = (question, extra = {}) => ({ type: 'INTERROGATION', response: { question, category: question, recommended: 'rec', options: ['a', 'b'], ...extra } })
@@ -114,4 +114,22 @@ test('composer only through host.composer (no app DOM, no attachment reach-in); 
   assert.match(plugin, /ctx\.addEventListener\(window, 'keydown'/, 'tracked by the host')
   assert.doesNotMatch(plugin, /event\.key === ['"](Tab|Enter|Escape)/)
   assert.match(plugin, /export const SHORTCUTS = \{[^}]*open: 'F4'/, 'the studio opens on F4, held in the shortcut map')
+})
+
+// The one primary (accent) button of a text step: Confirm once something is typed, otherwise the AI text, the
+// default (Recommended) or Skip; none while the AI text is awaited. A pure rule, so the buttons can not drift apart.
+test('textStepPrimary: Confirm is the primary button as soon as something is typed, whatever else is on offer', () => {
+  for (const hasDefault of [true, false]) for (const aiText of [true, false]) for (const waiting of [true, false]) {
+    assert.equal(textStepPrimary({ typed: true, hasDefault, aiText, waiting }), 'confirm', JSON.stringify({ hasDefault, aiText, waiting }))
+  }
+})
+
+test('textStepPrimary: nothing typed, the primary button is the AI text, else the default, else Skip', () => {
+  assert.equal(textStepPrimary({ typed: false, hasDefault: true, aiText: true, waiting: false }), 'ai')
+  assert.equal(textStepPrimary({ typed: false, hasDefault: true, aiText: false, waiting: false }), 'recommended')
+  assert.equal(textStepPrimary({ typed: false, hasDefault: false, aiText: false, waiting: false }), 'skip')
+})
+
+test('textStepPrimary: nothing typed while the AI text is awaited, no button is primary (the default waits for it)', () => {
+  assert.equal(textStepPrimary({ typed: false, hasDefault: true, aiText: false, waiting: true }), null)
 })

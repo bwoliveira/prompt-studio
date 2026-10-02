@@ -127,6 +127,16 @@ export function reduceStudio(state, action) {
       return state
   }
 }
+
+// The one primary (accent) button of a text step, by name: 'confirm' as soon as something is typed; otherwise the AI
+// text ('ai'), the default ('recommended') or 'skip' when there is no default; null while the AI text is awaited (the
+// default button waits for it). aiText: the AI text is ready to offer; waiting: it is still loading.
+export function textStepPrimary({ typed, hasDefault, aiText, waiting }) {
+  if (typed) return 'confirm'
+  if (aiText) return 'ai'
+  if (waiting) return null
+  return hasDefault ? 'recommended' : 'skip'
+}
 // @core-end
 
 const $studio = atom(initialStudioState())
