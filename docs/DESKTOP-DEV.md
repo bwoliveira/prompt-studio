@@ -43,6 +43,20 @@ template literals. Why the build is a concatenation with isolated engine scopes:
 are described in `CONTRIBUTING.md`. The doc snapshots behind `scripts/docs_sources.py` live outside the plugin; see
 `docs/sources/README.md`.
 
+## Test seams
+
+The plugin has no test mode. The three timing values the UI tests shorten are read from one global,
+`globalThis.__promptStudioTest`, and fall back to the real constant when it is absent (it never exists in Hermes Desktop).
+Tests create it as `{}` before loading `plugin.js` and set a field for the length of one test (`tests/desktop/studio-flow.test.mjs`
+also keeps its SDK stub flags on it). No other global is read by `desktop/src/*`; a new seam is a new field here, with a
+row in this table (`tests/desktop/studio-core.test.mjs` fails otherwise).
+
+| Field | Replaces | Default |
+|---|---|---|
+| `autoSuggestDelayMs` | the pause before Auto asks the AI for a step suggestion (`AUTO_SUGGEST_DELAY_MS`, `ui-suggestions.js`) | the constant |
+| `contextTimeoutMs` | how long the Studio waits for `/context` (`CONTEXT_CLIENT_TIMEOUT_MS`, `ui-composer.js`) | the constant |
+| `focusSettleMs` | how long the composer focus is retried after a write (`FOCUS_SETTLE_MS`, `ui-composer.js`) | the constant |
+
 ## i18n
 
 The UI is English-first through the Desktop plugin i18n API: `ctx.i18n.register(bundles)` in `register()`,

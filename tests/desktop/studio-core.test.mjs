@@ -326,6 +326,19 @@ test('naming: a function called useX is a React hook (calls one); actions are na
   assert.deepEqual(bad, [], 'functions named like hooks that are not: rename them (placePreview, applySuggestion)')
 })
 
+test('test seams: the UI reads its timing seams only from globalThis.__promptStudioTest, and docs/DESKTOP-DEV.md names each one', async () => {
+  const dir = new URL('../../desktop/src/', import.meta.url)
+  let source = ''
+  for (const name of (await readdir(dir)).filter(f => /^(ui-.*|studio-state)\.js$/.test(f))) source += await readFile(new URL(name, dir), 'utf8')
+  const globals = [...new Set([...source.matchAll(/globalThis\.(\w+)/g)].map(m => m[1]))]
+  assert.deepEqual(globals, ['__promptStudioTest'], 'one global for every test seam')
+  const seams = [...new Set([...source.matchAll(/__promptStudioTest\??\.(\w+)/g)].map(m => m[1]))].sort()
+  assert.ok(seams.length >= 3, `seams found: ${seams}`)
+  const docs = await readFile(new URL('../../docs/DESKTOP-DEV.md', import.meta.url), 'utf8')
+  assert.ok(docs.includes('globalThis.__promptStudioTest'), 'the global is documented')
+  assert.deepEqual(seams.filter(seam => !docs.includes(`\`${seam}\``)), [], 'seams missing from docs/DESKTOP-DEV.md')
+})
+
 test('studio-core.js imports only the engines and its i18n bundle', async () => {
   const src = await readFile(new URL('../../desktop/src/studio-core.js', import.meta.url), 'utf8')
   assert.deepEqual([...src.matchAll(/from '([^']+)'/g)].map(m => m[1]).sort(), ['./engine-astra.js', './engine-opus.js', './engine-sonnet.js', './i18n-core.js'])

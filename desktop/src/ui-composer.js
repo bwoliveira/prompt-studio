@@ -8,7 +8,7 @@
 const FOCUS_SETTLE_MS = 50
 function hostFocusSettled() {
   return new Promise(resolve => {
-    const done = () => later(resolve, globalThis.__promptStudioFocusSettleMs ?? FOCUS_SETTLE_MS)
+    const done = () => later(resolve, globalThis.__promptStudioTest?.focusSettleMs ?? FOCUS_SETTLE_MS)
     if (typeof requestAnimationFrame !== 'function') return done()
     requestAnimationFrame(() => requestAnimationFrame(done))
   })
@@ -206,7 +206,7 @@ function startContextRead() {
     const text = tr(key, displayCombo(SHORTCUTS.settings))
     return { status: 'error', reason: text && text !== key ? text : tr('errors.unavailable') }
   }
-  lifecycle.contextPromise = withTimeout(lifecycle.pluginContext.rest('/context', { method: 'POST', body }), globalThis.__promptStudioContextTimeoutMs ?? CONTEXT_CLIENT_TIMEOUT_MS)
+  lifecycle.contextPromise = withTimeout(lifecycle.pluginContext.rest('/context', { method: 'POST', body }), globalThis.__promptStudioTest?.contextTimeoutMs ?? CONTEXT_CLIENT_TIMEOUT_MS)
     .then(
       response => (response?.ok && typeof response.summary === 'string' && response.summary.trim()
         ? { status: 'ready', summary: response.summary, model: response.model || '', ms: Number(response.ms) || 0 }

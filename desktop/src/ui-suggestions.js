@@ -34,7 +34,7 @@ function cancelAutoSuggestion() {
 function scheduleAutoSuggestion() {
   cancelAutoSuggestion()
   const key = questionKey($studio.get())
-  const delay = globalThis.__promptStudioAutoSuggestDelayMs ?? AUTO_SUGGEST_DELAY_MS
+  const delay = globalThis.__promptStudioTest?.autoSuggestDelayMs ?? AUTO_SUGGEST_DELAY_MS
   const serial = lifecycle.suggestSerial
   lifecycle.autoSuggestTimer = later(async () => {
     lifecycle.autoSuggestTimer = null
