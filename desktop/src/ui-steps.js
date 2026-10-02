@@ -431,7 +431,7 @@ function PreviewPanel({ state }) {
         style: { display: 'flex', flexWrap: 'wrap', gap: '6px' },
         children: [
           jsx(Button, { variant: 'primary', data: { 'data-studio-send-prompt': true }, onClick: sendPreview, disabled: placing, title: t('preview.sendTitle'), keyHint: SHORTCUTS.generate, children: t('preview.send') }),
-          jsx(Button, { data: { 'data-studio-use-prompt': true }, onClick: usePreview, disabled: placing, title: t('preview.editTitle'), keyHint: SHORTCUTS.editPrompt, children: t('preview.edit') }),
+          jsx(Button, { data: { 'data-studio-use-prompt': true }, onClick: placePreview, disabled: placing, title: t('preview.editTitle'), keyHint: SHORTCUTS.editPrompt, children: t('preview.edit') }),
           ai && engine
             ? jsx(Button, {
                 data: { 'data-studio-switch-version': true },

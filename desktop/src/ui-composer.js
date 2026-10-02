@@ -298,7 +298,7 @@ function placePrompt(text) {
   return run
 }
 
-async function usePreview() {
+async function placePreview() {
   const state = $studio.get()
   if (state.status !== 'preview' || !state.preview || $placing.get()) return
   $placing.set(true)

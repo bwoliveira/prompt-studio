@@ -312,6 +312,20 @@ test('i18n: every key of the UI bundle is read by the code (an unused key fails)
   assert.deepEqual(await unusedUiKeys({ ai: { ghost: 'x', failed: 'y' }, shortcuts: { open: 'z' }, notify: { sessionChangedLost: 'w' } }), ['ai.ghost'])
 })
 
+test('naming: a function called useX is a React hook (calls one); actions are named for what they do', async () => {
+  const dir = new URL('../../desktop/src/', import.meta.url)
+  const hooks = /\buse(State|Effect|Value|T|PluginI18n|Memo|Ref|Context|Callback)\(/
+  const bad = []
+  for (const name of (await readdir(dir)).filter(f => /^(ui-.*|studio-state)\.js$/.test(f))) {
+    const source = await readFile(new URL(name, dir), 'utf8')
+    for (const m of source.matchAll(/^(async )?function (use[A-Z]\w*)\(/gm)) {
+      const body = source.slice(m.index, source.indexOf('\n}\n', m.index))
+      if (m[1] || !hooks.test(body.slice(m[0].length))) bad.push(`${name}: ${m[2]}`)
+    }
+  }
+  assert.deepEqual(bad, [], 'functions named like hooks that are not: rename them (placePreview, applySuggestion)')
+})
+
 test('studio-core.js imports only the engines and its i18n bundle', async () => {
   const src = await readFile(new URL('../../desktop/src/studio-core.js', import.meta.url), 'utf8')
   assert.deepEqual([...src.matchAll(/from '([^']+)'/g)].map(m => m[1]).sort(), ['./engine-astra.js', './engine-opus.js', './engine-sonnet.js', './i18n-core.js'])

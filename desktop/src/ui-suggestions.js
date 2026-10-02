@@ -120,7 +120,7 @@ function SuggestionRow({ state }) {
       children.push(jsx(Button, { variant: 'accent', data: { 'data-studio-ai-use': true }, onClick: () => commitAnswer(''), keyHint: SHORTCUTS.useAi, children: t('ai.useDefault') }))
     } else if (!empty) {
       const label = improving ? t('ai.useVersion') : t('ai.putInField')
-      children.push(jsx(Button, { variant: 'accent', data: { 'data-studio-ai-use': true }, onClick: useSuggestion, keyHint: SHORTCUTS.useAi, children: label }))
+      children.push(jsx(Button, { variant: 'accent', data: { 'data-studio-ai-use': true }, onClick: applySuggestion, keyHint: SHORTCUTS.useAi, children: label }))
     }
     children.push(jsx(Button, { data: { 'data-studio-ai-discard': true }, onClick: discardSuggestion, keyHint: SHORTCUTS.discard, children: t('ai.discard') }))
     if (!improving) {
@@ -190,7 +190,7 @@ async function requestSuggestion(mode = 'suggest') {
   $suggestion.set(next)
 }
 
-function useSuggestion() {
+function applySuggestion() {
   const suggestion = $suggestion.get()
   const state = $studio.get()
   if (!suggestion || suggestion.status !== 'ready' || suggestion.key !== questionKey(state)) return

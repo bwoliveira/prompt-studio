@@ -3468,7 +3468,7 @@ function SuggestionRow({ state }) {
       children.push(jsx(Button, { variant: 'accent', data: { 'data-studio-ai-use': true }, onClick: () => commitAnswer(''), keyHint: SHORTCUTS.useAi, children: t('ai.useDefault') }))
     } else if (!empty) {
       const label = improving ? t('ai.useVersion') : t('ai.putInField')
-      children.push(jsx(Button, { variant: 'accent', data: { 'data-studio-ai-use': true }, onClick: useSuggestion, keyHint: SHORTCUTS.useAi, children: label }))
+      children.push(jsx(Button, { variant: 'accent', data: { 'data-studio-ai-use': true }, onClick: applySuggestion, keyHint: SHORTCUTS.useAi, children: label }))
     }
     children.push(jsx(Button, { data: { 'data-studio-ai-discard': true }, onClick: discardSuggestion, keyHint: SHORTCUTS.discard, children: t('ai.discard') }))
     if (!improving) {
@@ -3538,7 +3538,7 @@ async function requestSuggestion(mode = 'suggest') {
   $suggestion.set(next)
 }
 
-function useSuggestion() {
+function applySuggestion() {
   const suggestion = $suggestion.get()
   const state = $studio.get()
   if (!suggestion || suggestion.status !== 'ready' || suggestion.key !== questionKey(state)) return
@@ -3993,7 +3993,7 @@ function PreviewPanel({ state }) {
         style: { display: 'flex', flexWrap: 'wrap', gap: '6px' },
         children: [
           jsx(Button, { variant: 'primary', data: { 'data-studio-send-prompt': true }, onClick: sendPreview, disabled: placing, title: t('preview.sendTitle'), keyHint: SHORTCUTS.generate, children: t('preview.send') }),
-          jsx(Button, { data: { 'data-studio-use-prompt': true }, onClick: usePreview, disabled: placing, title: t('preview.editTitle'), keyHint: SHORTCUTS.editPrompt, children: t('preview.edit') }),
+          jsx(Button, { data: { 'data-studio-use-prompt': true }, onClick: placePreview, disabled: placing, title: t('preview.editTitle'), keyHint: SHORTCUTS.editPrompt, children: t('preview.edit') }),
           ai && engine
             ? jsx(Button, {
                 data: { 'data-studio-switch-version': true },
@@ -4448,7 +4448,7 @@ function placePrompt(text) {
   return run
 }
 
-async function usePreview() {
+async function placePreview() {
   const state = $studio.get()
   if (state.status !== 'preview' || !state.preview || $placing.get()) return
   $placing.set(true)
