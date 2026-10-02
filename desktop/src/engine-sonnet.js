@@ -309,6 +309,9 @@ const NEGATED = /(?:^|[\s,;:(])(?:(?:do not|don't|dont|does not|doesn't|never|no
 // install, configure or deploy"): a coordinator or a list comma leads back to the previous word.
 const COORDINATED = /\b(\w+)\s*(?:,|,?\s+(?:or|nor|and|ou|nem|e))\s*$/
 // "Do not build the app or configure nginx": the clause before the coordinator opens with the prohibition.
+// "Do not build, test or deploy anything": a bare comma is a list only when a coordinator closes it later in the
+// sentence; "Do not deploy, review the code instead" opens an alternative order.
+const LIST_TAIL = /^[^.!?;:\n]{0,120}?\b(?:or|nor|and|ou|nem|e)\b/
 const CLAUSE_NEGATION = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|por favor)\s*,?\s+)?(?:(?:i|we|eu|nos)\s+)?(?:do not|don't|dont|does not|doesn't|never|not|nao|nunca|jamais)\b[^.!?;:\n]*$/
 const PREDICATE_NEGATION = /\b(?:is|are|was|were|am|be|been|being|'s|'re|seems|looks|esta|estao|estava|estavam|e|era|eram|foi|foram|fica|ficou|parece)\s+(?:not|nao|never|nunca)(?:\s+\w+)?\s*$/
 // A mark-less question may carry a comma only when what precedes the comma already reads as a question ("How do
@@ -317,8 +320,9 @@ const QUESTION_HEAD = /\b(?:do|does|did|can|could|should|would|will|may|might|is
 // Only this many characters around a match are inspected, so the scan stays linear on long drafts; the prefixes
 // NEGATED and SENTENCE_START look for are far shorter than this.
 const CONTEXT_WINDOW = 120
-// "I need a script to write log files": the artifact asked for sits before the verb that tells its purpose.
-const REQUESTED_ARTIFACT = /(?:a|an|the|um|uma|o|os|as|some|algum|alguma|alguns|algumas)\s+(?:(?!(?:to|for|and|or|that|which|para|que|e|ou)\s)[\w-]+\s+){1,3}(?:to|that|which|para|que)\s+$/
+// "I need a script to write log files": the artifact asked for sits before the verb that tells its purpose; with the
+// request opener ("I need", "preciso de") it also decides the deliverable ("I need a script to configure nginx").
+const REQUESTED_ARTIFACT = /((?:(?:i|we) (?:need|want|would like)|i'd like|we'd like|give me|send me|preciso de|precisamos de|quero|queremos|gostaria de|gostariamos de|me de|me passe|me envie|me mande|what (?:i|we) (?:need|want|would like) is|o que (?:eu|nos) (?:preciso|precisamos|quero|queremos) e)\s+(?:me\s+)?)?(?:a|an|the|um|uma|o|os|as|some|algum|alguma|alguns|algumas)\s+(?:(?!(?:to|for|and|or|that|which|para|que|e|ou)\s)[\w-]+\s+){1,3}(?:to|that|which|para|que)\s+$/
 const INTRO_CLAUSE = /^([^.!?,:;\n]{1,60}),\s+/
 // "The configure script is broken", "I tried to configure nginx yesterday": the verb names a thing or tells the past.
 const MODIFIER_USE = /\b(?:the|a|an|this|that|these|those|my|our|your|o|os|a|as|um|uma|este|esta|esse|essa|meu|minha|nosso|nossa|seu|sua)\s+$/
@@ -357,6 +361,7 @@ function prohibited(text, at, hops = 0) {
   if (NEGATED.test(before)) return hops === 0 || !PREDICATE_NEGATION.test(before)
   const chain = hops < 5 && COORDINATED.exec(before)
   if (!chain) return false
+  if (/,\s*$/.test(chain[0]) && !LIST_TAIL.test(text.slice(at))) return false
   if (CLAUSE_NEGATION.test(before.slice(0, chain.index))) return true
   return prohibited(text, at - before.length + chain.index, hops + 1)
 }
@@ -459,7 +464,10 @@ function detect(b) {
   const artifact = pickArtifact(requestedArtifact ? text.slice(at - requestedArtifact[0].length) : request)
   const codeWins = artifact === 'code'
   const textWins = artifact === 'text'
-  if ((signal === 'data' || signal === 'text') && MAKE_VERB.test(verbWord) && codeWins) { signal = 'implementation'; category = 'code' }
+  const asked = requestedArtifact && requestedArtifact[1]
+  if (asked && codeWins) { signal = 'implementation'; category = 'code' }
+  else if (asked && textWins) { signal = 'text'; category = 'writing' }
+  else if ((signal === 'data' || signal === 'text') && MAKE_VERB.test(verbWord) && codeWins) { signal = 'implementation'; category = 'code' }
   // "Gere um e-mail", "Monte uma mensagem": the verb does not say what is made, the first artifact named does.
   if (signal === 'implementation' && GENERATE_VERB.test(request) && textWins) { signal = 'text'; category = 'writing' }
   if (!signal) {

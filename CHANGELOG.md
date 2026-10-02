@@ -81,7 +81,8 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   detalhada da API" is a review. "Do not write a review. Build a React app." is the build, and "Write a biology
   test with ten questions" is writing while a load test or a test suite is code. "Before we begin, can I configure
   nginx without downtime?" is a question, and "The configure script is broken. Review it." is a review. "Help me
-  plan deployment before we configure nginx" asks for the plan, and "I need a script to write log files" is code.
+  plan deployment before we configure nginx" asks for the plan, and "I need a script to write log files" is code,
+  as is "I need a script to configure nginx". "Do not deploy, review the code instead" is the review.
 - Fix: *Gere um e-mail*, *Monte uma mensagem* and the like stay text, reports and summaries are text even when they
   mention tests ("Write a summary of the test results", "Escreva um relatório dos testes"), and a question such as
   "Como instalar o Docker?" or "Como resumir um livro?" stays an answer on Opus, Sonnet and Astra.
