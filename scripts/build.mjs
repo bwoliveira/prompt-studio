@@ -7,10 +7,8 @@
 // Both outputs are syntax-checked as ES modules before anything is written or compared.
 // `node scripts/build.mjs --check` writes nothing and exits 1 when either output is stale.
 import { readFile, writeFile } from 'node:fs/promises'
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { realpathSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 const url = path => new URL(`../${path}`, import.meta.url)
@@ -23,13 +21,34 @@ export const stripImports = source => source.replace(IMPORT_LINE, '')
 
 // `export const|let|var|function|class|async function` loses its keyword; `export default function|class` too;
 // `export { a, b }` (one or many lines) is dropped. Re-exports and `export default <expression>` cannot be inlined.
+// Only real statements count: text that looks like an export inside a string, template literal or comment is kept.
 export function stripExports(source) {
-  if (/^export\s*(?:\*|\{[^}]*\})\s*(?:as\s+[\w$]+\s*)?from\b/m.test(source)) throw new Error('re-export (`export ... from`) cannot be inlined into the single-scope build')
-  const defaults = source.replace(/^export default (?=(?:async function|function|class)\b)/gm, '')
-  if (/^export\s+default\b/m.test(defaults)) throw new Error('`export default` is only supported before a named function or class')
-  return defaults
-    .replace(/^export\s*\{[^}]*\}[ \t]*;?[ \t]*(?:\r?\n|$)/gm, '')
-    .replace(/^export (?=(?:const|let|var|function|class|async function)\b)/gm, '')
+  if (codeMatches(source, /^export\s*(?:\*|\{[^}]*\})\s*(?:as\s+[\w$]+\s*)?from\b/gm)) throw new Error('re-export (`export ... from`) cannot be inlined into the single-scope build')
+  const defaults = replaceInCode(source, /^export default (?=(?:async function|function|class)\b)/gm, '')
+  if (codeMatches(defaults, /^export\s+default\b/gm)) throw new Error('`export default` is only supported before a named function or class')
+  const lists = replaceInCode(defaults, /^export\s*\{[^}]*\}[ \t]*;?[ \t]*(?:\r?\n|$)/gm, '')
+  return replaceInCode(lists, /^export (?=(?:const|let|var|function|class|async function)\b)/gm, '')
+}
+
+// Spans walk() skips (strings, template literals, comments, regex literals), as sorted [start, end) pairs.
+function skippedSpans(source) {
+  const spans = []
+  walk(source, () => false, 0, (start, end) => spans.push([start, end]))
+  return spans
+}
+const inSpan = (spans, i) => spans.some(([start, end]) => start <= i && i < end)
+// pattern must be global: a match that starts inside a skipped span is not code.
+function codeMatches(source, pattern) {
+  const spans = skippedSpans(source)
+  for (const m of source.matchAll(pattern)) if (!inSpan(spans, m.index)) return true
+  return false
+}
+function replaceInCode(source, pattern, replacement) {
+  const spans = skippedSpans(source)
+  return source.replace(pattern, (match, ...rest) => {
+    const offset = rest.find(value => typeof value === 'number')
+    return inSpan(spans, offset) ? match : replacement
+  })
 }
 
 // Walk source code, skipping strings, template literals, comments and regex literals. visit(i, ch, depth, prev) sees
@@ -195,20 +214,14 @@ export function findCollisions(entries) {
 }
 
 // Syntax-check a generated module the way Node itself would load it: catches what the name scan cannot, such as a
-// duplicate binding in a declaration form it does not parse.
+// duplicate binding in a declaration form it does not parse. The source goes through stdin, so the check writes
+// nothing and also runs where the filesystem is read-only (the review sandbox runs `--check`).
 export function assertValidModule(label, source) {
-  const dir = mkdtempSync(join(tmpdir(), 'ps-syntax-'))
-  try {
-    const file = join(dir, 'bundle.mjs')
-    writeFileSync(file, source)
-    const result = spawnSync(process.execPath, ['--check', file], { encoding: 'utf8' })
-    if (result.error) throw result.error
-    if (result.status !== 0) {
-      const detail = result.stderr.split('\n').filter(line => line.trim()).slice(0, 6).join('\n')
-      throw new Error(`${label} is not valid ESM:\n${detail}`)
-    }
-  } finally {
-    rmSync(dir, { recursive: true, force: true })
+  const result = spawnSync(process.execPath, ['--input-type=module', '--check'], { input: source, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+  if (result.error) throw result.error
+  if (result.status !== 0) {
+    const detail = result.stderr.split('\n').filter(line => line.trim()).slice(0, 6).join('\n')
+    throw new Error(`${label} is not valid ESM:\n${detail}`)
   }
 }
 

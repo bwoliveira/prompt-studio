@@ -111,6 +111,17 @@ test('stripExports: fails clearly on forms it cannot inline', () => {
   assert.throws(() => stripExports('export default {a: 1}'), /export default/)
 })
 
+test('stripExports: text that looks like an export inside a template literal, string or comment is kept (Codex P2)', () => {
+  const source = ['export const example = `', 'export { sample }', 'export const inner = 1', '`', "export const quoted = 'export { q }'", '/*', 'export { inComment }', '*/', 'export { example }', ''].join('\n')
+  const out = stripExports(source)
+  assert.ok(out.includes('`\nexport { sample }\nexport const inner = 1\n`'), out)
+  assert.ok(out.includes("'export { q }'"), out)
+  assert.ok(out.includes('/*\nexport { inComment }\n*/'), out)
+  assert.ok(/^const example = `$/m.test(out) && /^const quoted = /m.test(out), out)
+  assert.ok(!/^export \{ example \}$/m.test(out), out)
+  assert.doesNotThrow(() => stripExports('const doc = `\nexport default {a: 1}\nexport * from \'./x.js\'\n`\n'))
+})
+
 test('stripImports removes import lines only', () => {
   assert.equal(stripImports("import a from 'a'\nconst b = 1\n"), 'const b = 1\n')
 })
@@ -144,6 +155,19 @@ async function buildCopy() {
   return dir
 }
 const run = (dir, ...args) => spawnSync(process.execPath, ['scripts/build.mjs', ...args], { cwd: dir, encoding: 'utf8' })
+
+test('CLI --check writes nothing, so it works when the temp folder is not writable (read-only review sandbox, Codex P2)', async () => {
+  const dir = await buildCopy()
+  try {
+    assert.equal(run(dir).status, 0)
+    const env = { ...process.env, TMPDIR: join(dir, 'no-such-dir'), TMP: join(dir, 'no-such-dir'), TEMP: join(dir, 'no-such-dir') }
+    const r = spawnSync(process.execPath, ['scripts/build.mjs', '--check'], { cwd: dir, encoding: 'utf8', env })
+    assert.equal(r.status, 0, r.stderr)
+    assert.throws(() => assertValidModule('desktop/plugin.js', 'const a = 1\nconst a = 2\n'), /desktop\/plugin\.js is not valid ESM/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
 
 test('CLI --check: missing desktop/plugin.js is a clear error, not "stale"', async () => {
   const dir = await buildCopy()
