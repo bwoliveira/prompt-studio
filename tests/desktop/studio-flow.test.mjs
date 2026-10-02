@@ -118,6 +118,13 @@ export const useValue = useStore
 export const COMPOSER_AREAS = { top: 'top', middleware: 'middleware', actions: 'actions' }
 export const PALETTE_AREA = 'palette'
 export const KEYBINDS_AREA = 'keybinds'
+// The Desktop SDK's formatModifierToken (0.21.4+): glyphs on a Mac, words elsewhere; counts calls so a test can tell it was used.
+const sdkFormatModifier = mod => {
+  globalThis.__sdkModifierCalls = (globalThis.__sdkModifierCalls || 0) + 1
+  const mac = /mac/i.test(navigator.platform || '')
+  return ({ mod: mac ? '⌘' : 'Ctrl', ctrl: mac ? '⌃' : 'Ctrl', alt: mac ? '⌥' : 'Alt', shift: mac ? '⇧' : 'Shift' })[mod] ?? mod
+}
+export const formatModifierToken = mod => sdkFormatModifier(mod)
 export const Tip = ({ children }) => children
 export const GlyphSpinner = () => null
 // Kbd: forwards data-*/aria-* props like the real UI-kit component; records the variant.
@@ -209,7 +216,7 @@ export const host = {
   notifyError: (_e, message) => { notifications.push({ kind: 'error', message }) }
 }
 `
-  writeFileSync(join(tmp, 'sdk.js'), LEGACY_SDK ? sdkSource.replace(/^export const (ListRow|ToggleRow) = .*\n/gm, '') : sdkSource)
+  writeFileSync(join(tmp, 'sdk.js'), LEGACY_SDK ? sdkSource.replace(/^export const (ListRow|ToggleRow|formatModifierToken) = .*\n/gm, '') : sdkSource)
   writeFileSync(join(tmp, 'entry.js'), `
 export { default as plugin, SHORTCUTS } from ${JSON.stringify(process.env.PROMPT_STUDIO_PLUGIN || join(repo, 'desktop', 'plugin.js'))}
 export { notifications, i18n, translate, $locale, host, sdkHasRows } from './sdk.js'
@@ -750,6 +757,21 @@ const errorText = (code, locale = 'en') => {
   return typeof message === 'function' ? message(K().settings) : message
 }
 const digit = (action, n) => K()[action].replace('1…9', String(n))
+// Runs `fn` with navigator.platform (and userAgentData.platform) stubbed, then puts both back.
+async function withPlatform(platform, fn) {
+  const nav = ui.dom.window.navigator
+  const saved = ['platform', 'userAgentData'].map(name => [name, Object.getOwnPropertyDescriptor(nav, name)])
+  if (platform) {
+    Object.defineProperty(nav, 'platform', { configurable: true, value: platform })
+    Object.defineProperty(nav, 'userAgentData', { configurable: true, value: undefined })
+  }
+  try { return await fn() } finally {
+    for (const [name, descriptor] of saved) {
+      if (descriptor) Object.defineProperty(nav, name, descriptor)
+      else delete nav[name]
+    }
+  }
+}
 async function press(combo, target = document.activeElement || document.body, extra = {}) {
   const parts = combo.split('+')
   const key = parts.pop()
@@ -1076,7 +1098,7 @@ test('U1: focus lands on the first logical target after every step and status ch
   assert.ok(inStrip(), 'back to steps keeps focus in the studio')
 })
 
-test('U3/U7: F1 toggles a Shortcuts list with the full map and the left-Alt / number-row notes', { skip }, async () => {
+test('U3/U7: F1 toggles a Shortcuts list with the full map and the AltGr / number-row notes', { skip }, async () => {
   await openStudio(INTENT, 'off')
   const help = $('[data-studio-shortcuts-help]')
   assert.equal(help.querySelector('[data-studio-key]')?.textContent, K().help)
@@ -1090,7 +1112,8 @@ test('U3/U7: F1 toggles a Shortcuts list with the full map and the left-Alt / nu
   const rows = [...list.querySelectorAll('[data-studio-shortcut-row]')].map(row => row.getAttribute('data-studio-shortcut-row'))
   assert.deepEqual(rows, Object.values(K()).map(rowCombo), 'F1 list = shortcut map')
   for (const combo of rows) assert.ok(list.querySelector(`[data-studio-shortcut-row=\"${combo}\"]`), `${combo} listed`)
-  assert.match(list.textContent, /left Alt/)
+  assert.match(list.textContent, /AltGr/)
+  assert.ok(!/left Alt/.test(list.textContent), 'the code takes either Alt, so no "use the left Alt"')
   assert.match(list.textContent, /physical number row/)
   assert.equal(help.getAttribute('aria-expanded'), 'true')
   await click('[data-studio-shortcuts-help]')
@@ -1896,6 +1919,246 @@ test('KEYS-MAC: Option+E on macOS (dead key in e.key) still works as Alt+E via e
   assert.equal(composer().submits.length, 0, 'not sent')
   assert.equal(draft(), prompt)
   assert.ok($('[data-studio-strip]') === null)
+})
+
+// What macOS sends for an Option chord on a dead key (⌥E, ⌥N, ⌥I, ⌥U, ⌥`): key 'Dead' and the physical code, with
+// keyCode 229 and/or isComposing set because the browser opens an accent composition.
+const DEAD_KEYS = [
+  { key: 'Dead', keyCode: 229 },
+  { key: 'Dead', isComposing: true },
+  { key: 'Dead', keyCode: 229, isComposing: true },
+  { key: 'Process', keyCode: 229, isComposing: true }
+]
+
+test('KEYS-MAC-DEAD: Option+E, Option+N and Option+I as dead keys (keyCode 229 / isComposing) still put in composer, ask again and cycle the AI mode', { skip }, async () => {
+  const dead = (combo, extra) => press(combo, document.activeElement, extra)
+  // Alt+I: the AI mode cycles, once per variant.
+  await openStudio(INTENT, 'manual')
+  for (const extra of DEAD_KEYS) {
+    const mode = aiMode()
+    const event = await dead(K().mode, extra)
+    assert.ok(event.defaultPrevented === true, `Alt+I ${JSON.stringify(extra)} taken, so no accent is typed`)
+    assert.notEqual(aiMode(), mode, `Alt+I ${JSON.stringify(extra)} cycled the mode`)
+  }
+  await setMode('manual')
+  // Alt+N: another suggestion, once per variant.
+  await press(K().skip)
+  await press(K().ask); await waitFor(() => $('[data-studio-ai-use]'))
+  for (const extra of DEAD_KEYS) {
+    const before = backend.calls.filter(c => c.path === '/suggest').length
+    await dead(K().another, extra)
+    await waitFor(() => backend.calls.filter(c => c.path === '/suggest').length > before && $('[data-studio-ai-use]'))
+    assert.equal(backend.calls.filter(c => c.path === '/suggest').length, before + 1, `Alt+N ${JSON.stringify(extra)} asked again`)
+  }
+  await press(K().discard)
+  await click('[data-studio-cancel]')
+  // Alt+E: put in composer, once per variant.
+  for (const extra of DEAD_KEYS) {
+    await toPreview()
+    const prompt = $('[data-studio-preview-text]').textContent
+    const event = await dead(K().editPrompt, extra)
+    assert.ok(event.defaultPrevented === true, `Alt+E ${JSON.stringify(extra)} taken`)
+    assert.equal(composer().submits.length, 0, 'not sent')
+    assert.equal(draft(), prompt, `Alt+E ${JSON.stringify(extra)} put the prompt in the composer`)
+    assert.ok($('[data-studio-strip]') === null)
+  }
+})
+
+test('KEYS-MAC-DEAD: a real IME composition without an Alt chord is still ignored, and so is an Alt chord on a non-letter key', { skip }, async () => {
+  await openStudio(INTENT, 'off')
+  for (const extra of [{ isComposing: true }, { keyCode: 229 }, { key: 'Process', keyCode: 229, isComposing: true }]) {
+    const event = await press(K().generate, document.activeElement, extra)
+    assert.ok(event.defaultPrevented === false, `F9 ${JSON.stringify(extra)} left to the IME`)
+    assert.ok($('[data-studio-preview]') === null && $('[data-studio-strip]'), 'nothing ran')
+  }
+  // Not an Alt chord: the physical code is a letter but Alt is up (the IME is typing a candidate).
+  for (const extra of [{ key: 'Process', keyCode: 229, isComposing: true }, { key: 'Dead', keyCode: 229 }]) {
+    const event = await press('E', document.activeElement, { ...extra, code: 'KeyE' })
+    assert.ok(event.defaultPrevented === false, `bare E ${JSON.stringify(extra)} ignored`)
+  }
+  // Alt held but the code is no letter or digit (Alt+Space with the IME open): still the IME's.
+  const space = new ui.dom.window.KeyboardEvent('keydown', { key: 'Process', code: 'Space', keyCode: 229, isComposing: true, altKey: true, bubbles: true, cancelable: true })
+  await ui.act(async () => { document.activeElement.dispatchEvent(space) })
+  assert.ok(space.defaultPrevented === false)
+  // Control+Option and Command+Option chords stay untouched even on a dead key.
+  for (const mods of [{ ctrlKey: true }, { metaKey: true }]) {
+    for (const extra of DEAD_KEYS) {
+      const event = await press(K().mode, document.activeElement, { ...extra, ...mods })
+      assert.ok(event.defaultPrevented === false, `${Object.keys(mods)[0]}+Alt+I ${JSON.stringify(extra)} untouched`)
+    }
+  }
+})
+
+// What a Mac shows for a canonical combo, written out here and not taken from the plugin: ⌥ ⇧ before the key, "fn " before an F-key.
+const macCap = combo => combo.split(' / ').map(one => {
+  const parts = one.split('+')
+  const base = parts.pop()
+  if (/^F\d+$/.test(base)) return `fn ${base}`
+  return parts.map(part => ({ Alt: '⌥', Shift: '⇧' })[part]).join('') + base
+}).join(' / ')
+
+test('KEYS-MAC-CAPS: on a Mac every key cap, tooltip and F1 row reads ⌥E / ⇧ / "fn F4"; the canonical combo stays in the attributes; Linux is unchanged', { skip }, async () => {
+  const map = K()
+  // The three that name the forms.
+  assert.equal(macCap('Alt+E'), '⌥E')
+  assert.equal(macCap('Alt+Shift+1…9'), '⌥⇧1…9')
+  assert.equal(macCap('F4'), 'fn F4')
+  const visibleCaps = () => [...$('[data-studio-strip]').querySelectorAll('[data-studio-key]')]
+  // Linux first: the caps are the canonical combos, no glyph and no fn.
+  await withPlatform('Linux x86_64', async () => {
+    await openStudio(INTENT, 'manual')
+    await press(map.skip)
+    const caps = visibleCaps()
+    assert.ok(caps.length > 5)
+    for (const cap of caps) {
+      assert.ok(cap.textContent === cap.getAttribute('data-studio-key'), `${cap.textContent} unchanged on Linux`)
+      assert.ok(!/[⌥⇧⌘⌃]|fn /.test(cap.textContent), cap.textContent)
+    }
+    await press(map.help)
+    assert.ok(!/Mac|Option/.test($('[data-studio-shortcuts-list]').textContent), 'no Mac note on Linux')
+    await press(map.close)
+  })
+  globalThis.__sdkModifierCalls = 0
+  await withPlatform('MacIntel', async () => {
+    // The platform is read at render time: a studio open and closed again redraws the F4 button.
+    await openStudio(INTENT, 'manual')
+    await click('[data-studio-cancel]')
+    assert.ok($('[data-studio-open] [data-studio-key]').textContent === macCap(map.open), 'the open button says fn F4')
+    assert.equal($('[data-studio-open] [data-studio-key]').textContent, 'fn F4')
+    assert.equal($('[data-studio-open]').getAttribute('aria-keyshortcuts'), map.open, 'aria-keyshortcuts stays canonical')
+    assert.ok($('[data-studio-open]').getAttribute('title').includes('fn F4') && !$('[data-studio-open]').getAttribute('title').includes('Shortcut: F4'), $('[data-studio-open]').getAttribute('title'))
+    await openStudio(INTENT, 'manual')
+    for (let i = 0; i < 3 && !$('[data-studio-ladder]'); i += 1) await press(map.skip)
+    assert.ok($('[data-studio-ladder]'), 'ladder with steps to edit')
+    const caps = visibleCaps()
+    assert.ok(caps.length > 8)
+    for (const cap of caps) {
+      const combo = cap.getAttribute('data-studio-key')
+      assert.equal(cap.textContent, macCap(combo), `${combo} drawn as ${macCap(combo)}`)
+      assert.ok(!/Alt|Shift/.test(cap.textContent), `no Alt/Shift word: ${cap.textContent}`)
+    }
+    const text = selector => $(`${selector} [data-studio-key]`)?.textContent
+    assert.equal(text('[data-studio-skip]'), 'fn F6')
+    assert.equal(text('[data-studio-paste-open]'), '⌥C')
+    assert.equal(text('[data-studio-ai-toggle]'), '⌥I')
+    assert.equal(text('[data-studio-target-option="opus"]'), '⌥O')
+    assert.equal(text('[data-studio-settings]'), 'fn F3')
+    assert.equal(text('[data-studio-shortcuts-help]'), 'fn F1')
+    assert.equal(text('[data-studio-cancel]'), 'fn F10')
+    const edits = [...$('[data-studio-ladder]').querySelectorAll('[data-studio-key]')].map(cap => cap.textContent)
+    edits.forEach((cap, i) => assert.equal(cap, `⌥⇧${i + 1}`, `step ${i + 1} edit cap`))
+    // Canonical combo in the attributes, the Mac form in the tooltip.
+    let titled = 0
+    for (const el of $('[data-studio-strip]').querySelectorAll('[data-studio-shortcut]')) {
+      const combo = el.getAttribute('data-studio-shortcut')
+      assert.ok(el.getAttribute('aria-keyshortcuts') === null || el.getAttribute('aria-keyshortcuts') === combo, 'aria-keyshortcuts canonical')
+      const title = el.getAttribute('title') || ''
+      if (title.includes('Shortcut: ')) { titled += 1; assert.ok(title.endsWith(`Shortcut: ${macCap(combo)}`), `tooltip of ${combo} shows the Mac form: ${title}`) }
+    }
+    assert.ok(titled > 5, 'tooltips checked')
+    assert.ok($('[data-studio-skip]').getAttribute('title').includes('Shortcut: fn F6'), $('[data-studio-skip]').getAttribute('title'))
+    assert.ok($('[data-studio-ai-toggle] span[title]').getAttribute('title').includes('⌥I'), 'AI mode tooltip')
+    // F1: rows show the Mac form, keep the canonical combo in data-studio-shortcut-row, and the Mac note is there.
+    await press(map.help)
+    const list = $('[data-studio-shortcuts-list]')
+    const rows = [...list.querySelectorAll('[data-studio-shortcut-row]')]
+    assert.equal(rows.length, Object.keys(map).length)
+    for (const row of rows) {
+      const combo = row.getAttribute('data-studio-shortcut-row')
+      assert.equal(row.textContent, macCap(combo), `F1 row ${combo}`)
+    }
+    assert.ok(rows.some(row => row.textContent === 'fn F4') && rows.some(row => row.textContent === '⌥O / ⌥A / ⌥T') && rows.some(row => row.textContent === '⌥⇧1…9'))
+    assert.match(list.textContent, /Mac/, 'Mac note in F1')
+    assert.match(list.textContent, /fn/)
+    assert.match(list.textContent, /⌥\+digits/, 'digit note uses the Option glyph')
+    assert.ok(!/left Alt/.test(list.textContent))
+    await press(map.help)
+    // The keys still run through the canonical combos.
+    await press(map.paste)
+    assert.ok($('[data-studio-answer-input]'), 'Option+C opened the paste field')
+    await press(map.close)
+  })
+  if (ui.sdkHasRows) assert.ok(globalThis.__sdkModifierCalls > 0, 'the SDK formatModifierToken drew the modifiers')
+  else assert.equal(globalThis.__sdkModifierCalls, 0, 'no SDK formatModifierToken on this SDK: the local glyphs were used')
+})
+
+test('KEYS-MAC-CAPS: the done text, the empty-draft notice and Settings errors name the key as a Mac shows it; the F1 notes are en/pt', { skip }, async () => {
+  const original = structuredClone(K())
+  try {
+    for (const locale of ['en', 'pt']) {
+      await freshSettings('sess-1')
+      ui.i18n.locale = locale
+      await ui.act(async () => { ui.$locale.set(locale) })
+      await withPlatform('MacIntel', async () => {
+        $('[data-slot="composer-rich-input"]').textContent = ''
+        ui.notifications.length = 0
+        await click('[data-studio-open]')
+        assert.ok((ui.notifications.at(-1)?.message ?? '').includes('fn F4'), `${locale}: empty-draft notice: ${ui.notifications.at(-1)?.message}`)
+        await openStudio(INTENT, 'off')
+        for (let i = 0; i < 20 && $('[data-studio-step]'); i += 1) await press($('[data-studio-skip]') ? original.skip : original.accept)
+        assert.ok(currentText().includes('(fn F9)'), `${locale}: done state: ${currentText()}`)
+        await press(original.help)
+        const notes = $('[data-studio-shortcuts-list]').textContent
+        assert.ok(/fn/.test(notes) && /⌥/.test(notes), `${locale}: Mac note: ${notes}`)
+        assert.ok(!/left Alt|Alt da esquerda/.test(notes), `${locale}: no left-Alt advice`)
+        await press(original.help)
+        await freshSettings('sess-1')
+        backend.context = () => ({ ok: false, code: 'provider_refused', error: 'provider refused: PermissionDeniedError' })
+        await openFresh()
+        await waitFor(() => $('[data-studio-context-status]')?.textContent.includes('(fn F3)'))
+        if ($('[data-studio-cancel]')) await click('[data-studio-cancel]')
+      })
+      // Off a Mac the same notes carry no Mac text and still no left-Alt advice.
+      await openStudio(INTENT, 'off')
+      await press(original.help)
+      const linux = $('[data-studio-shortcuts-list]').textContent
+      assert.ok(!/left Alt|Alt da esquerda/.test(linux) && /AltGr/.test(linux), `${locale}: Alt wording: ${linux}`)
+      assert.ok(!/fn|⌥/.test(linux), `${locale}: no Mac text on Linux`)
+      await press(original.help)
+      await click('[data-studio-cancel]')
+    }
+  } finally {
+    ui.i18n.locale = 'en'
+    await ui.act(async () => { ui.$locale.set('en') })
+    if ($('[data-studio-cancel]')) await click('[data-studio-cancel]')
+  }
+})
+
+test('KEYS-NEVER: the listener never handles Enter, Tab, Esc, or Ctrl/Super chords, studio open or closed, Mac or not', { skip }, async () => {
+  const untouched = async (label, combo, target, extra) => {
+    const event = await press(combo, target, extra)
+    assert.ok(event.defaultPrevented === false, `${label} is the app's`)
+    assert.ok(event.cancelBubble === false, `${label} still reaches the app`)
+  }
+  const never = async target => {
+    for (const key of ['Enter', 'Tab', 'Escape']) {
+      for (const extra of [{}, { altKey: true }, { shiftKey: true }, { altKey: true, shiftKey: true }]) {
+        await untouched(`${key} ${JSON.stringify(extra)}`, key, target, { code: key, ...extra })
+      }
+    }
+    for (const mods of [{ ctrlKey: true }, { metaKey: true }, { ctrlKey: true, altKey: true }, { metaKey: true, altKey: true }, { ctrlKey: true, shiftKey: true }, { metaKey: true, shiftKey: true }]) {
+      for (const combo of ['E', 'N', 'I', 'S', '1', 'F4', 'F5', 'F9', 'F10', 'Enter']) {
+        await untouched(`${JSON.stringify(mods)} ${combo}`, combo, target, mods)
+      }
+    }
+  }
+  const platforms = [null, 'MacIntel']
+  for (const platform of platforms) {
+    await withPlatform(platform, async () => {
+      // Closed: the composer is the app's.
+      $('[data-slot="composer-rich-input"]').textContent = INTENT
+      await never(document.activeElement || document.body)
+      assert.ok($('[data-studio-strip]') === null)
+      // Open: with the focus on the recommended button and in the answer field.
+      await openStudio(INTENT, 'manual')
+      await never(document.activeElement)
+      await click('[data-studio-paste-open]')
+      await never($('[data-studio-answer-input]'))
+      for (const extra of DEAD_KEYS) await untouched(`Enter ${JSON.stringify(extra)}`, 'Enter', document.activeElement, { code: 'Enter', ...extra })
+      assert.ok($('[data-studio-strip]'), 'the studio is still open: nothing was pressed for the user')
+      await click('[data-studio-cancel]')
+    })
+  }
 })
 
 test('LOAD-1: while the session context is read only a loading state and Cancel (F10) show; options come after', { skip }, async () => {

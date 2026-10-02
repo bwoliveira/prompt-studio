@@ -46,6 +46,30 @@ export const SHORTCUTS = {
 const digitCombo = (action, n) => SHORTCUTS[action].replace('1…9', String(n))
 // What the F1 list prints for an entry: the combo, or the three target combos joined.
 const shortcutLabel = value => (typeof value === 'string' ? value : Object.values(value).join(' / '))
+
+// Mac keyboards: Alt is the Option key (⌥), Shift is ⇧ and the F-keys need fn. Read when drawn, with the
+// same rule as the Desktop (userAgentData, then navigator.platform, then the user agent).
+const isMacPlatform = () => typeof navigator !== 'undefined' && /mac/i.test(navigator.userAgentData?.platform || navigator.platform || navigator.userAgent || '')
+const MAC_MODIFIERS = { alt: '⌥', shift: '⇧', ctrl: '⌃', mod: '⌘' }
+// The Desktop SDK's formatModifierToken (0.21.4+) when it exports one and answers with the Mac glyph, else the
+// local table. Read from the namespace: a named import of a missing export would stop the plugin from loading.
+function modifierGlyph(name) {
+  const key = name.toLowerCase()
+  const sdk = typeof hermesSdk.formatModifierToken === 'function' ? hermesSdk.formatModifierToken(key) : ''
+  return /^[⌘⌃⌥⇧]$/.test(sdk) ? sdk : MAC_MODIFIERS[key] ?? name
+}
+// How a combo of the map is shown to the user: as is, except on a Mac, where 'Alt+Shift+1…9' reads ⌥⇧1…9 and
+// 'F4' reads fn F4 (the three target combos stay joined with ' / '). Attributes and tooltips' machine
+// readers keep the canonical combo.
+function displayCombo(combo) {
+  if (!isMacPlatform()) return combo
+  return combo.split(' / ').map(one => {
+    const parts = one.split('+')
+    const base = parts.pop()
+    if (!parts.length && MAC_MODIFIERS[base.toLowerCase()]) return modifierGlyph(base)
+    return /^F\d+$/.test(base) ? `fn ${base}` : parts.map(modifierGlyph).join('') + base
+  }).join(' / ')
+}
 // While open these are always swallowed, even when no control shows them right now: F5 would
 // otherwise reach the window (reload in some Electron setups).
 const STUDIO_FKEYS = [SHORTCUTS.accept, SHORTCUTS.skip, SHORTCUTS.useAi, SHORTCUTS.back, SHORTCUTS.generate, SHORTCUTS.close]
@@ -61,6 +85,11 @@ function keyCombo(event) {
   return ''
 }
 
+// An Alt chord on a letter or digit key, by physical code. On macOS ⌥E, ⌥N, ⌥I, ⌥U and ⌥` are dead keys:
+// the event has key 'Dead' and the browser may mark it keyCode 229 / isComposing as an accent starts, so
+// the code is the only thing that says which shortcut it was.
+const isAltCodeChord = event => event.altKey && !event.ctrlKey && !event.metaKey && /^(Key[A-Z]|Digit[1-9])$/.test(event.code || '')
+
 function shortcutTarget(root, combo) {
   for (const el of root.querySelectorAll('[data-studio-shortcut]')) {
     if (el.getAttribute('data-studio-shortcut') === combo && !el.disabled) return el
@@ -75,8 +104,8 @@ function shortcutTarget(root, combo) {
 function installStudioKeys(ctx) {
   if (typeof window === 'undefined' || !ctx?.addEventListener) return
   const onKey = event => {
-    // IME composition (CJK, dead keys) owns the keyboard until it ends.
-    if (event.isComposing || event.keyCode === 229) return
+    // IME composition (CJK) owns the keyboard until it ends; an Alt chord on a letter or digit key is a dead key.
+    if ((event.isComposing || event.keyCode === 229) && !isAltCodeChord(event)) return
     const combo = keyCombo(event)
     if (!combo) return
     const open = $studio.get().status !== 'idle'
@@ -107,13 +136,13 @@ function KeyCap({ combo, primary, reserved }) {
     size: 'sm',
     variant: primary ? 'inverted' : 'default',
     style: { marginLeft: '6px', verticalAlign: '1px', visibility: reserved ? 'hidden' : undefined, whiteSpace: 'nowrap' },
-    children: combo
+    children: displayCombo(combo)
   })
 }
 
 function keyProps(t, keyHint, title) {
   if (!keyHint) return { title }
-  return { 'aria-keyshortcuts': keyHint, 'data-studio-shortcut': keyHint, title: [title, t('keys.shortcut', keyHint)].filter(Boolean).join(' · ') }
+  return { 'aria-keyshortcuts': keyHint, 'data-studio-shortcut': keyHint, title: [title, t('keys.shortcut', displayCombo(keyHint))].filter(Boolean).join(' · ') }
 }
 
 function Button({ children, onClick, variant = 'default', disabled = false, title, data, keyHint, reserveKey, ariaLabel }) {
@@ -193,7 +222,7 @@ function Ladder({ ladder, canEdit, editing }) {
         onClick: event => { event.preventDefault(); editStep(index) },
         onMouseDown: event => event.preventDefault(),
         style: { ...style, cursor: 'pointer', fontFamily: 'var(--dt-font-sans, inherit)' },
-        title: [t('step.editTitle'), index < 9 ? t('keys.shortcut', combo) : ''].filter(Boolean).join(' · '),
+        title: [t('step.editTitle'), index < 9 ? t('keys.shortcut', displayCombo(combo)) : ''].filter(Boolean).join(' · '),
         type: 'button',
         children: cells
       }, `${rung.question}-${index}`)
@@ -515,7 +544,7 @@ function AiToggle() {
     role: 'radiogroup',
     style: { ...typeStyle, alignItems: 'center', display: 'inline-flex', fontSize: '12px', gap: '4px' },
     children: [
-      jsxs('span', { style: { alignItems: 'center', display: 'inline-flex', marginRight: '2px' }, title: t('ai.cycle', SHORTCUTS.mode), children: [t('ai.label'), jsx(KeyCap, { combo: SHORTCUTS.mode })] }),
+      jsxs('span', { style: { alignItems: 'center', display: 'inline-flex', marginRight: '2px' }, title: t('ai.cycle', displayCombo(SHORTCUTS.mode)), children: [t('ai.label'), jsx(KeyCap, { combo: SHORTCUTS.mode })] }),
       ...AI_MODES.map(item => jsx('button', {
         ...(item === next ? { 'data-studio-shortcut': SHORTCUTS.mode } : {}),
         'aria-checked': item === mode,
@@ -558,7 +587,7 @@ function DoneRow() {
   return jsx('div', {
     'data-studio': 'done',
     style: { marginTop: '14px' },
-    children: jsx(CurrentQuestion, { text: t('actions.done', generateLabel(t, true, mode), SHORTCUTS.generate) })
+    children: jsx(CurrentQuestion, { text: t('actions.done', generateLabel(t, true, mode), displayCombo(SHORTCUTS.generate)) })
   })
 }
 
@@ -873,12 +902,12 @@ function ShortcutsList() {
         children: Object.entries(SHORTCUTS).flatMap(([key, value]) => {
           const combo = shortcutLabel(value)
           return [
-            jsx('dt', { 'data-studio-shortcut-row': combo, style: { margin: 0 }, children: jsx(Kbd, { size: 'sm', children: combo }) }, `k-${combo}`),
+            jsx('dt', { 'data-studio-shortcut-row': combo, style: { margin: 0 }, children: jsx(Kbd, { size: 'sm', children: displayCombo(combo) }) }, `k-${combo}`),
             jsx('dd', { style: { ...typeStyle, fontSize: '12px', lineHeight: '18px', margin: 0 }, children: t(`shortcuts.${key}`) }, `d-${combo}`)
           ]
         })
       }),
-      jsxs('ul', { style: { margin: '8px 0 0', paddingLeft: '16px' }, children: [note(t('shortcuts.noteAlt')), note(t('shortcuts.noteDigits', SHORTCUTS.pick.replace('+1…9', ''))), note(t('shortcuts.noteKeys'))] })
+      jsxs('ul', { style: { margin: '8px 0 0', paddingLeft: '16px' }, children: [note(t('shortcuts.noteAlt')), note(t('shortcuts.noteDigits', displayCombo(SHORTCUTS.pick.replace('+1…9', '')))), ...(isMacPlatform() ? [note(t('shortcuts.noteMac', displayCombo('Alt'), [SHORTCUTS.editPrompt, SHORTCUTS.another, SHORTCUTS.mode].map(displayCombo).join(', ')))] : []), note(t('shortcuts.noteKeys'))] })
     ]
   })
 }
@@ -999,7 +1028,7 @@ function StudioButton() {
       padding: '0 8px',
       whiteSpace: 'nowrap'
     },
-    title: `${t('open.title')} · ${t('keys.shortcut', SHORTCUTS.open)}`,
+    title: `${t('open.title')} · ${t('keys.shortcut', displayCombo(SHORTCUTS.open))}`,
     type: 'button',
     children: [t('open.label'), jsx(KeyCap, { combo: SHORTCUTS.open }, 'key')]
   })

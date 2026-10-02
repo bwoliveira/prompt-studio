@@ -4,6 +4,15 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
 
 ## Unreleased
 
+- Fix: on a Mac, ⌥E (Put in composer), ⌥N (Another suggestion) and ⌥I (AI mode) did nothing: macOS reports them as
+  dead keys (key `Dead`, keyCode 229 or `isComposing`) and the key listener dropped every such event. An Alt chord on
+  a letter or digit key is now read by its physical key even then; a real input-method composition without an Alt
+  chord is still ignored. The listener still never handles Enter, Tab, Esc or Ctrl/Super chords (now covered by a test).
+- Mac key caps: on a Mac the key caps, tooltips, notices and the F1 list show ⌥E, ⇧ and "fn F4" instead of Alt+E,
+  Shift and F4 (the modifier glyphs come from the Desktop SDK's `formatModifierToken` when it has one, a local table
+  otherwise). Other platforms are unchanged, and `aria-keyshortcuts` keeps the canonical combo. The F1 help gains a Mac
+  note (Option, fn) and no longer says "use the left Alt": either Alt works, only an AltGr (right Alt on some
+  layouts) does not.
 - Fix: a reply with no answer text and JSON only inside the model's thinking no longer becomes the suggestion; it is
   treated as an empty reply (retried once, unless it ended on the token limit). On choice steps an AI value that is
   not exactly one of the options (for example "Not applicable here" with options Yes/No) is now reported as an

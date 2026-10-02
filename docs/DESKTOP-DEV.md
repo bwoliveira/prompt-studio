@@ -95,7 +95,13 @@ the detection constants drift apart.
 | Alt+V | Version |
 | Alt+E | Put in composer to edit |
 
-Use the left Alt: on some layouts the right Alt is AltGr. Alt+digits follow the physical number row.
+Either Alt works, except where the right Alt is AltGr. Alt+digits follow the physical number row.
+
+The map above holds the canonical combos (`aria-keyshortcuts`, `data-studio-shortcut`, tests). What the user reads
+goes through `displayCombo` in `ui-components.js`: on a Mac `Alt+Shift+1…9` shows as ⌥⇧1…9 and `F4` as fn F4, with the
+modifier glyphs from the SDK's `formatModifierToken` when the Desktop exports it (0.21.4+) and a local table otherwise.
+The key listener reads an Alt chord on a `Key*`/`Digit*` code even when the event is `key: 'Dead'`, `keyCode: 229` or
+`isComposing` (macOS Option dead keys); other composition is ignored. It never handles Enter, Tab, Esc or Ctrl/Super chords.
 
 ## Composer access
 

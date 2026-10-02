@@ -79,7 +79,7 @@ async function startFromComposer() {
     }
     const intent = draft.trim()
     if (!intent) {
-      host.notify({ kind: 'info', message: tr('notify.empty', SHORTCUTS.open) })
+      host.notify({ kind: 'info', message: tr('notify.empty', displayCombo(SHORTCUTS.open)) })
       return
     }
     if (intent.length < 10) {
@@ -268,7 +268,7 @@ function describeFailure(error) {
 function errorDetail(response) {
   const code = typeof response?.code === 'string' ? response.code : ''
   const key = `errors.${code}`
-  const text = code ? tr(key, SHORTCUTS.settings) : null
+  const text = code ? tr(key, displayCombo(SHORTCUTS.settings)) : null
   return text && text !== key ? text : String(response?.error || '')
 }
 
@@ -291,7 +291,7 @@ function startContextRead() {
   $context.set({ status: 'reading' })
   const fail = code => {
     const key = `errors.${code}`
-    const text = tr(key, SHORTCUTS.settings)
+    const text = tr(key, displayCombo(SHORTCUTS.settings))
     return { status: 'error', reason: text && text !== key ? text : tr('errors.unavailable') }
   }
   contextPromise = withTimeout(pluginContext.rest('/context', { method: 'POST', body }), globalThis.__promptStudioContextTimeoutMs ?? CONTEXT_CLIENT_TIMEOUT_MS)
