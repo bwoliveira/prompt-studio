@@ -1,5 +1,8 @@
 # Desktop development
 
+Notes on the Desktop half. Setup, tests, CI and the pull-request flow are in `CONTRIBUTING.md`; the rules for coding agents
+are in `AGENTS.md`; the standing decisions are in `docs/adr/`; the vocabulary is in `CONTEXT.md`.
+
 ## Layout
 
 | Path | What it is |
@@ -25,40 +28,18 @@
 
 ```bash
 node scripts/build.mjs          # inline desktop/src/* into plugin.js and write desktop/studio-core.mjs
-node scripts/build.mjs --check  # exit 1 if plugin.js or studio-core.mjs are out of date (run in CI / before commit)
+node scripts/build.mjs --check  # exit 1 if plugin.js, studio-core.mjs or the README shortcut table are out of date (run in CI / before commit)
 ```
+
+The same build writes the keyboard table of `README.md` between its `shortcut-table` marker comments, from the `SHORTCUTS`
+map (named once, as `SHORTCUTS_SOURCE` in `scripts/build.mjs`) and the `shortcuts.*` labels of `i18n-ui.js`. Never edit that
+table by hand. Why the build is a concatenation with isolated engine scopes: `docs/adr/0005-concatenation-build-with-isolated-engine-scopes.md`.
 
 ## Tests and validation
 
-```bash
-npm ci                            # once: the pinned dev dependencies (package.json, package-lock.json)
-npm test                          # tests/desktop/*.test.mjs; fails, never skips, when a dependency is missing
-npm run test:bin                  # bin/lib/local-review.test.mjs (bin/review and bin/pr)
-uvx --with-requirements requirements-dev.txt pytest -q tests
-hermes plugins validate .
-python3 scripts/docs_sources.py check --docs-dir <snapshot dir>   # every doc quote in PROMPT-DOCS-REVIEW.md
-```
-
-The UI flow tests need react, react-dom, jsdom, nanostores, @nanostores/react and esbuild. `package.json` pins them to
-the versions Hermes ships and `npm ci` installs them into `node_modules/`; no Hermes install is needed. `npm test` sets
-`PROMPT_STUDIO_REQUIRE_DEPS=1`, so a missing dependency fails the run instead of skipping the UI tests (`CI=1` does the
-same). A plain `node --test tests/desktop/*.test.mjs` also looks in `PROMPT_STUDIO_NODE_MODULES` and the Hermes install
-(`/usr/local/lib/hermes-agent/node_modules`) and skips, with the reason on stderr, when none has them. To change a
-version: `npm install --save-exact --save-dev <pkg>@<version>` and commit both `package.json` and `package-lock.json`.
-`npm test` caps Node's heap (`--max-old-space-size=1400`); on a shared machine also wrap it with the `systemd-run`
-memory cap from `AGENTS.md`. Python test dependencies are in `requirements-dev.txt` (`pip install -r requirements-dev.txt`).
-
-CI (`.github/workflows/ci.yml`, GitHub-hosted `ubuntu-latest`) runs on every pull request and push to `main`: the build
-check, `npm test`, `npm run test:bin`, `pytest -q tests` and gitleaks over the commits of the pull request (or the pushed commits on `main`): the checkout
-fetches the whole history, but gitleaks (the pinned binary, not gitleaks-action, which would skip commits past the first 30 and merged side branches) scans only that commit range, merges included, so old synthetic test keys in earlier
-commits do not fail it. After the push `bin/pr` reads the check runs of the commit it reviewed (`gh api`, polled
-every `CHECKS_POLL_SECONDS`, default 10) and merges only when `Build check and Node tests`, `Python tests` and
-`gitleaks` all ended in success. It refuses on a failed, cancelled, skipped or neutral one, on a job still running
-past `CHECKS_TIMEOUT_SECONDS` (default 1200) and on a job not reported within `CHECKS_REGISTER_SECONDS` (default
-180); `gh pr checks` is not used because it exits 0 for cancelled or skipped checks and for a partial set of jobs.
-A green run on the PR is the gate; the local Codex review still runs before the push.
-
-The doc snapshots live outside the plugin; see `docs/sources/README.md`.
+`npm test`, `npm run test:bin`, the Python tests, `hermes plugins validate .`, the dependency pins, the memory cap and CI
+are described in `CONTRIBUTING.md`. The doc snapshots behind `scripts/docs_sources.py` live outside the plugin; see
+`docs/sources/README.md`.
 
 ## i18n
 
@@ -96,34 +77,13 @@ rule of its own, and the build allows an engine no import but the core (`node sc
 - Never taken by the key listener: Tab, Enter, Esc, and any Ctrl or Super chord. F-keys with a modifier are ignored.
   The answer textarea stops propagation of its own keys so typing never reaches the composer's handlers.
 - Capture phase, so keys work with the cursor in the answer field; IME composition is left alone.
-- F1 shows the full map. Keep the `SHORTCUTS` map in `desktop/src/ui-components.js` (the only place a key is written) and the help strings in `i18n-ui.js` in sync.
+- F1 shows the full map. The `SHORTCUTS` map in `desktop/src/ui-components.js` is the only place a key is written; the `shortcuts.*` labels in `i18n-ui.js` name each entry (they are also the Action column of the README table). The reasons are in `docs/adr/0004-f-keys-plus-alt-letters-never-enter.md`.
 
-| Key | Action |
-|---|---|
-| F4 | Open Prompt Studio |
-| F1 | Shortcut help |
-| F3 | Settings (models, session context, language) |
-| F5 / Alt+Y | Confirm / use the recommendation |
-| F6 / Alt+K | Skip |
-| F7 / Alt+L | Use the AI suggestion |
-| F8 / Alt+B | Back (or undo the edit) |
-| F9 / Alt+G | Generate the prompt |
-| F10 / Alt+X | Close |
-| Alt+1…9 | Pick option N |
-| Alt+Shift+1…9 | Edit option N |
-| Alt+S | Ask the AI |
-| Alt+N | Another suggestion |
-| Alt+D | Discard |
-| Alt+M | Improve my text |
-| Alt+C | Paste |
-| Alt+O / Alt+A / Alt+T | Target model (Opus / Astra / Sonnet) |
-| Alt+I | AI mode |
-| Alt+V | Version |
-| Alt+E | Put in composer to edit |
+The full key table, for Linux/Windows and for a Mac, is the generated table in `README.md` (the same keys as the F1 list).
 
 Either Alt works, except where the right Alt is AltGr. Alt+digits follow the physical number row.
 
-The map above holds the canonical combos (`aria-keyshortcuts`, `data-studio-shortcut`, tests). What the user reads
+The map holds the canonical combos (`aria-keyshortcuts`, `data-studio-shortcut`, tests). What the user reads
 goes through `displayCombo` in `ui-components.js`: on a Mac `Alt+Shift+1…9` shows as ⌥⇧1…9 and `F4` as plain F4 (never "fn F4"), with the
 modifier glyphs from the SDK's `formatModifierToken` when the Desktop exports it (0.21.4+) and a local table otherwise.
 The key listener reads an Alt chord on a `Key*`/`Digit*` code even when the event is `key: 'Dead'`, `keyCode: 229` or
@@ -134,7 +94,7 @@ The key listener reads an Alt chord on a `Key*`/`Digit*` code even when the even
 `composerAdapter` in `desktop/src/ui-locale.js` reads and writes the message field only through the SDK's
 `host.composer` (Hermes Desktop 0.21.5+), addressed with `null` (the composer in use): `getDraft` to start,
 `setDraft` to empty it, return the draft on Close and place the prompt; F9 uses `submit` for the session the Studio
-was opened in. The plugin changes nothing in the app's DOM; its key listener only reads which dialogs, menus and listboxes are
+was opened in. The plugin changes nothing in the app's DOM (`docs/adr/0003-host-composer-only.md`); its key listener only reads which dialogs, menus and listboxes are
 open (ARIA roles and visibility) to stand back behind them, which depends on the host marking its overlays that way. The SDK has no attachment API, so attachments are not read: they stay
 in the composer, go with the prompt on Alt+E and are not sent by F9 (the preview says so).
 
@@ -156,6 +116,13 @@ The AI model used by the studio is the auxiliary task `prompt_studio` in the Her
 
 ## Workflow
 
-- Each fix starts with a failing test. The test is committed together with the fix or before it.
-- The commit message names the test that failed first.
-- An independent reviewer, who did not write the change, checks each release.
+The same as `AGENTS.md`; read it first.
+
+- Change only what the task needs. Edit `desktop/src/*` and run `node scripts/build.mjs`; never edit `desktop/plugin.js` or
+  `desktop/studio-core.mjs`.
+- New behavior comes with tests, and each fix starts with a failing test: the commit message names the test that failed
+  first (`Failing first: <test file> "<test name>"`). UI tests never compare jsdom nodes with `assert.equal`/`deepEqual`.
+- Every user-visible change gets a line in `CHANGELOG.md` under `## Unreleased`; versions are bumped only when a release is cut.
+- One subject per branch (`<type>/<subject>`). Before the first `bin/pr` of a branch, two reviews, in this order: the Hermes
+  `/review`, then the local Codex review that `bin/pr` runs. P0, P1 and P2 findings are fixed, with a test, until none is left.
+- The plugin sends no sampling parameters to the model (`docs/adr/0001-no-sampling-parameters.md`).

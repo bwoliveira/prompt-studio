@@ -10,6 +10,11 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
   English and Portuguese text in the suggestion and prompt tooltips and in the session-context note, instead of "the
   model could not be reached". One classifier decides the code for /suggest, /compose and /context (the context reader
   had its own copy); a 429 that names billing is still `provider_payment`. See docs/CONTRACT.md.
+- Docs: the README is now for users (about 200 lines), with the keyboard table per platform generated from the shortcut map
+  (`node scripts/build.mjs` writes it, `--check` fails when it is stale); contributor material moved to `CONTRIBUTING.md`
+  and `docs/DESKTOP-DEV.md`, configuration, model and remote-install details to `docs/CONFIGURATION.md`, `docs/MODELS.md`
+  and `docs/REMOTE-INSTALL.md`; six ADRs in `docs/adr/` record the standing decisions and `CONTEXT.md` is the glossary.
+
 - Feature: Prompt Studio opens without an F-key. It adds a binding to Hermes Desktop's keybinds area, **Ctrl+Shift+E**
   (**⌘⇧E** on a Mac), which you can reassign in Desktop's settings; its default is a chord none of Desktop's own
   actions uses, and it runs the same opening as F4 (an empty or short draft and a missing message field are reported

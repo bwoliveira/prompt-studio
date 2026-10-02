@@ -104,9 +104,9 @@ def test_python_job_installs_from_the_declared_file_with_a_cache_keyed_on_it(wor
 
 
 def test_docs_name_the_declared_files():
-    for doc in ("README.md", "docs/DESKTOP-DEV.md"):
-        text = (REPO / doc).read_text()
-        assert "requirements-dev.txt" in text and "npm ci" in text, doc
+    # The contributor docs live in CONTRIBUTING.md; the README is for users.
+    text = (REPO / "CONTRIBUTING.md").read_text()
+    assert "requirements-dev.txt" in text and "npm ci" in text
     agents = (REPO / "AGENTS.md").read_text()
     ci_lines = [line for line in agents.splitlines() if "ci.yml" in line]
     assert len(ci_lines) == 1 and "bin/pr" in ci_lines[0], ci_lines
@@ -121,6 +121,6 @@ def test_bin_pr_requires_exactly_the_jobs_of_the_workflow(workflow):
 
 
 def test_docs_say_gitleaks_scans_the_commit_range_not_the_whole_history():
-    for doc in ("README.md", "docs/DESKTOP-DEV.md"):
+    for doc in ("README.md", "CONTRIBUTING.md", "docs/DESKTOP-DEV.md"):
         text = (REPO / doc).read_text()
         assert "gitleaks over the full history" not in " ".join(text.split()), doc
