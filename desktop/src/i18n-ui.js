@@ -151,7 +151,10 @@ export const UI_MESSAGES = {
       empty_session: 'This session has no conversation yet.',
       invalid_summary: 'The model did not return a usable summary.',
       model_not_found: key => `The provider does not offer this model; check the name in Settings (${key}).`,
-      provider_refused: key => `The provider refused the request: API key not accepted (401) or model not allowed for your account or plan (403). Check the provider API key and plan, or pick another model in Settings (${key}).`,
+      auth_failed: key => `The provider did not accept the API key (401): it may be wrong, expired or revoked. Check the provider API key, or pick another model in Settings (${key}).`,
+      provider_refused: key => `The provider refused this model for your account or plan (403). Check your plan, or pick another model in Settings (${key}).`,
+      rate_limited: key => `The provider is limiting requests (429). Wait a moment and try again, or pick another model in Settings (${key}).`,
+      provider_timeout: key => `The provider did not answer in time. Try again, or pick another model in Settings (${key}). Details are in the Hermes log.`,
       provider_payment: key => `The provider refused the request for billing reasons (for example 402: no credits or quota). Check your plan or credits, or pick another model in Settings (${key}).`,
       provider_bad_request: key => `The provider rejected the request (400). The model or route may not accept these settings; try another model or route in Settings (${key}). Details are in the Hermes log.`
     },
@@ -370,7 +373,10 @@ export const UI_MESSAGES = {
       empty_session: 'Esta sessão ainda não tem conversa.',
       invalid_summary: 'O modelo não devolveu um resumo utilizável.',
       model_not_found: key => `O provedor não oferece este modelo; confira o nome nas Configurações (${key}).`,
-      provider_refused: key => `O provedor recusou o pedido: chave de API não aceita (401) ou modelo não liberado para a sua conta ou plano (403). Confira a chave de API e o plano do provedor, ou escolha outro modelo nas Configurações (${key}).`,
+      auth_failed: key => `O provedor não aceitou a chave de API (401): ela pode estar errada, expirada ou revogada. Confira a chave de API do provedor, ou escolha outro modelo nas Configurações (${key}).`,
+      provider_refused: key => `O provedor recusou este modelo para a sua conta ou plano (403). Confira o plano, ou escolha outro modelo nas Configurações (${key}).`,
+      rate_limited: key => `O provedor está limitando as requisições (429). Espere um instante e tente de novo, ou escolha outro modelo nas Configurações (${key}).`,
+      provider_timeout: key => `O provedor não respondeu a tempo. Tente de novo, ou escolha outro modelo nas Configurações (${key}). Os detalhes estão no log do Hermes.`,
       provider_payment: key => `O provedor recusou o pedido por cobrança (por exemplo 402: sem créditos ou cota). Confira o plano ou os créditos, ou escolha outro modelo nas Configurações (${key}).`,
       provider_bad_request: key => `O provedor rejeitou o pedido (400). O modelo ou a rota podem não aceitar estes ajustes; tente outro modelo ou rota nas Configurações (${key}). Os detalhes estão no log do Hermes.`
     },

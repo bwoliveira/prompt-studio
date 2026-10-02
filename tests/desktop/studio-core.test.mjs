@@ -335,10 +335,20 @@ test('the design step follows the chosen deliverable: not asked for an answer or
 })
 
 
-// /review P3: provider_refused also covers 401 (a wrong or expired key), so the message must point to the key too.
-test('provider_refused tells the user to check the key as well as the plan (en and pt)', () => {
-  assert.match(UI_MESSAGES.en.errors.provider_refused('F3'), /401/)
-  assert.match(UI_MESSAGES.en.errors.provider_refused('F3'), /API key/)
-  assert.match(UI_MESSAGES.pt.errors.provider_refused('F3'), /401/)
-  assert.match(UI_MESSAGES.pt.errors.provider_refused('F3'), /chave/)
+// #32: a wrong or expired key (401) is auth_failed; provider_refused is the plan/model refusal (403) only.
+test('auth_failed points to the key and provider_refused to the plan, rate_limited and provider_timeout say what happened (en and pt)', () => {
+  const text = (locale, code) => UI_MESSAGES[locale].errors[code]('F3')
+  assert.match(text('en', 'auth_failed'), /401/)
+  assert.match(text('en', 'auth_failed'), /API key/)
+  assert.match(text('pt', 'auth_failed'), /401/)
+  assert.match(text('pt', 'auth_failed'), /chave/)
+  assert.match(text('en', 'provider_refused'), /403/)
+  assert.match(text('en', 'provider_refused'), /plan/)
+  assert.ok(!/401/.test(text('en', 'provider_refused')) && !/401/.test(text('pt', 'provider_refused')))
+  assert.match(text('pt', 'provider_refused'), /403/)
+  assert.match(text('pt', 'provider_refused'), /plano/)
+  assert.match(text('en', 'rate_limited'), /429/)
+  assert.match(text('pt', 'rate_limited'), /429/)
+  assert.match(text('en', 'provider_timeout'), /did not answer in time/)
+  assert.match(text('pt', 'provider_timeout'), /não respondeu a tempo/)
 })

@@ -211,7 +211,7 @@ def test_a_model_the_provider_refuses_gets_its_own_code():
         raise AuthenticationError("bad key sk-abc")
 
     out = sc.context({"session_id": "s1"}, llm=refused, opener=_opener(FakeDB([msg("user", "hi")])))
-    assert out["code"] == "provider_refused" and "sk-abc" not in json.dumps(out), out
+    assert out["code"] == "auth_failed" and "sk-abc" not in json.dumps(out), out
 
 
 def test_store_failure_is_unavailable(caplog):

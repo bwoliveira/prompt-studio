@@ -95,9 +95,12 @@ Response (HTTP 200): `{ "ok": true, "summary": "…", "model": "provider/model",
 | `timeout` | no reply within 15 s (also carries `model`) | `no summary within 15 s` |
 | `unavailable` | store or provider failure, or the reader cannot load (also `model` for provider failures) | `session store unavailable` / `model unavailable` / `context reader unavailable` |
 | `model_not_found` | the provider does not know the model name (also `model`) | `model not found` |
-| `provider_refused` | the provider denies the model to the account/key/plan: 401/403 or "MODEL_NOT_IN_PLAN" (also `model`) | `provider refused` |
+| `auth_failed` | the provider does not accept the credentials: 401 / AuthenticationError, a wrong or expired API key (also `model`) | `auth failed` |
+| `provider_refused` | the provider denies the model to the account/plan: 403 / PermissionDeniedError or "MODEL_NOT_IN_PLAN" (also `model`) | `provider refused` |
 | `provider_payment` | billing refusal: 402, "insufficient_quota", "insufficient credits", "payment required", "billing_hard_limit", "credit balance is too low" (also `model`) | `provider payment` |
 | `provider_bad_request` | the provider rejects the request: 400 / BadRequestError not matched above (also `model`) | `provider bad request` |
+| `rate_limited` | the provider throttles the requests: 429 / RateLimitError not matched above (also `model`) | `rate limited` |
+| `provider_timeout` | the provider call itself timed out before the 15 s deadline: a client timeout (`TimeoutError`, `*Timeout`, `APITimeoutError`) or 408/504 (also `model`) | `provider timeout` |
 | `invalid_summary` | reply is not JSON with a non-empty string `summary` (also `model`) | fixed sentence |
 | `host_incompatible` | the installed Hermes changed a signature the plugin relies on (session store, redactor or model call; see "Hermes host" below); nothing is sent to the model | fixed sentence |
 
@@ -151,13 +154,20 @@ back to `error` when the code is unknown or absent.
 | `timeout` | both | no reply before the deadline | `no model reply within 20 s` / `no prompt from the model within 45 s` |
 | `unavailable` | both | the provider call raised | `model unavailable: <ExceptionClassName>` |
 | `model_not_found` | both | the provider does not know the model name (404 / "model not found") | `model not found: <ExceptionClassName>` |
-| `provider_refused` | both | the provider denies the model to the account/key/plan (401/403, "MODEL_NOT_IN_PLAN" / "not in plan"; 404 stays `model_not_found`) | `provider refused: <ExceptionClassName>` |
+| `auth_failed` | both | the provider does not accept the credentials (401 / AuthenticationError: a wrong or expired API key) | `auth failed: <ExceptionClassName>` |
+| `provider_refused` | both | the provider denies the model to the account/plan (403 / PermissionDeniedError, "MODEL_NOT_IN_PLAN" / "not in plan"; 404 stays `model_not_found`) | `provider refused: <ExceptionClassName>` |
 | `provider_payment` | both | billing refusal (402, "insufficient_quota", "insufficient credits", "payment required", "billing_hard_limit", "credit balance is too low") | `provider payment: <ExceptionClassName>` |
 | `provider_bad_request` | both | the provider rejects the request (400 / BadRequestError) and no code above matched | `provider bad request: <ExceptionClassName>` |
+| `rate_limited` | both | the provider throttles the requests (429 / RateLimitError) and no code above matched (a 429 that names billing is `provider_payment`) | `rate limited: <ExceptionClassName>` |
+| `provider_timeout` | both | the provider call itself timed out (client timeout, 408, 504) before the Studio's own deadline; the deadline stays `timeout` | `provider timeout: <ExceptionClassName>` |
 | `host_incompatible` | both | the installed Hermes changed a signature the plugin relies on (see "Hermes host" below); no provider call was made. The desktop shows a localized (en/pt) "update the plugin" text in the context note and in the /suggest and /compose tooltips | `Hermes changed in a way this Prompt Studio version does not support; update the plugin (details in the Hermes log)` |
 | `empty_reply` | both | empty reply twice, or once when it ended on `finish_reason: length` (no retry: the same cap ends the same way) (also `empty: true`) | fixed sentence |
 
-`timeout`, `unavailable`, `model_not_found`, `provider_refused`, `provider_payment`, `provider_bad_request`, `host_incompatible` and `empty_reply` also carry `model`. The route-level errors (400 for a blank draft, 500
+One classifier (`PROVIDER_ERRORS` in `llm_adapter.py`) turns a failed provider call into its code for /suggest, /compose and
+/context. First match wins: `host_incompatible`, `model_not_found`, `auth_failed`, `provider_refused`, `provider_payment`,
+`provider_bad_request`, `rate_limited`, `provider_timeout`, else `unavailable`.
+
+`timeout`, `unavailable`, `model_not_found`, `auth_failed`, `provider_refused`, `provider_payment`, `provider_bad_request`, `rate_limited`, `provider_timeout`, `host_incompatible` and `empty_reply` also carry `model`. The route-level errors (400 for a blank draft, 500
 `{ "ok": false, "error": "suggest engine unavailable" }` / `"compose engine unavailable"` when the engine cannot load
 or crashes, 422 over the size limits) have no `code`.
 

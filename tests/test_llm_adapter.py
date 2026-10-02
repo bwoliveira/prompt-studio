@@ -308,7 +308,7 @@ def test_a_larger_callers_cap_is_never_lowered(monkeypatch):
 
 
 
-def test_is_provider_refused_covers_401_403_and_plan_messages():
+def test_is_provider_refused_covers_403_and_plan_messages_but_not_401():
     class E(Exception):
         pass
 
@@ -319,12 +319,12 @@ def test_is_provider_refused_covers_401_403_and_plan_messages():
         status_code = 403
 
     via_response = E("x"); via_response.response = Resp()
-    assert adapter.is_provider_refused(with_status(403)) and adapter.is_provider_refused(with_status(401))
+    assert adapter.is_provider_refused(with_status(403)) and not adapter.is_provider_refused(with_status(401))
     assert adapter.is_provider_refused(via_response)
     assert adapter.is_provider_refused(E("Error code: MODEL_NOT_IN_PLAN"))
     assert adapter.is_provider_refused(E("model is Not In Plan"))
     assert adapter.is_provider_refused(type("PermissionDeniedError", (Exception,), {})("x"))
-    assert adapter.is_provider_refused(type("AuthenticationError", (Exception,), {})("x"))
+    assert not adapter.is_provider_refused(type("AuthenticationError", (Exception,), {})("x"))  # auth_failed
     assert not adapter.is_provider_refused(with_status(404))
     assert not adapter.is_provider_refused(with_status(500))
     assert not adapter.is_provider_refused(RuntimeError("down"))
@@ -354,7 +354,7 @@ def test_is_provider_payment_covers_402_and_billing_messages():
 
 # /review P2: the word "billing" alone is not a billing failure (rate limit, outage, a parameter name).
 def test_billing_word_alone_is_not_a_payment_error():
-    assert adapter.provider_error_code(_status_exc(429, "Rate limit reached. See billing documentation.")) == "unavailable"
+    assert adapter.provider_error_code(_status_exc(429, "Rate limit reached. See billing documentation.")) == "rate_limited"
     assert adapter.provider_error_code(_status_exc(500, "Billing service temporarily unavailable")) == "unavailable"
     assert adapter.provider_error_code(_status_exc(400, "Invalid parameter: billing_account")) == "provider_bad_request"
     assert adapter.provider_error_code(_status_exc(429, "insufficient_quota")) == "provider_payment"
@@ -375,9 +375,9 @@ def test_provider_error_code_precedence():
     assert adapter.provider_error_code(_status_exc(400, "billing_hard_limit_reached")) == "provider_payment"
     assert adapter.provider_error_code(_status_exc(402)) == "provider_payment"
     assert adapter.provider_error_code(_status_exc(400)) == "provider_bad_request"
-    assert adapter.provider_error_code(_status_exc(429)) == "unavailable"
+    assert adapter.provider_error_code(_status_exc(429)) == "rate_limited"
     assert adapter.provider_error_code(_status_exc(500)) == "unavailable"
-    assert adapter.provider_error_code(TimeoutError()) == "unavailable"
+    assert adapter.provider_error_code(TimeoutError()) == "provider_timeout"
 
 
 def _fake_refusing_json(monkeypatch, error, config=None, timeouts=None, refuse_after=0.0):
