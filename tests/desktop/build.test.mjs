@@ -3,7 +3,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { cp, mkdtemp, readFile, rm, unlink, writeFile, mkdir } from 'node:fs/promises'
+import { cp, mkdtemp, readFile, rm, symlink, unlink, writeFile, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -37,7 +37,7 @@ test('topLevelNames: several declarators in one statement', () => {
 
 test('topLevelNames: multi-line declarations', () => {
   const source = [
-    'const config = {',
+    'let config = {',
     '  retries: 3,',
     '  names: [1, 2]',
     '},',
@@ -104,7 +104,7 @@ test('assertValidModule: never runs the module it checks, even one that imports 
   assert.equal(globalThis.__psSyntaxRan, undefined)
 })
 
-test('walk: a regex literal after return, typeof and the like is not a string (Codex P2)', () => {
+test('regex or division: a regex literal after return, typeof and the like is not a string (Codex P2)', () => {
   const source = "function matches(text) { return /'/.test(text) }\nfunction kind(x) { return typeof /\"/ }\nexport const ENGINE = { matches, kind }\n"
   const out = stripExports(source)
   assert.ok(/^const ENGINE = \{ matches, kind \}$/m.test(out), out)
@@ -113,7 +113,7 @@ test('walk: a regex literal after return, typeof and the like is not a string (C
   assert.ok(stripExports('const half = total / 2\nexport const r = half / 3 / 4\n').includes('const r = half / 3 / 4'))
 })
 
-test('walk: a comment between the keyword and the regex literal does not turn it into a division (Codex P2)', () => {
+test('regex or division: a comment between the keyword and the regex literal does not turn it into a division (Codex P2)', () => {
   for (const source of [
     "export function matches(text) { return /* note */ /'/.test(text) }\nexport const ENGINE = { matches }\n",
     "export function matches(text) { return // note\n /'/.test(text) }\nexport const ENGINE = { matches }\n",
@@ -128,7 +128,7 @@ test('walk: a comment between the keyword and the regex literal does not turn it
   assert.ok(stripExports("const q = obj.in / 2 + '/'\nexport const r = 1\n").includes('const r = 1'))
 })
 
-test('walk: a regex literal after a control-flow condition is a regex, and a misread quote never hides the next line (Codex P2)', () => {
+test('regex or division: a regex literal after a control-flow condition is a regex, and a misread quote never hides the next line (Codex P2)', () => {
   for (const source of [
     "function matches(s) { if (s) /'/.test(s) }\nexport const ENGINE = { matches }\n",
     "function matches(s) { while (s.next()) /\"/.test(s) }\nexport const ENGINE = { matches }\n",
@@ -147,7 +147,7 @@ test('walk: a regex literal after a control-flow condition is a regex, and a mis
   assert.ok(stripExports('export const t = `a\nexport { x }\n`\n').includes('`a\nexport { x }\n`'))
 })
 
-test('walk: a slash after a postfix ++ or -- divides (Codex P2)', () => {
+test('regex or division: a slash after a postfix ++ or -- divides (Codex P2)', () => {
   for (const source of [
     'export function nextHalf(count) { return count++ / 2 } // a single ` in this comment\nexport const ENGINE = { nextHalf }\n',
     "export function f(a) { return a[0]-- / 2 + '/' }\nexport const ENGINE = { f }\n",
@@ -160,6 +160,102 @@ test('walk: a slash after a postfix ++ or -- divides (Codex P2)', () => {
   // Near misses: a binary + or - before a regex keeps the regex.
   assert.ok(stripExports("const n = 1 + /'/.test(s)\nexport const r = 1\n").includes('const r = 1'))
   assert.ok(stripExports("const n = a - -/'/.source.length\nexport const r = 1\n").includes('const r = 1'))
+})
+
+// Contexts the hand-written reader never covered (ticket #52). Each source ends with an export that stripExports must
+// still find (the reader misread the slash, so a quote, a backtick or a brace in the regex hid the lines after it).
+const AFTER_EXPORT = "\nexport const ENGINE = { ok: 1 }\n"
+const stripped = source => stripExports(`${source}${AFTER_EXPORT}`)
+const exportRemains = out => /^export\b/m.test(out)
+
+test('regex or division: a regex after the closing brace of a block, a function body or a class body is a regex (#52)', () => {
+  for (const body of [
+    "function f(s) { if (s) { } /`/.test(s) }",
+    "function f(s) { { } /`/.test(s) }",
+    "function f(s) { try { } finally { } /`/.test(s) }",
+    "function f(s) {\n  for (;;) { break }\n  /`/.test(s)\n}",
+    "function f() {}\n/`/.test('x')",
+    "class K { m() { return 1 } }\n/`/.test('x')",
+  ]) assert.ok(!exportRemains(stripped(body)), body)
+})
+
+test('regex or division: a slash after } that ends an object literal or a function expression divides (#52)', () => {
+  for (const body of [
+    "const a = ({ n: 1 }).n / 2 / 3",
+    "const b = { n: 4 }\nconst c = b.n / 2 / 3 // it's",
+    "const d = function () { return 8 }() / 2 / 3 // `",
+    "const e = `${{ n: 6 }.n / 2}` + 'x' // '",
+  ]) assert.ok(!exportRemains(stripped(body)), body)
+})
+
+test('regex or division: a slash after ] divides, a slash after ( [ , : ? or => starts a regex (#52)', () => {
+  for (const body of [
+    "const a = [4, 6][1] / 2 / 3 // '",
+    "const b = [/`/, /'/]",
+    "const c = f(/`/, /'/)",
+    "const d = { k: /`/, j: 1 ? /'/ : /\"/ }",
+    "const e = s => /`/.test(s)",
+    "const g = [1][0] / 1 + `${2 / 1}` + '/' // `",
+  ]) assert.ok(!exportRemains(stripped(body)), body)
+})
+
+test('regex or division: a slash after a call, a parenthesised value or a loop header is told apart (#52)', () => {
+  for (const body of [
+    "const a = f(1) / 2 / 3 // '",
+    "const b = (f(1)) / 2 / 3 // `",
+    "async function g(s) { for await (const x of s) /`/.test(x) }",
+    "function h(s) { if (f(s)) /`/.test(s); else /'/.test(s) }",
+    "function k(s) { while (s) /`/.test(s) }",
+    "function m(s) { do /`/.test(s); while (s) }",
+    "const of = 8, async = 4\nconst n = of / 2 / 2 + async / 2 // `",
+  ]) assert.ok(!exportRemains(stripped(body)), body)
+})
+
+test('regex or division: a template literal with ${} that holds a slash, a regex or a brace in a regex (#52)', () => {
+  for (const body of [
+    "const a = `${1 / 2}` // `",
+    "const b = `${/`/.test('x')}`",
+    "const c = `${/}/.test('x')}`",
+    "const d = `${/'/.test('x') ? `${3 / 4}` : '/'}`",
+    "const e = `a${1}/${2}/b`",
+    "const f = String.raw`${1 / 2}\\d`",
+  ]) assert.ok(!exportRemains(stripped(body)), body)
+})
+
+test('regex or division: topLevelNames and findCollisions read the same contexts (#52)', () => {
+  const source = "function f(s) { if (s) { } /`/.test(s) }\nconst a = `${/}/.test('x')}`, hidden = 1\nconst half = a / 2 / 3\n"
+  assert.deepEqual(names(source), ['a', 'f', 'half', 'hidden'])
+  assert.throws(() => findCollisions([['ui-a.js', source], ['ui-b.js', 'const hidden = 2']]), /collision: hidden declared by both ui-a\.js and ui-b\.js/)
+})
+
+test('stripExports: on the repository sources it agrees with plain line-by-line removal of the export keyword (#52)', async () => {
+  const files = ['detection-core.js', 'engine-opus.js', 'engine-sonnet.js', 'engine-astra.js', 'i18n-core.js', 'i18n-ui.js', 'studio-core.js']
+  for (const file of files) {
+    const source = stripImports(await readFile(join(repo, 'desktop/src', file), 'utf8'))
+    const lineByLine = source
+      .replace(/^export default (?=(?:async function|function|class)\b)/gm, '')
+      .replace(/^export\s*\{[^}]*\}[ \t]*;?[ \t]*(?:\r?\n|$)/gm, '')
+      .replace(/^export (?=(?:const|let|var|function|class|async function)\b)/gm, '')
+    assert.ok(stripExports(source) === lineByLine, `${file}: stripExports differs from the line-by-line result`)
+  }
+})
+
+test('stripExports and topLevelNames: invalid JavaScript is an error that names the problem, never a silent guess (#52)', () => {
+  assert.throws(() => stripExports('export const = ;'), /Unexpected token/)
+  assert.throws(() => topLevelNames('const = ;'), /Unexpected token/)
+  assert.throws(() => findCollisions([['ui-a.js', 'const ok = 1'], ['ui-broken.js', 'const = ;']]), /ui-broken\.js/)
+})
+
+test('topLevelNames: an indented top-level declaration counts, one inside a function or block does not (#52)', () => {
+  assert.deepEqual(names('  const indented = 1\nfunction f() { const inner = 2 }\nif (true) { let scoped = 3 }'), ['f', 'indented'])
+  assert.throws(() => findCollisions([['ui-a.js', '  const twin = 1'], ['ui-b.js', 'const twin = 2']]), /collision: twin/)
+})
+
+test('stripExports: only top-level export statements change, and export default needs a function or class (#52)', () => {
+  assert.ok(stripExports("export const a = 1; const t = 'export const b = 2'\n") === "const a = 1; const t = 'export const b = 2'\n")
+  assert.ok(stripExports('export {};\nconst k = 1\n') === 'const k = 1\n')
+  assert.throws(() => stripExports('export default () => 1'), /export default/)
+  assert.throws(() => stripExports('export default function () {}'), /export default/)
 })
 
 test('topLevelNames: astral characters (emoji) in a comment do not shift the masks after them (Codex P2)', () => {
@@ -224,6 +320,7 @@ async function buildCopy() {
   await cp(join(repo, 'scripts/build.mjs'), join(dir, 'scripts/build.mjs'))
   await cp(join(repo, 'desktop/src'), join(dir, 'desktop/src'), { recursive: true })
   await cp(join(repo, 'README.md'), join(dir, 'README.md'))
+  await symlink(join(repo, 'node_modules'), join(dir, 'node_modules'), 'dir') // the build imports acorn from it
   return dir
 }
 const run = (dir, ...args) => spawnSync(process.execPath, ['scripts/build.mjs', ...args], { cwd: dir, encoding: 'utf8' })
@@ -285,8 +382,9 @@ test('CLI: a duplicate const the name scan cannot see fails the build, and --che
   const dir = await buildCopy()
   try {
     assert.equal(run(dir).status, 0)
-    await writeFile(join(dir, 'desktop/src/ui-settings.js'), '  const indentedTwin = 1\n', { flag: 'a' })
-    await writeFile(join(dir, 'desktop/src/ui-steps.js'), 'const indentedTwin = 2\n', { flag: 'a' })
+    // A `var` in a nested block hoists to the module scope: not a top-level declaration, yet it clashes with a const.
+    await writeFile(join(dir, 'desktop/src/ui-settings.js'), 'if (true) { var hoistedTwin = 1 }\n', { flag: 'a' })
+    await writeFile(join(dir, 'desktop/src/ui-steps.js'), 'const hoistedTwin = 2\n', { flag: 'a' })
     for (const args of [[], ['--check']]) {
       const result = run(dir, ...args)
       assert.notEqual(result.status, 0, result.stdout)

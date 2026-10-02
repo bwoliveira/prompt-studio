@@ -6,7 +6,7 @@
 // CODEX_TIMEOUT_SECONDS (default 900); a timeout or any failure never approves. `--summary-file <path>` writes the
 // review verdict as Markdown, which bin/pr puts into the pull request body.
 import { spawn, spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync, mkdirSync, existsSync, mkdtempSync, rmSync, openSync, closeSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, mkdtempSync, rmSync, openSync, closeSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -216,6 +216,12 @@ async function main() {
 
   try {
     git('worktree', 'add', '--quiet', '--detach', tree, head);
+    // The build reads its sources with acorn (#52): the copy borrows the checkout's installed dependencies (read-only
+    // link, not part of the commit) so Codex can run `node scripts/build.mjs --check` there. Removing the copy deletes
+    // only the link.
+    if (existsSync(join(root, 'node_modules')) && !existsSync(join(tree, 'node_modules'))) {
+      symlinkSync(join(root, 'node_modules'), join(tree, 'node_modules'), 'dir');
+    }
     for (const f of ['review-prompt.md', 'review-schema.json']) {
       if (!existsSync(join(controls, f))) {
         console.error(`The reviewed commit has no bin/lib/${f}: update the branch with the base branch. Nothing was approved.`);
