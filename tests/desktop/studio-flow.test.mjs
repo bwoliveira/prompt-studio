@@ -1131,6 +1131,47 @@ test('overlay guard: F4 does not open the studio behind an open menu', { skip },
 })
 
 
+// R3 (#20 x #21): an Alt twin blocked behind an overlay is not the studio's, so it reaches the overlay's own field
+// (on a Mac the six letters are printable Option symbols); the bare F5-F10 stay swallowed while the studio is open.
+for (const role of ['dialog', 'menu', 'listbox', 'settings']) {
+  test(`overlay guard: behind ${role === 'settings' ? "the studio's Settings" : `a foreign role=${role}`} the Alt twins are neither prevented nor stopped, F5-F10 still are`, { skip }, async () => {
+    await openStudio(INTENT, 'off')
+    let overlay = null
+    let field
+    if (role === 'settings') {
+      await openSettings()
+      field = $('[data-studio-settings-dialog]').querySelector('input,button') || document.body
+    } else {
+      overlay = document.createElement('div')
+      overlay.setAttribute('role', role)
+      field = document.createElement('input')
+      overlay.appendChild(field)
+      document.body.appendChild(overlay)
+    }
+    try {
+      const rungs = document.querySelectorAll('[data-studio-rung]').length
+      for (const action of FKEY_ACTIONS) {
+        const reached = []
+        const listener = event => reached.push(event.code)
+        field.addEventListener('keydown', listener)
+        const twin = await press(K().alt[action], field)
+        field.removeEventListener('keydown', listener)
+        assert.ok(twin.defaultPrevented === false, `${K().alt[action]} not prevented`)
+        assert.equal(reached.length, 1, `${K().alt[action]} reached the field (not stopped)`)
+        assert.equal((await press(K()[action], field)).defaultPrevented, true, `${K()[action]} still swallowed`)
+      }
+      assert.ok($('[data-studio-strip]'), 'nothing closed the studio')
+      assert.equal(document.querySelectorAll('[data-studio-rung]').length, rungs, 'no step moved')
+    } finally {
+      overlay?.remove()
+      if (role === 'settings') await press(K().settings)
+    }
+    await press(K().close)
+    assert.ok($('[data-studio-strip]') === null, 'F10 cancels once nothing is open')
+  })
+}
+
+
 test('SHORTCUT MAP: every key cap, aria-keyshortcuts, target key and Alt+Shift edit key on screen is a combo of the map', { skip }, async () => {
   const map = K()
   const flat = []

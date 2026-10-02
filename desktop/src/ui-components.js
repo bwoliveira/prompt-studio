@@ -86,6 +86,9 @@ const altOf = combo => {
 // While open these are always swallowed, even when no control shows them right now: F5 would
 // otherwise reach the window (reload in some Electron setups), and a Mac would type the Option symbol.
 const isFKeyAction = combo => Object.keys(SHORTCUTS.alt).some(key => SHORTCUTS[key] === combo || SHORTCUTS.alt[key] === combo)
+// Behind an overlay only the F-keys themselves stay swallowed (F5 would reload the window); an Alt twin belongs to the
+// overlay's own field there, where on a Mac it is a printable Option symbol.
+const isBareFKeyAction = combo => Object.keys(SHORTCUTS.alt).some(key => SHORTCUTS[key] === combo)
 
 function keyCombo(event) {
   if (event.ctrlKey || event.metaKey) return ''
@@ -154,14 +157,14 @@ function installStudioKeys(ctx) {
     const blocked = foreignOverlayOpen() || ($settingsOpen.get() && !OVERLAY_KEYS.includes(combo))
     let target = null
     if (blocked) {
-      // Nothing behind the overlay: F5-F10 are still swallowed below while the studio is open.
+      // Nothing behind the overlay: F5-F10 are still swallowed below while the studio is open; their Alt twins are not.
     } else if (open) {
       const root = document.querySelector('[data-studio-strip]')
       target = root && shortcutTarget(root, combo)
     } else if (combo === SHORTCUTS.open) {
       target = document.querySelector('[data-studio-open]')
     }
-    if (!target && !(open && isFKeyAction(combo))) return
+    if (!target && !(open && (blocked ? isBareFKeyAction(combo) : isFKeyAction(combo)))) return
     event.preventDefault()
     event.stopPropagation()
     if (target && !event.repeat) target.click()

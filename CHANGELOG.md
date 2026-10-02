@@ -11,6 +11,8 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
   never needs fn: Alt+Y accept, Alt+K skip, Alt+L use the AI suggestion, Alt+B back, Alt+G generate, Alt+X close
   (never E, I, N or U, the Option dead keys). The control prints both keys, the F1 list shows both, and both are
   announced to screen readers. The studio still never takes Enter, Alt+Enter, Tab, Esc or any Ctrl/Super chord.
+  Behind a dialog, menu or palette (or the Studio's Settings) the Alt twins are left to that overlay, so a Mac still
+  types ⌥Y, ⌥K, ⌥L, ⌥B, ⌥G and ⌥X there; F5 to F10 themselves stay swallowed while the Studio is open.
 - Fix: on a Mac, ⌥E (Put in composer), ⌥N (Another suggestion) and ⌥I (AI mode) did nothing: macOS reports them as
   dead keys (key `Dead`, keyCode 229 or `isComposing`) and the key listener dropped every such event. An Alt chord on
   a letter or digit key is now read by its physical key even then; a real input-method composition without an Alt
