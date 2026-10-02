@@ -7,7 +7,7 @@ import { cp, mkdtemp, readFile, rm, unlink, writeFile, mkdir } from 'node:fs/pro
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { assertValidModule, compareOutputs, findCollisions, stripExports, stripImports, topLevelNames } from '../../scripts/build.mjs'
+import { assertValidModule, compareOutputs, findCollisions, readShortcutMap, renderShortcutTable, replaceShortcutTable, SHORTCUTS_SOURCE, SHORTCUT_TABLE_START, SHORTCUT_TABLE_END, stripExports, stripImports, topLevelNames } from '../../scripts/build.mjs'
 
 const repo = fileURLToPath(new URL('../../', import.meta.url))
 const names = source => [...topLevelNames(source)].sort()
@@ -223,6 +223,7 @@ async function buildCopy() {
   await mkdir(join(dir, 'desktop'))
   await cp(join(repo, 'scripts/build.mjs'), join(dir, 'scripts/build.mjs'))
   await cp(join(repo, 'desktop/src'), join(dir, 'desktop/src'), { recursive: true })
+  await cp(join(repo, 'README.md'), join(dir, 'README.md'))
   return dir
 }
 const run = (dir, ...args) => spawnSync(process.execPath, ['scripts/build.mjs', ...args], { cwd: dir, encoding: 'utf8' })
@@ -364,4 +365,112 @@ test('CLI: the detection core itself imports nothing (ticket #29)', async () => 
 test('the repository build output is up to date', () => {
   const result = run(repo, '--check')
   assert.equal(result.status, 0, result.stderr)
+})
+
+// README keyboard table: generated from the SHORTCUTS map between marker comments; --check fails when it is stale.
+const SMALL_SOURCE = [
+  'const x = 1',
+  'export const SHORTCUTS = {',
+  "  open: 'F4',",
+  "  accept: 'F5',",
+  "  pick: 'Alt+1…9',",
+  "  edit: 'Alt+Shift+1…9',",
+  "  model: Object.fromEntries(TARGETS.map(target => [target.id, target.key])),",
+  "  alt: { accept: 'Alt+Y' }",
+  '}',
+  "const OPEN_BINDING = 'mod+shift+e'",
+  ''
+].join('\n')
+const SMALL_LABELS = { open: 'Open', accept: 'Accept', pick: 'Pick', edit: 'Edit', model: 'Model' }
+const SMALL_TARGETS = [{ id: 'a', key: 'Alt+O' }, { id: 'b', key: 'Alt+A' }]
+
+test('shortcut table: one row per map entry with the Alt twin, Linux/Windows and Mac columns, the Desktop binding on the open row', () => {
+  const map = readShortcutMap(SMALL_SOURCE, SMALL_TARGETS)
+  assert.deepEqual(Object.keys(map.shortcuts), ['open', 'accept', 'pick', 'edit', 'model', 'alt'])
+  assert.equal(map.openBinding, 'mod+shift+e')
+  const table = renderShortcutTable(map, SMALL_LABELS).split('\n')
+  assert.deepEqual(table, [
+    '| Linux and Windows | Mac | Action |',
+    '|---|---|---|',
+    '| F4, or Ctrl+Shift+E | F4, or ⌘⇧E | Open |',
+    '| F5 / Alt+Y | F5 / ⌥Y | Accept |',
+    '| Alt+1…9 | ⌥1…9 | Pick |',
+    '| Alt+Shift+1…9 | ⌥⇧1…9 | Edit |',
+    '| Alt+O / Alt+A | ⌥O / ⌥A | Model |'
+  ])
+})
+
+test('shortcut table: a missing map, a missing label or an unknown modifier is an error, never a blank row', () => {
+  assert.throws(() => readShortcutMap('const x = 1\n', SMALL_TARGETS), /SHORTCUTS/)
+  assert.throws(() => readShortcutMap(SMALL_SOURCE.replace(/const OPEN_BINDING.*\n/, ''), SMALL_TARGETS), /OPEN_BINDING/)
+  const map = readShortcutMap(SMALL_SOURCE, SMALL_TARGETS)
+  assert.throws(() => renderShortcutTable(map, { ...SMALL_LABELS, pick: undefined }), /shortcuts\.pick/)
+  const odd = readShortcutMap(SMALL_SOURCE.replace("accept: 'F5'", "accept: 'Hyper+F5'"), SMALL_TARGETS)
+  assert.throws(() => renderShortcutTable(odd, SMALL_LABELS), /Hyper/)
+})
+
+test('shortcut table: only the text between the marker comments is replaced', () => {
+  const readme = `before\n${SHORTCUT_TABLE_START}\nold table\n${SHORTCUT_TABLE_END}\nafter\n`
+  assert.equal(replaceShortcutTable(readme, 'NEW'), `before\n${SHORTCUT_TABLE_START}\nNEW\n${SHORTCUT_TABLE_END}\nafter\n`)
+  assert.throws(() => replaceShortcutTable('no markers here', 'NEW'), /marker/)
+  assert.throws(() => replaceShortcutTable(`${SHORTCUT_TABLE_END}\n${SHORTCUT_TABLE_START}\n`, 'NEW'), /marker/)
+})
+
+test('the real README table is generated from the SHORTCUTS map in ' + SHORTCUTS_SOURCE, async () => {
+  const dir = await buildCopy()
+  try {
+    assert.equal(run(dir).status, 0)
+    assert.equal(run(dir, '--check').status, 0)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('CLI --check fails when the README shortcut table is stale, and a plain build regenerates it', async () => {
+  const dir = await buildCopy()
+  try {
+    assert.equal(run(dir).status, 0)
+    const fresh = await readFile(join(dir, 'README.md'), 'utf8')
+    assert.equal(run(dir, '--check').status, 0)
+    // A key changed in the map but not in the README: the F9 row of the README still says F8.
+    const stale = fresh.replace('| F9 / Alt+G |', '| F8 / Alt+G |')
+    assert.notEqual(stale, fresh, 'the generated table has the F9 row')
+    await writeFile(join(dir, 'README.md'), stale)
+    const result = run(dir, '--check')
+    assert.equal(result.status, 1, result.stdout)
+    assert.match(result.stderr, /stale README shortcut table/)
+    assert.match(result.stderr, /node scripts\/build\.mjs/)
+    assert.equal(await readFile(join(dir, 'README.md'), 'utf8'), stale, '--check writes nothing')
+    // Same through the map: the key moves in the source, the README keeps the old one.
+    await writeFile(join(dir, 'README.md'), fresh)
+    const ui = await readFile(join(dir, 'desktop/src/ui-components.js'), 'utf8')
+    await writeFile(join(dir, 'desktop/src/ui-components.js'), ui.replace("generate: 'F9'", "generate: 'F11'"))
+    assert.equal(run(dir, '--check').status, 1)
+    await writeFile(join(dir, 'desktop/src/ui-components.js'), ui)
+    await writeFile(join(dir, 'README.md'), stale)
+    assert.equal(run(dir).status, 0)
+    assert.equal(await readFile(join(dir, 'README.md'), 'utf8'), fresh)
+    assert.equal(run(dir, '--check').status, 0)
+    // Text outside the markers is the author's: a build never touches it.
+    const edited = fresh.replace('# Prompt Studio', '# Prompt Studio edited')
+    await writeFile(join(dir, 'README.md'), edited)
+    assert.equal(run(dir).status, 0)
+    assert.equal(await readFile(join(dir, 'README.md'), 'utf8'), edited)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('CLI: a README without the table markers fails the build with a clear message', async () => {
+  const dir = await buildCopy()
+  try {
+    await writeFile(join(dir, 'README.md'), '# Prompt Studio\n')
+    for (const args of [[], ['--check']]) {
+      const result = run(dir, ...args)
+      assert.equal(result.status, 1)
+      assert.match(result.stderr, /README\.md.*marker/)
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
 })
