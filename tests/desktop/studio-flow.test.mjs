@@ -673,7 +673,7 @@ test('UI hierarchy: one primary action per step, Generate secondary until the en
   await openStudio()
   await waitFor(() => $('[data-studio-skip]'))
   assert.ok($('[data-studio-open]') === null, 'composer button hidden while open (Cancel closes)')
-  assert.match($('[data-studio-generate]').textContent, /^Generate now(F9)?$/)
+  assert.match($('[data-studio-generate]').textContent, /^Generate now(F9Alt\+G)?$/)
   assert.ok(!isPrimary($('[data-studio-generate]')), 'Generate is not the primary action mid-way')
   assert.ok(isPrimary($('[data-studio-skip]')) && /I don't have one/.test($('[data-studio-skip]').textContent), 'paste step: "I don\'t have one" is primary')
   await pasteStep('')
@@ -1148,7 +1148,8 @@ test('SHORTCUT MAP: every key cap, aria-keyshortcuts, target key and Alt+Shift e
     assert.equal(cap.textContent, combo, 'the cap prints its combo')
   }
   for (const el of strip.querySelectorAll('[aria-keyshortcuts], [data-studio-shortcut]')) {
-    assert.ok(allowed.has(el.getAttribute('aria-keyshortcuts') ?? el.getAttribute('data-studio-shortcut')), 'shortcut attribute comes from the map')
+    // aria-keyshortcuts is a space-separated list: an F-key control also announces its Alt+letter.
+    for (const combo of (el.getAttribute('aria-keyshortcuts') ?? el.getAttribute('data-studio-shortcut')).split(' ')) assert.ok(allowed.has(combo), `${combo}: shortcut attribute comes from the map`)
   }
   // Target switch keys.
   for (const [id, combo] of Object.entries(map.model)) {
@@ -1300,9 +1301,10 @@ test('U3/U7: F1 toggles a Shortcuts list with the full map and the AltGr / numbe
   const list = $('[data-studio-shortcuts-list]')
   assert.ok(list, 'F1 opened the list')
   // The list is the map: one row per entry, in map order, with the combo the map holds (the model row joins its three).
-  const rowCombo = value => (typeof value === 'string' ? value : Object.values(value).join(' / '))
+  // The six F-key rows carry their Alt+letter alternative after the F-key (the `alt` entry is not a row of its own).
+  const rowCombo = (key, value) => [typeof value === 'string' ? value : Object.values(value).join(' / '), K().alt[key]].filter(Boolean).join(' / ')
   const rows = [...list.querySelectorAll('[data-studio-shortcut-row]')].map(row => row.getAttribute('data-studio-shortcut-row'))
-  assert.deepEqual(rows, Object.values(K()).map(rowCombo), 'F1 list = shortcut map')
+  assert.deepEqual(rows, Object.entries(K()).filter(([key]) => key !== 'alt').map(([key, value]) => rowCombo(key, value)), 'F1 list = shortcut map')
   for (const combo of rows) assert.ok(list.querySelector(`[data-studio-shortcut-row=\"${combo}\"]`), `${combo} listed`)
   assert.match(list.textContent, /AltGr/)
   assert.ok(!/left Alt/.test(list.textContent), 'the code takes either Alt, so no "use the left Alt"')
@@ -1447,7 +1449,7 @@ async function toEnumStep(mode) {
   await pasteStep('')
   for (let i = 0; i < 12 && !$('[data-studio-options]'); i += 1) await answerStep()
   assert.ok($('[data-studio-options]'), 'reached a choice step')
-  const local = $('[data-studio-recommend]').textContent.replace(/^★ Recommended: /, '').replace(/F5$/, '')
+  const local = $('[data-studio-recommend]').textContent.replace(/^★ Recommended: /, '').replace(/F5Alt\+Y$/, '')
   await setMode(mode)
   if (mode === 'auto') await waitFor(() => suggestFields().length > 0)
   else await settle() // intentional: the On-request test proves no automatic call is made
@@ -2970,3 +2972,117 @@ test('SDK composer: a composer whose draft cannot be read gets the prompt append
   assert.equal(composer().writes.length, 0, 'no setDraft over unread text')
 })
 
+
+
+// ---------------------------------------------------------------- Alt+letter alternatives to F5-F10 (#20)
+const FKEY_ACTIONS = ['accept', 'skip', 'useAi', 'back', 'generate', 'close']
+const rungCount = () => document.querySelectorAll('[data-studio-rung]').length
+const capsOf = el => [...el.querySelectorAll('[data-studio-key]')].map(cap => cap.textContent)
+
+test('ALT-1: each F5-F10 action has an Alt+letter alternative in the map, never on a dead key or a letter already taken', () => {
+  const map = K()
+  assert.deepEqual(Object.keys(map.alt).sort(), [...FKEY_ACTIONS].sort(), 'one alternative per F5-F10 action')
+  const letters = FKEY_ACTIONS.map(action => map.alt[action])
+  for (const combo of letters) assert.match(combo, /^Alt\+[A-Z]$/, `${combo} is Alt plus one letter`)
+  // Option dead keys on a Mac (the diagnosis lists E, I, N and U): never used for these.
+  for (const combo of letters) assert.ok(!['E', 'I', 'N', 'U'].includes(combo.slice(-1)), `${combo} is not a dead key`)
+  const others = []
+  const walk = value => { if (typeof value === 'string') others.push(value); else Object.values(value).forEach(walk) }
+  walk({ ...map, alt: {} })
+  for (const combo of letters) assert.ok(!others.includes(combo), `${combo} is not used by another action`)
+  assert.equal(new Set(letters).size, letters.length, 'no letter twice')
+})
+
+test('ALT-2: every Alt+letter alternative runs the same control as its F-key, and is printed on it, announced and listed in F1', { skip }, async () => {
+  const alt = K().alt
+  // Closed: the alternatives are the app's, like F5-F10.
+  for (const action of FKEY_ACTIONS) assert.equal((await press(alt[action])).defaultPrevented, false, `${alt[action]} left alone while closed`)
+  // The first step has no Back yet: no live cap, but both keys keep their room so nothing jumps when it turns on.
+  await openStudio(INTENT, 'manual', { deliverable: true })
+  assert.equal($('[data-studio-back]').disabled, true)
+  assert.deepEqual([...$('[data-studio-back]').querySelectorAll('[data-studio-key-reserved]')].map(cap => cap.textContent), [K().back, alt.back])
+  await press(K().close)
+  await openStudio(INTENT, 'manual')
+  // Printed: the paste step's skip button carries F6 and its Alt letter, and announces both.
+  const skipButton = $('[data-studio-skip]')
+  assert.deepEqual(capsOf(skipButton), [K().skip, alt.skip], 'F-key first, then the Alt letter')
+  assert.equal(skipButton.getAttribute('aria-keyshortcuts'), `${K().skip} ${alt.skip}`)
+  assert.ok(skipButton.getAttribute('title').includes(alt.skip), 'tooltip names it too')
+  assert.deepEqual(capsOf($('[data-studio-cancel]')), [K().close, alt.close])
+  assert.deepEqual(capsOf($('[data-studio-generate]')), [K().generate, alt.generate])
+  // Listed in F1, the F-key and its alternative on one row.
+  await press(K().help)
+  for (const action of FKEY_ACTIONS) assert.ok($(`[data-studio-shortcuts-list] [data-studio-shortcut-row="${K()[action]} / ${alt[action]}"]`), `${action} row lists ${alt[action]}`)
+  await press(K().help)
+  // Skip (the paste step has no answer yet), then Back, then Accept after typing: all by the Alt letters.
+  assert.equal(field(), 'thirdPartyText')
+  const base = rungCount()
+  await press(alt.skip)
+  assert.equal(rungCount(), base + 1, 'Alt skip answered the step')
+  assert.deepEqual(capsOf($('[data-studio-back]')), [K().back, alt.back], 'live caps once Back is enabled')
+  await press(alt.back)
+  assert.equal(rungCount(), base, 'Alt back undid it')
+  await press(alt.skip)
+  await typeAnswer('Uso pessoal, só eu')
+  const typed = await press(alt.accept, $('[data-studio-answer-input]'))
+  assert.equal(typed.defaultPrevented, true, 'works with the cursor in the answer field')
+  assert.equal(rungCount(), base + 2, 'Alt accept confirmed what was typed')
+  // Generate, back to the steps, generate again, send, all by Alt letters.
+  await press(alt.generate)
+  assert.ok($('[data-studio-preview]'), 'Alt generate built the preview')
+  await press(alt.back)
+  assert.ok($('[data-studio-preview]') === null, 'Alt back returned to the steps')
+  ui.host.composer.submits.length = 0
+  await press(alt.generate)
+  await press(alt.generate)
+  assert.ok($('[data-studio-strip]') === null)
+  assert.equal(ui.host.composer.submits.length, 1, 'Alt generate sent it')
+  // Close by the Alt letter returns the draft.
+  await openStudio(INTENT, 'manual')
+  await press(alt.close)
+  assert.ok($('[data-studio-strip]') === null, 'Alt close closed the studio')
+  assert.equal(draft(), INTENT, 'draft returned')
+})
+
+test('ALT-3: Alt+letter use-AI takes the AI suggestion like F7; while open an Alt alternative with no live control is swallowed like F5-F10', { skip }, async () => {
+  const alt = K().alt
+  await openStudio()
+  await press(K().skip)
+  await waitFor(aiReady)
+  assert.deepEqual(capsOf($('[data-studio-ai-use]')), [K().useAi, alt.useAi])
+  const n = rungCount()
+  await press(alt.useAi)
+  if ($('[data-studio-answer-input]')?.value) await press(alt.accept)
+  assert.equal(rungCount(), n + 1, 'Alt use-AI used the suggestion')
+  // First step of a fresh opening: Back is disabled, so no control prints Alt back; the key is still not typed into the field.
+  await press(K().close)
+  await openStudio(INTENT, 'manual', { deliverable: true })
+  assert.equal($('[data-studio-back]').disabled, true)
+  assert.equal((await press(alt.back)).defaultPrevented, true, 'swallowed, like F8')
+  assert.equal(rungCount(), 0)
+  await press(K().close)
+})
+
+test('ALT-4: the listener never handles Enter, Alt+Enter, Ctrl+Enter, Tab, Esc or any Ctrl/Super chord, open or closed', { skip }, async () => {
+  const chords = async () => {
+    const results = []
+    for (const [combo, extra] of [
+      ['Enter', {}], ['Alt+Enter', {}], ['Enter', { ctrlKey: true }], ['Enter', { metaKey: true }], ['Alt+Shift+Enter', {}],
+      ['Tab', {}], ['Alt+Tab', {}], ['Tab', { ctrlKey: true }], ['Escape', {}], ['Alt+Escape', {}], ['Escape', { ctrlKey: true }]
+    ]) results.push([combo, JSON.stringify(extra), (await press(combo, document.activeElement || document.body, extra)).defaultPrevented])
+    // Ctrl/Super with each F-key, each Alt letter and Alt+digit (Ctrl+Alt is AltGr on some layouts).
+    for (const combo of [...FKEY_ACTIONS.flatMap(action => [K()[action], K().alt[action]]), K().ask, digit('pick', 1)]) {
+      for (const extra of [{ ctrlKey: true }, { metaKey: true }, { ctrlKey: true, metaKey: true }]) results.push([combo, JSON.stringify(extra), (await press(combo, document.body, extra)).defaultPrevented])
+    }
+    return results.filter(([, , prevented]) => prevented)
+  }
+  assert.deepEqual(await chords(), [], 'closed: nothing taken')
+  await openStudio(INTENT, 'manual')
+  const rungs = rungCount()
+  const text = currentText()
+  assert.deepEqual(await chords(), [], 'open: nothing taken')
+  assert.ok($('[data-studio-strip]'), 'still open')
+  assert.equal(rungCount(), rungs, 'no step answered')
+  assert.equal(currentText(), text, 'still on the same step')
+  await press(K().close)
+})

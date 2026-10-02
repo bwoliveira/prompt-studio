@@ -4054,7 +4054,11 @@ export const SHORTCUTS = {
   model: Object.fromEntries(TARGETS.map(target => [target.id, target.key])),
   mode: 'Alt+I',
   version: 'Alt+V',
-  editPrompt: 'Alt+E'
+  editPrompt: 'Alt+E',
+  // A second key, with no F-key, for each of F5-F10 (an Apple keyboard needs fn for those). Never E, I, N or U:
+  // those Option chords are dead keys on a Mac. Free in the map above, in Hermes Desktop and in Cinnamon.
+  // Not a row of its own in F1: each combo is listed next to the F-key it doubles.
+  alt: { accept: 'Alt+Y', skip: 'Alt+K', useAi: 'Alt+L', back: 'Alt+B', generate: 'Alt+G', close: 'Alt+X' }
 }
 // The combo of digit `n` for a range entry of the map ('pick' → Alt+3, 'edit' → Alt+Shift+3).
 const digitCombo = (action, n) => SHORTCUTS[action].replace('1…9', String(n))
@@ -4084,9 +4088,14 @@ function displayCombo(combo) {
     return /^F\d+$/.test(base) ? `fn ${base}` : parts.map(modifierGlyph).join('') + base
   }).join(' / ')
 }
+// The Alt+letter that doubles a F-key combo, if there is one (F9 -> Alt+G).
+const altOf = combo => {
+  const action = Object.keys(SHORTCUTS.alt).find(key => SHORTCUTS[key] === combo)
+  return action && SHORTCUTS.alt[action]
+}
 // While open these are always swallowed, even when no control shows them right now: F5 would
-// otherwise reach the window (reload in some Electron setups).
-const STUDIO_FKEYS = [SHORTCUTS.accept, SHORTCUTS.skip, SHORTCUTS.useAi, SHORTCUTS.back, SHORTCUTS.generate, SHORTCUTS.close]
+// otherwise reach the window (reload in some Electron setups), and a Mac would type the Option symbol.
+const isFKeyAction = combo => Object.keys(SHORTCUTS.alt).some(key => SHORTCUTS[key] === combo || SHORTCUTS.alt[key] === combo)
 
 function keyCombo(event) {
   if (event.ctrlKey || event.metaKey) return ''
@@ -4135,7 +4144,7 @@ function foreignOverlayOpen() {
 
 function shortcutTarget(root, combo) {
   for (const el of root.querySelectorAll('[data-studio-shortcut]')) {
-    if (el.getAttribute('data-studio-shortcut') === combo && !el.disabled) return el
+    if ((el.getAttribute('data-studio-shortcut') === combo || el.getAttribute('data-studio-shortcut-alt') === combo) && !el.disabled) return el
   }
   return null
 }
@@ -4143,7 +4152,7 @@ function shortcutTarget(root, combo) {
 // Installed once at register time through ctx.addEventListener, so the host removes it on
 // dispose, on hot reload and when register() fails half way. While the studio is closed only F4
 // is looked at (and only when the composer is on screen); while it is open, only combos printed
-// on a visible control, plus F5-F10 swallowed.
+// on a visible control, plus F5-F10 and their Alt letters swallowed.
 function installStudioKeys(ctx) {
   if (typeof window === 'undefined' || !ctx?.addEventListener) return
   const onKey = event => {
@@ -4162,7 +4171,7 @@ function installStudioKeys(ctx) {
     } else if (combo === SHORTCUTS.open) {
       target = document.querySelector('[data-studio-open]')
     }
-    if (!target && !(open && STUDIO_FKEYS.includes(combo))) return
+    if (!target && !(open && isFKeyAction(combo))) return
     event.preventDefault()
     event.stopPropagation()
     if (target && !event.repeat) target.click()
@@ -4188,7 +4197,14 @@ function KeyCap({ combo, primary, reserved }) {
 
 function keyProps(t, keyHint, title) {
   if (!keyHint) return { title }
-  return { 'aria-keyshortcuts': keyHint, 'data-studio-shortcut': keyHint, title: [title, t('keys.shortcut', displayCombo(keyHint))].filter(Boolean).join(' · ') }
+  const alt = altOf(keyHint)
+  return {
+    // aria-keyshortcuts takes a space-separated list; the visible and tooltip text read "F9 / Alt+G" (⌥G on a Mac).
+    'aria-keyshortcuts': alt ? `${keyHint} ${alt}` : keyHint,
+    'data-studio-shortcut': keyHint,
+    ...(alt ? { 'data-studio-shortcut-alt': alt } : {}),
+    title: [title, t('keys.shortcut', displayCombo(alt ? `${keyHint} / ${alt}` : keyHint))].filter(Boolean).join(' · ')
+  }
 }
 
 function Button({ children, onClick, variant = 'default', disabled = false, title, data, keyHint, reserveKey, ariaLabel }) {
@@ -4227,7 +4243,7 @@ function Button({ children, onClick, variant = 'default', disabled = false, titl
     ...keyProps(t, live, title),
     type: 'button',
     children: live || reserved
-      ? jsxs(Fragment, { children: [children, jsx(KeyCap, { combo: live || reserved, primary, reserved: Boolean(reserved) })] })
+      ? jsxs(Fragment, { children: [children, jsx(KeyCap, { combo: live || reserved, primary, reserved: Boolean(reserved) }), altOf(live || reserved) ? jsx(KeyCap, { combo: altOf(live || reserved), primary, reserved: Boolean(reserved) }) : null] })
       : children
   })
 }
@@ -4945,8 +4961,8 @@ function ShortcutsList() {
       jsx('span', { style: { color: 'var(--ui-text-primary, inherit)', display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px' }, children: t('shortcuts.title') }),
       jsx('dl', {
         style: { columnGap: '10px', display: 'grid', gridTemplateColumns: 'max-content minmax(0, 1fr)', margin: 0, rowGap: '4px' },
-        children: Object.entries(SHORTCUTS).flatMap(([key, value]) => {
-          const combo = shortcutLabel(value)
+        children: Object.entries(SHORTCUTS).filter(([key]) => key !== 'alt').flatMap(([key, value]) => {
+          const combo = [shortcutLabel(value), SHORTCUTS.alt[key]].filter(Boolean).join(' / ')
           return [
             jsx('dt', { 'data-studio-shortcut-row': combo, style: { margin: 0 }, children: jsx(Kbd, { size: 'sm', children: displayCombo(combo) }) }, `k-${combo}`),
             jsx('dd', { style: { ...typeStyle, fontSize: '12px', lineHeight: '18px', margin: 0 }, children: t(`shortcuts.${key}`) }, `d-${combo}`)
