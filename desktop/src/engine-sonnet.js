@@ -255,10 +255,13 @@ const GENERATE_VERB = /^(gere|gerar|monte|montar)\b/
 // punctuation, a plain period included; a period inside a name or version, "Node.js", "3.12", is not an end). The verbs
 // inside it ("Como instalar o Docker?") are what is asked about, not an order. A question may wrap onto the next
 // line ("How do I configure nginx\nwith TLS?") or carry a comma ("How do I configure nginx, with TLS."); a blank line
-// ends it, and so does a sentence mark or a period followed by a space ("How do I configure nginx. Be brief."), after
+// ends it ("How do I configure nginx\n\nBe brief." is still a question), and so does a sentence mark or a period
+// followed by a space ("How do I configure nginx. Be brief."), after
 // which an order is a task ("What is Docker? Fix the login bug."). The scan is linear: no part of the form may
 // re-consume whitespace another part accepted, or a long run of spaces before a stray mark backtracks quadratically.
-const QUESTION_FORM = /^(?:como|o que|qual|quais|por que|porque|quando|onde|quem|quanto|how|what|why|which|who|when|where)\b(?:(?:[^.!?\n]|\.(?=\S)|\n(?![ \t]*\n))*\?|(?:[^.!?\n]|\.(?=\S)|\n(?![ \t]*\n))*(?:\.(?!\S)|$))/
+const QUESTION_FORM = /^(?:como|o que|qual|quais|por que|porque|quando|onde|quem|quanto|how|what|why|which|who|when|where)\b(?:(?:[^.!?\n]|\.(?=\S)|\n(?![ \t]*\n))*\?|(?:[^.!?\n]|\.(?=\S)|\n(?![ \t]*\n))*(?:\.(?!\S)|$|(?=\n[ \t]*\n)))/
+// "What I need: build a dashboard", "O que eu quero e que voce construa ...": a question word opening a statement.
+const DECLARATIVE = /^(?:what|o que)\s+(?:i|we|you|eu|nos|a gente|voce|voces)\s+(?:need|want|would like|'d like|expect|mean|ask|prefer|really (?:need|want)|preciso|precisamos|quero|queremos|gostaria|gostariamos|espero|esperamos)\b/
 // Languages: Portuguese (unaccented) + English.
 // "Analise a planilha" stays a data task: the analysis verb with a data file as its subject.
 const DATA_NOUN = /\b(planilhas?|csv|datasets?|spreadsheets?)\b/
@@ -292,7 +295,7 @@ const INFINITIVE_MARK = /\b(?:(?:need|needs|needed|want|wants|wanted|have|has|ha
 // A noun-signal word that heads a requested noun phrase ("A plan to configure nginx", "Preciso de um plano para ...")
 // names the request: a determiner (after an optional request opener or verb) opens its sentence, up to two plain
 // modifiers may sit between them ("a migration plan"), and no copula follows ("The plan is ready. Build ..." is context).
-const REQUESTED_NOUN = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:i|we) (?:need|want|would like)|i'd like|we'd like|give me|send me|preciso de|precisamos de|quero|queremos|gostaria de|gostariamos de|me de|me passe|me envie|me mande|outline|draft|prepare|propose|sketch|produce|provide|esboce|elabore|prepare|proponha|produza|forneca|apresente)\s+(?:me\s+)?)?(?:a|an|the|um|uma|o|os|as|some|algum|alguma|alguns|algumas)\s+(?:(?!(?:to|for|of|and|or|that|which|para|de|do|da|que|e|ou)\s)[\w-]+\s+){0,2}$/
+const REQUESTED_NOUN = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:i|we) (?:need|want|would like)|i'd like|we'd like|give me|send me|preciso de|precisamos de|quero|queremos|gostaria de|gostariamos de|me de|me passe|me envie|me mande|outline|draft|prepare|propose|sketch|produce|provide|esboce|elabore|prepare|proponha|produza|forneca|apresente|what (?:i|we) (?:need|want|would like) is|o que (?:eu|nos) (?:preciso|precisamos|quero|queremos) e)\s+(?:me\s+)?)?(?:a|an|the|um|uma|o|os|as|some|algum|alguma|alguns|algumas)\s+(?:(?!(?:to|for|of|and|or|that|which|para|de|do|da|que|e|ou)\s)[\w-]+\s+){0,2}$/
 const COPULA = /^\s+(?:is|are|was|were|will|would|has|have|had|e|esta|estao|era|eram|foi|foram|sera|serao|ja|fica|ficou|seems|looks|parece)\b/
 // A noun-signal word followed by a determiner is the verb wherever it sits ("... so plan the steps", "review our API").
 // Portuguese este/esta are left out: folded, "esta" is also "esta" ("Nosso plano esta pronto").
@@ -316,6 +319,22 @@ const CONTEXT_WINDOW = 120
 // participle ("email announcing the app", "script that sends an e-mail", "app de blog") means the first word is the
 // artifact asked for. Nouns in -ing that name a field (marketing, landing, onboarding, billing) stay modifiers.
 const MODIFIER_GAP = /^\s+(?:(?!(?:that|which|who|to|for|of|on|about|with|and|or|in|by|que|para|de|do|da|dos|das|sobre|com|e|ou|em|no|na|por)\b)(?!(?!(?:marketing|landing|onboarding|billing)\b)\w+(?:ing|ndo)\b)\w+\s+){0,2}$/
+
+// The first artifact named after the verb decides, unless it only modifies the next one; a discarded modifier does not
+// end the search ("API documentation generator script" is code: API modifies documentation, which modifies script).
+function pickArtifact(request) {
+  const scan = (re, from) => { const g = new RegExp(re.source, re.flags.replace('g', '') + 'g'); g.lastIndex = from; return g.exec(request) }
+  let code = scan(CODE_ARTIFACT, 0)
+  let txt = scan(TEXT_ARTIFACT, 0)
+  while (code && txt) {
+    const [first, next] = code.index < txt.index ? [code, txt] : [txt, code]
+    if (!MODIFIER_GAP.test(request.slice(first.index + first[0].length, next.index))) break
+    if (first === code) code = scan(CODE_ARTIFACT, next.index + next[0].length)
+    else txt = scan(TEXT_ARTIFACT, next.index + next[0].length)
+  }
+  if (code && txt) return code.index < txt.index ? 'code' : 'text'
+  return code ? 'code' : txt ? 'text' : null
+}
 function contextBefore(text, at) {
   // The sentinel keeps ^ from matching where the window was cut.
   return at > CONTEXT_WINDOW ? '\u0000' + text.slice(at - CONTEXT_WINDOW, at) : text.slice(0, at)
@@ -338,7 +357,9 @@ function isQuestion(goal) {
   const yesNo = YESNO_FORM.exec(goal)
   if (yesNo) return yesNo
   const m = QUESTION_FORM.exec(goal)
-  if (!m || m[0].includes('?') || !m[0].includes(',')) return m
+  if (!m || m[0].includes('?')) return m
+  if (DECLARATIVE.test(m[0])) return null
+  if (!m[0].includes(',')) return m
   const head = m[0].slice(0, m[0].indexOf(','))
   return QUESTION_HEAD.test(head) || firstSignal(head).verb ? m : null
 }
@@ -402,13 +423,9 @@ function detect(b) {
   const request = Number.isFinite(at) ? text.slice(at) : text
   // Only the verb that fired can make a code artifact: a later "write" does not turn an analysis into code.
   const verbWord = (request.match(/^\s*(\w+)/) || [])[1] || ''
-  const code = CODE_ARTIFACT.exec(request)
-  const txt = TEXT_ARTIFACT.exec(request)
-  const codeAt = code ? code.index : -1
-  const textAt = txt ? txt.index : -1
-  const modifier = (first, nextAt) => nextAt >= 0 && MODIFIER_GAP.test(request.slice(first.index + first[0].length, nextAt))
-  const codeWins = codeAt >= 0 && (textAt < 0 || (codeAt < textAt ? !modifier(code, textAt) : modifier(txt, codeAt)))
-  const textWins = textAt >= 0 && (codeAt < 0 || (textAt < codeAt ? !modifier(txt, codeAt) : modifier(code, textAt)))
+  const artifact = pickArtifact(request)
+  const codeWins = artifact === 'code'
+  const textWins = artifact === 'text'
   if ((signal === 'data' || signal === 'text') && MAKE_VERB.test(verbWord) && codeWins) { signal = 'implementation'; category = 'code' }
   // "Gere um e-mail", "Monte uma mensagem": the verb does not say what is made, the first artifact named does.
   if (signal === 'implementation' && GENERATE_VERB.test(request) && textWins) { signal = 'text'; category = 'writing' }

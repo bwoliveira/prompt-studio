@@ -69,7 +69,8 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   to configure nginx" (or "a migration plan", "outline a plan") asks for the plan, "Do not access production. Can
   you build the app?" is a request, not a question, an indirect prohibition ("I do not want you to configure") is
   still one, "Can you tell me how to configure nginx?" asks for an explanation, and "Include a code example" after
-  a question is not an order.
+  a question is not an order. A blank line ends a question ("How do I configure nginx\n\nBe brief."), "Write an API
+  documentation generator script" is code, and "What I need: build a React dashboard" is the order it states.
 - Fix: *Gere um e-mail*, *Monte uma mensagem* and the like stay text, reports and summaries are text even when they
   mention tests ("Write a summary of the test results", "Escreva um relatório dos testes"), and a question such as
   "Como instalar o Docker?" or "Como resumir um livro?" stays an answer on Opus, Sonnet and Astra.
