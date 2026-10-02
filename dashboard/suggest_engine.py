@@ -175,7 +175,9 @@ def _match_option(value: str, options: list[str]) -> str | None:
     for option in options:
         if option.strip().lower() == wanted:
             return option
-    starts = [o for o in options if o.strip().lower().startswith(wanted) or wanted.startswith(o.strip().lower())]
+    # Only a value that is the start of one option ("Y" -> "Yes"); a longer value that merely begins with an
+    # option ("Not applicable here" vs "No") is a different answer and must not be mapped onto it.
+    starts = [o for o in options if o.strip().lower().startswith(wanted)]
     return starts[0] if len(starts) == 1 else None
 
 

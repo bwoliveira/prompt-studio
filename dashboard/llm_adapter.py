@@ -61,6 +61,47 @@ def _finish_reason(response: Any) -> str:
     return value if isinstance(value, str) else ""
 
 
+def _answer_content(response: Any) -> Any:
+    """``message.content`` of the first choice: the answer, never the thinking.
+
+    The host's ``extract_content_or_reasoning`` falls back to the reasoning fields when the content is empty;
+    handing it a bare ``{"content": ...}`` message keeps that fallback (and its think-block stripping) from
+    turning JSON inside the thinking into the reply.
+    """
+    choices = response.get("choices") if isinstance(response, Mapping) else getattr(response, "choices", None)
+    first = choices[0] if choices else response
+    message = first.get("message") if isinstance(first, Mapping) else getattr(first, "message", first)
+    content = message.get("content") if isinstance(message, Mapping) else getattr(message, "content", None)
+    return _answer_text(content)
+
+
+# A closed thinking block anywhere in the content.
+_CLOSED_THINKING = re.compile(r"<(think|thinking|reasoning)>.*?</\1>", re.DOTALL | re.IGNORECASE)
+# A thinking block cut off by the token limit: it runs to the end of the content, but only counts when the tag
+# opens the content or a line. A tag mentioned mid-line (inside a JSON string, say) is answer data, not a block.
+_UNCLOSED_THINKING = re.compile(r"(?:^|\n)[ \t]*<(think|thinking|reasoning)>.*\Z", re.DOTALL | re.IGNORECASE)
+
+
+def _without_thinking_blocks(text: str) -> str:
+    return _UNCLOSED_THINKING.sub("", _CLOSED_THINKING.sub("", text))
+
+
+def _answer_text(content: Any) -> Any:
+    """The answer text of ``content``: text parts of a list only, no thinking block, closed or unclosed."""
+    if isinstance(content, list):
+        texts = []
+        for part in content:
+            if isinstance(part, str):
+                texts.append(part)
+                continue
+            kind = part.get("type") if isinstance(part, Mapping) else getattr(part, "type", None)
+            text = part.get("text") if isinstance(part, Mapping) else getattr(part, "text", None)
+            if kind == "text" and isinstance(text, str):
+                texts.append(text)
+        content = "".join(texts)
+    return _without_thinking_blocks(content) if isinstance(content, str) else content
+
+
 def _loads_dict(text: str) -> dict[str, Any] | None:
     """json.loads ``text``; the value only when it is a dict, else None."""
     try:
@@ -236,7 +277,7 @@ def _default_llm(
         response = _call(retry_body, remaining)
     resolved_provider = route.get("provider", provider or "auto")
     resolved_model = route.get("model", model or "default")
-    return Reply(extract_content_or_reasoning(response), f"{resolved_provider}/{resolved_model}", _finish_reason(response))
+    return Reply(extract_content_or_reasoning({"content": _answer_content(response)}), f"{resolved_provider}/{resolved_model}", _finish_reason(response))
 
 
 _JSON_MODE_TEXT = ("response_format", "json_object", "structured output", "json_schema", "json mode")
