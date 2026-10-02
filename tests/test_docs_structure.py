@@ -45,3 +45,26 @@ def test_subagent_recommendation_in_the_docs_is_the_engines_default():
     assert "prioritize subagents" not in section
     steps = next(line for line in (REPO / "docs" / "STEPS-REVIEW.md").read_text().splitlines() if line.startswith("| 8 |"))
     assert "Astra also recommends \"model decides\"" in steps and "Sonnet also recommends \"model decides\"" in steps
+
+
+def test_engine_comments_cite_rows_and_sections_that_exist_in_the_rule_reference():
+    """#40: comments such as "[review] E1" or "section 5" pointed at ids the review doc no longer has."""
+    import re
+
+    review = (REPO / "docs" / "PROMPT-DOCS-REVIEW.md").read_text(encoding="utf-8")
+    rows = set(re.findall(r"^\| ([OAS]\d+[a-z]?) \|", review, re.M))
+    sections = set(re.findall(r"^## (\d+)\.", review, re.M))
+    assert {"O1", "A5", "S30"} <= rows and {"1", "2", "3", "5"} <= sections
+    problems = []
+    for name in ("engine-opus.js", "engine-sonnet.js", "engine-astra.js"):
+        for number, line in enumerate((REPO / "desktop" / "src" / name).read_text(encoding="utf-8").splitlines(), 1):
+            if ("[review]" not in line and "PROMPT-DOCS-REVIEW" not in line) or "docs/PROMPT-DOCS-REVIEW.md" in line:
+                continue
+            cited = re.split(r"\[review\]|PROMPT-DOCS-REVIEW", line, maxsplit=1)[1]
+            for first, last in re.findall(r"\b([OAS]\d+[a-z]?)(?:-([OAS]?\d+[a-z]?))?", cited):
+                for row in (first, last and (last if last[0] in "OAS" else first[0] + last)):
+                    if row and row not in rows:
+                        problems.append(f"{name}:{number} cites {row}")
+            problems += [f"{name}:{number} cites section {n}" for n in re.findall(r"section (\d+)", cited) if n not in sections]
+            problems += [f"{name}:{number} cites old id {old}" for old in re.findall(r"\b[CDE]\d{1,2}\b", cited)]
+    assert not problems, problems

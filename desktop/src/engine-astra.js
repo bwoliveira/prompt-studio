@@ -15,7 +15,7 @@
 //   place and state each rule once." and "Use ALWAYS, NEVER, must, and only for true invariants".
 // - No tool list, no reasoning-effort or chain-of-thought lines. reasoning-best-practices.md:
 //   "prompting them to "think step by step" or "explain your reasoning" is unnecessary." Hermes owns
-//   tools and effort; no doc asks to confirm tool availability (PROMPT-DOCS-REVIEW E9).
+//   tools and effort; no doc asks to confirm tool availability (PROMPT-DOCS-REVIEW section 2, "Not emitted").
 // - No extra testing/verification lines. gpt6-rethinking-prompts.md: "GPT-6 Astra does that on its
 //   own, so the same instructions can lead to unnecessary testing."
 
@@ -34,7 +34,7 @@ const PASTE_CAP = 12000
 const LANGUAGE_LINE = 'Write the answer in the language of the task above; switch only if the requirements name another language.'
 
 // gpt6-using.md: "The user's instructions take precedence over guidelines provided in a skill." and
-// "Make the priority of user instructions and skills explicit." (widened to AGENTS.md, PROMPT-DOCS-REVIEW E8)
+// "Make the priority of user instructions and skills explicit." (widened to AGENTS.md, PROMPT-DOCS-REVIEW A5)
 const PRIORITY_LINE = 'The instructions in this request take precedence over guidelines in a skill or an instruction file such as AGENTS.md; if they conflict, follow this request.'
 // gpt6-using.md: "If a skill causes you to ask for permission or confirmation, pause, leave requested
 // work unfinished, or diverge from the user's intent, name and link to the exact SKILL.md file you
@@ -56,7 +56,7 @@ const CONFIRM_LINE = 'Require confirmation for external writes, destructive acti
 // inspect the relevant materials and report the result. Do not implement changes unless the request
 // also asks for them."
 const READ_ONLY_LINE = 'For requests to answer, explain, review, diagnose, or plan, inspect the relevant materials and report the result. Do not implement changes unless the request also asks for them.'
-// gpt6-using.md, adapted from system prompt to this request (PROMPT-DOCS-REVIEW E7): "treat these as
+// gpt6-using.md, adapted from system prompt to this request (PROMPT-DOCS-REVIEW A7): "treat these as
 // instructions to do the work and take action. Do not stop at acknowledging capability (e.g. "Yes…"),
 // proposing a plan, or offering to continue. Do not settle for a partial or "helpful enough" solution
 // that does not fully satisfy the user's task to save time, effort or tokens. If a task requires sustained
@@ -126,7 +126,7 @@ const DONE_LINES = {
 // gpt6-using.md, writing style (verbatim): "Use plain, simple language: familiar words, concrete
 // examples, and precise verbs. Prefer active voice and direct statements."
 const PLAIN_LINE = 'Use plain, simple language: familiar words, concrete examples, and precise verbs. Prefer active voice and direct statements.'
-// gpt6-using.md, anti-slop prompt (two sentences, examples trimmed; PROMPT-DOCS-REVIEW E10).
+// gpt6-using.md, anti-slop prompt (two sentences, examples trimmed; PROMPT-DOCS-REVIEW A21).
 const STYLE_LINE = 'Do not use concluding summary statements such as "In short:". Do not use contrastive framing such as "X, not Y" that introduces an unprompted alternative that the user didn\'t ask about.'
 // Format lines, only when the user chose one. gpt6-using.md: "Specify the writing style and structure
 // your application needs." prose = verbatim from gpt6-using.md.
@@ -149,12 +149,12 @@ const LENGTH_LINES = {
 const EXAMPLE_NOTE_ONE = 'Follow the pattern of this example; do not copy its content.'
 const EXAMPLE_NOTE_MANY = 'Follow the pattern of these examples; do not copy their content.'
 
-// Subagents (user's wording + gpt6-using.md verbatim lines; PROMPT-DOCS-REVIEW section 5).
+// Subagents (user's wording + gpt6-using.md verbatim lines; PROMPT-DOCS-REVIEW section 3 and A27-A31).
 // gpt6-using.md (verbatim).
 const DELEGATE_LINE = 'If at any point you can parallelize work by delegating tasks to another agent (no matter if you are the root or subagent), you should do so using collaboration tools if it could save time or improve quality.'
 // gpt6-using.md: "Specify when and how much it should use subagents for parallel work."
 const SPLIT_LINE = 'Use subagents. Split the task into parts that can run in parallel without sharing state (separate modules, files, sources or questions) and give each part to its own subagent, with its goal, the context it needs and the result to hand back. Launch independent parts together rather than one at a time. Keep dependent steps, integration and the final answer with the lead agent.'
-// PROMPT-DOCS-REVIEW E3 (reviewer from a fresh context, gaps only; extrapolated to Astra).
+// PROMPT-DOCS-REVIEW A29 (reviewer from a fresh context, gaps only; extrapolated to Astra).
 const REVIEWER_LINE = 'Name one subagent as the reviewer. The reviewer did not write any of the work and starts from a fresh context: give it only the integrated result, the requirements and the definition of done, not the reasoning behind the work. It checks the result once and reports only gaps that affect correctness or the stated requirements, each with its evidence; style preferences are not findings. Writers do not review their own work; the lead agent fixes or sends back what the reviewer finds and treats the rest as optional.'
 // gpt6-using.md (verbatim).
 const LEGIBLE_LINE = 'Messages that you send to other agents and your final answer may be read by a human, so ensure they are legible. Always put proper spaces between words and/or numbers.'
