@@ -90,6 +90,17 @@ function keyCombo(event) {
 // the code is the only thing that says which shortcut it was.
 const isAltCodeChord = event => event.altKey && !event.ctrlKey && !event.metaKey && /^(Key[A-Z]|Digit[1-9])$/.test(event.code || '')
 
+// Behind an open overlay (the Settings dialog, a model menu, the command palette or any other
+// dialog/menu/listbox in the document) the studio's keys do nothing, except the two that toggle
+// their own overlay (F1 help, F3 Settings). A hidden element does not count, nor one that holds the studio.
+const OVERLAY_KEYS = [SHORTCUTS.help, SHORTCUTS.settings]
+const OVERLAY_SELECTOR = '[role="dialog"],[role="alertdialog"],[role="menu"],[role="listbox"]'
+function overlayOpen() {
+  if ($settingsOpen.get()) return true
+  const strip = document.querySelector('[data-studio-strip]')
+  return [...document.querySelectorAll(OVERLAY_SELECTOR)].some(el => !el.closest('[hidden],[aria-hidden="true"]') && !(strip && el.contains(strip)))
+}
+
 function shortcutTarget(root, combo) {
   for (const el of root.querySelectorAll('[data-studio-shortcut]')) {
     if (el.getAttribute('data-studio-shortcut') === combo && !el.disabled) return el
@@ -109,8 +120,11 @@ function installStudioKeys(ctx) {
     const combo = keyCombo(event)
     if (!combo) return
     const open = $studio.get().status !== 'idle'
+    const blocked = overlayOpen() && !OVERLAY_KEYS.includes(combo)
     let target = null
-    if (open) {
+    if (blocked) {
+      // Nothing behind the overlay: F5-F10 are still swallowed below while the studio is open.
+    } else if (open) {
       const root = document.querySelector('[data-studio-strip]')
       target = root && shortcutTarget(root, combo)
     } else if (combo === SHORTCUTS.open) {
@@ -707,7 +721,7 @@ function SettingsButton() {
   return jsx(Button, {
     ariaLabel: t('settings.button'),
     data: { 'data-studio-settings': true, 'aria-haspopup': 'dialog' },
-    onClick: () => $settingsOpen.set(true),
+    onClick: () => $settingsOpen.set(!$settingsOpen.get()),
     keyHint: SHORTCUTS.settings,
     title: t('settings.button'),
     children: jsx(Codicon, { name: 'settings-gear' })

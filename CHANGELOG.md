@@ -13,6 +13,10 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
   otherwise). Other platforms are unchanged, and `aria-keyshortcuts` keeps the canonical combo. The F1 help gains a Mac
   note (Option, fn) and no longer says "use the left Alt": either Alt works, only an AltGr (right Alt on some
   layouts) does not.
+- Fix: with the Settings dialog, a model menu, the command palette or any other open dialog/menu/listbox in front, the
+  Studio's keys no longer reach the controls behind it: F9 does not generate, F10 does not cancel, F4 does not open
+  the Studio and the Alt chords do nothing. F5-F10 are still swallowed while the Studio is open (no page reload);
+  only F1 (help) and F3 are handled, and F3 now also closes Settings when it is open.
 - Fix: a reply with no answer text and JSON only inside the model's thinking no longer becomes the suggestion; it is
   treated as an empty reply (retried once, unless it ended on the token limit). On choice steps an AI value that is
   not exactly one of the options (for example "Not applicable here" with options Yes/No) is now reported as an
