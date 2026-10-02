@@ -91,10 +91,32 @@ test('findCollisions: a duplicate hidden behind a template literal or a comment 
   assert.throws(() => findCollisions([['ui-a.js', 'const a = 1, /* c */ hidden = 2'], ['ui-b.js', 'let hidden']]), /collision: hidden/)
 })
 
-test('assertValidModule: accepts a module and rejects a duplicate binding with the label', () => {
-  assert.doesNotThrow(() => assertValidModule('ok.js', "import x from 'x'\nconst a = 1\nexport { a, x }\n"))
-  assert.throws(() => assertValidModule('desktop/plugin.js', 'const a = 1\n  const a = 2\n'), /desktop\/plugin\.js is not valid ESM[\s\S]*already been declared/)
-  assert.throws(() => assertValidModule('broken.js', 'const = ;'), /broken\.js is not valid ESM/)
+test('assertValidModule: accepts a module and rejects a duplicate binding with the label', async () => {
+  await assert.doesNotReject(assertValidModule('ok.js', "import x from 'x'\nconst a = 1\nexport { a, x }\n"))
+  await assert.rejects(assertValidModule('desktop/plugin.js', 'const a = 1\n  const a = 2\n'), /desktop\/plugin\.js is not valid ESM[\s\S]*already been declared/)
+  await assert.rejects(assertValidModule('broken.js', 'const = ;'), /broken\.js is not valid ESM/)
+})
+
+test('assertValidModule: never runs the module it checks, even one that imports only built-ins', async () => {
+  delete globalThis.__psSyntaxRan
+  await assert.doesNotReject(assertValidModule('side-effect.js', "import 'node:fs'\nglobalThis.__psSyntaxRan = true\nexport const z = 1\n"))
+  await assert.doesNotReject(assertValidModule('plain.js', 'globalThis.__psSyntaxRan = true\n'))
+  assert.equal(globalThis.__psSyntaxRan, undefined)
+})
+
+test('walk: a regex literal after return, typeof and the like is not a string (Codex P2)', () => {
+  const source = "function matches(text) { return /'/.test(text) }\nfunction kind(x) { return typeof /\"/ }\nexport const ENGINE = { matches, kind }\n"
+  const out = stripExports(source)
+  assert.ok(/^const ENGINE = \{ matches, kind \}$/m.test(out), out)
+  assert.ok(out.includes("return /'/.test(text)"), out)
+  assert.deepEqual([...topLevelNames(source)].sort(), ['ENGINE', 'kind', 'matches'])
+  assert.ok(stripExports('const half = total / 2\nexport const r = half / 3 / 4\n').includes('const r = half / 3 / 4'))
+})
+
+test('topLevelNames: astral characters (emoji) in a comment do not shift the masks after them (Codex P2)', () => {
+  const source = `// ${'😀'.repeat(15)}\nconst real = \`\nconst fake = 1\n\`\n`
+  assert.deepEqual([...topLevelNames(source)], ['real'])
+  assert.doesNotThrow(() => findCollisions([['ui-a.js', source], ['ui-b.js', 'const fake = 2\n']]))
 })
 
 test('stripExports: keeps declarations, drops export lists and default markers', () => {
@@ -156,14 +178,21 @@ async function buildCopy() {
 }
 const run = (dir, ...args) => spawnSync(process.execPath, ['scripts/build.mjs', ...args], { cwd: dir, encoding: 'utf8' })
 
-test('CLI --check writes nothing, so it works when the temp folder is not writable (read-only review sandbox, Codex P2)', async () => {
+test('CLI --check writes nothing and starts no process, so it works in the read-only review sandbox (Codex P2)', async () => {
   const dir = await buildCopy()
   try {
     assert.equal(run(dir).status, 0)
+    // The sandbox: no writable temp folder, and every child process fails with EPERM.
+    const deny = join(dir, 'deny-children.cjs')
+    await writeFile(deny, [
+      "const cp = require('node:child_process')",
+      "for (const k of ['spawn', 'spawnSync', 'exec', 'execSync', 'execFile', 'execFileSync', 'fork']) cp[k] = () => { throw Object.assign(new Error('spawn EPERM'), { code: 'EPERM' }) }",
+      "require('node:module').syncBuiltinESMExports()",
+    ].join('\n'))
     const env = { ...process.env, TMPDIR: join(dir, 'no-such-dir'), TMP: join(dir, 'no-such-dir'), TEMP: join(dir, 'no-such-dir') }
-    const r = spawnSync(process.execPath, ['scripts/build.mjs', '--check'], { cwd: dir, encoding: 'utf8', env })
+    const r = spawnSync(process.execPath, ['--require', deny, 'scripts/build.mjs', '--check'], { cwd: dir, encoding: 'utf8', env })
     assert.equal(r.status, 0, r.stderr)
-    assert.throws(() => assertValidModule('desktop/plugin.js', 'const a = 1\nconst a = 2\n'), /desktop\/plugin\.js is not valid ESM/)
+    await assert.rejects(assertValidModule('desktop/plugin.js', 'const a = 1\nconst a = 2\n'), /desktop\/plugin\.js is not valid ESM/)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
