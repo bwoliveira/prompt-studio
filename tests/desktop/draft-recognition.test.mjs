@@ -216,6 +216,18 @@ const TABLE = [
   ['Como configurar o nginx\ncom TLS', 'answer', 'pt, two lines, no mark'],
   ['What is Docker?\nFix the login bug.', 'implementation', 'near miss: the mark closes the question, then an order'],
   ['How do I install Docker?\n\nThen configure nginx.', 'workflow', 'near miss: an order after a blank line'],
+  // a comma inside a question does not end it (Codex P2)
+  ['How do I configure nginx, with TLS.', 'answer', 'comma, trailing period'],
+  ['Como configurar o nginx, sem reiniciar o servidor.', 'answer', 'pt comma'],
+  ['How do I configure nginx, and then deploy it', 'answer', 'comma, no mark: still one question'],
+  ['What is Docker? Then, configure nginx.', 'workflow', 'near miss: the mark closes the question, the comma after it is in the order'],
+  // coordinated verbs stay under the prohibition (Codex P2)
+  ['What is Docker? Do not build or deploy anything.', 'answer', 'build or deploy both negated'],
+  ['O que é Docker? Não construa nem publique nada.', 'answer', 'pt nem'],
+  ['How does cron work? Never install, configure or deploy anything here.', 'answer', 'three coordinated verbs'],
+  ['What is Docker? Do not build anything. Configure nginx.', 'workflow', 'near miss: a new sentence is not coordinated'],
+  ['Do not deploy; review the API instead', 'review', 'near miss: a semicolon is not a coordinator'],
+  ['Como engenheiro de redes, configure o nginx', 'workflow', 'near miss: "como" means "as a", the comma is not inside a question'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
@@ -296,7 +308,7 @@ test('parity: Opus and Sonnet carry the identical detection block', async () => 
   const [opus, sonnet] = await Promise.all([src('engine-opus.js'), src('engine-sonnet.js')])
   const a = detection(opus)
   const b = detection(sonnet)
-  for (const needle of ['CATEGORY_RULES', 'DELIVERABLE_RULES', 'MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'QUESTION_START', 'NOUN_SIGNAL', 'SENTENCE_START', 'VERB_OBJECT', 'INFINITIVE_MARK', 'NEGATED', 'CONTEXT_WINDOW', 'MODIFIER_GAP', 'INTERFACE', 'function firstSignal', 'function detect', 'function analyzeNormalized']) {
+  for (const needle of ['CATEGORY_RULES', 'DELIVERABLE_RULES', 'MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'QUESTION_START', 'NOUN_SIGNAL', 'SENTENCE_START', 'VERB_OBJECT', 'INFINITIVE_MARK', 'NEGATED', 'COORDINATED', 'QUESTION_HEAD', 'CONTEXT_WINDOW', 'MODIFIER_GAP', 'INTERFACE', 'function contextBefore', 'function prohibited', 'function isQuestion', 'function firstSignal', 'function detect', 'function analyzeNormalized']) {
     assert.ok(a.includes(needle), `opus block has ${needle}`)
   }
   assert.equal(a, b, 'Opus and Sonnet detection blocks drifted apart: change both engines identically')
@@ -304,7 +316,7 @@ test('parity: Opus and Sonnet carry the identical detection block', async () => 
 
 test('parity: the artifact constants are the same text on all three engines', async () => {
   const sources = await Promise.all(['engine-opus.js', 'engine-sonnet.js', 'engine-astra.js'].map(src))
-  for (const name of ['MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'NOUN_SIGNAL', 'SENTENCE_START', 'VERB_OBJECT', 'INFINITIVE_MARK', 'NEGATED', 'CONTEXT_WINDOW', 'MODIFIER_GAP', 'REVIEW_OBJECT', 'PLAN_OBJECT', 'DATA_OBJECT', 'WORKFLOW_OBJECT']) {
+  for (const name of ['MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'NOUN_SIGNAL', 'SENTENCE_START', 'VERB_OBJECT', 'INFINITIVE_MARK', 'NEGATED', 'COORDINATED', 'QUESTION_HEAD', 'CONTEXT_WINDOW', 'MODIFIER_GAP', 'REVIEW_OBJECT', 'PLAN_OBJECT', 'DATA_OBJECT', 'WORKFLOW_OBJECT']) {
     const lines = sources.map(source => source.split('\n').find(line => line.startsWith(`const ${name} =`)))
     assert.ok(lines.every(Boolean), `${name} exists in every engine`)
     assert.equal(new Set(lines).size, 1, `${name} differs between engines:\n${lines.join('\n')}`)

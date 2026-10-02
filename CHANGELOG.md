@@ -60,7 +60,9 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   ("Analyze this script, then write a post" stays an analysis). A second question is still a question, a reminder
   ("Don't forget to review the API") still asks for the review, and a very long draft no longer freezes the Studio
   while it is read. "Explain how to configure nginx" is an answer on every engine, "We need to plan before we
-  configure" keeps the plan, and a question that wraps onto the next line is still a question.
+  configure" keeps the plan, and a question that wraps onto the next line or carries a comma is still a question.
+  "Do not build or deploy anything" forbids both verbs, and the Astra prompt states the chosen deliverable from
+  the same reading of goal and requirements as the analysis.
 - Fix: *Gere um e-mail*, *Monte uma mensagem* and the like stay text, reports and summaries are text even when they
   mention tests ("Write a summary of the test results", "Escreva um relatório dos testes"), and a question such as
   "Como instalar o Docker?" or "Como resumir um livro?" stays an answer on Opus, Sonnet and Astra.

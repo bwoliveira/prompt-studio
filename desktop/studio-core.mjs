@@ -227,8 +227,9 @@ const GENERATE_VERB = /^(gere|gerar|monte|montar)\b/
 // A question: the draft opens with a question word and its first sentence is a question (or one phrase without
 // punctuation, a plain period included; a period inside a name or version, "Node.js", "3.12", is not an end). The verbs
 // inside it ("Como instalar o Docker?") are what is asked about, not an order. A question may wrap onto the next
-// line ("How do I configure nginx\nwith TLS?"); a blank line ends it.
-const QUESTION_FORM = /^(?:como|o que|qual|quais|por que|porque|quando|onde|quem|quanto|how|what|why|which|who|when|where)\b(?:(?:[^.!?\n]|\.(?=\S)|\n(?!\s*\n))*\?|(?:[^.!?,\n]|\.(?=\S)|\n(?!\s*\n))*\.?\s*$)/
+// line ("How do I configure nginx\nwith TLS?") or carry a comma ("How do I configure nginx, with TLS."); a blank line
+// ends it, and so does a sentence mark, after which an order is a task ("What is Docker? Fix the login bug.").
+const QUESTION_FORM = /^(?:como|o que|qual|quais|por que|porque|quando|onde|quem|quanto|how|what|why|which|who|when|where)\b(?:(?:[^.!?\n]|\.(?=\S)|\n(?!\s*\n))*\?|(?:[^.!?\n]|\.(?=\S)|\n(?!\s*\n))*\.?\s*$)/
 // Languages: Portuguese (unaccented) + English.
 // "Analise a planilha" stays a data task: the analysis verb with a data file as its subject.
 const DATA_NOUN = /\b(planilhas?|csv|datasets?|spreadsheets?)\b/
@@ -265,6 +266,12 @@ const VERB_OBJECT = /^\s+(?:the|a|an|our|my|your|this|these|those|all|each|every
 // A verb right after a negation (an adverb at most in between) is a prohibition, not the order ("do not run any
 // commands", "never ever deploy", "nao execute"). A reminder ("don't forget to review") still asks for the review.
 const NEGATED = /(?:^|[\s,;:(])(?:(?:do not|don't|dont|does not|doesn't|never|not|nao|nunca|jamais)(?:\s+(?:ever|even|just|simply|actually|really|ainda|mesmo|sequer|simplesmente))?|without|sem)\s*$/
+// The prohibition covers the verbs coordinated with the negated one ("do not build or deploy anything", "never
+// install, configure or deploy"): a coordinator or a list comma leads back to the previous word.
+const COORDINATED = /\b(\w+)\s*(?:,|,?\s+(?:or|nor|and|ou|nem|e))\s*$/
+// A mark-less question may carry a comma only when what precedes the comma already reads as a question ("How do
+// I configure nginx, with TLS."): a role opener ("Como especialista em redes, escreva ...") is not one.
+const QUESTION_HEAD = /\b(?:do|does|did|can|could|should|would|will|may|might|is|are|was|were|am|have|has|posso|devo|consigo|faco|funciona|funcionam|deveria|poderia|sao|esta|estao|ha)\b/
 // Only this many characters around a match are inspected, so the scan stays linear on long drafts; the prefixes
 // NEGATED and SENTENCE_START look for are far shorter than this.
 const CONTEXT_WINDOW = 120
@@ -273,6 +280,25 @@ const CONTEXT_WINDOW = 120
 // participle ("email announcing the app", "script that sends an e-mail", "app de blog") means the first word is the
 // artifact asked for. Nouns in -ing that name a field (marketing, landing, onboarding, billing) stay modifiers.
 const MODIFIER_GAP = /^\s+(?:(?!(?:that|which|who|to|for|of|on|about|with|and|or|in|by|que|para|de|do|da|dos|das|sobre|com|e|ou|em|no|na|por)\b)(?!(?!(?:marketing|landing|onboarding|billing)\b)\w+(?:ing|ndo)\b)\w+\s+){0,2}$/
+function contextBefore(text, at) {
+  // The sentinel keeps ^ from matching where the window was cut.
+  return at > CONTEXT_WINDOW ? '\u0000' + text.slice(at - CONTEXT_WINDOW, at) : text.slice(0, at)
+}
+// A verb is prohibited when a negation precedes it, or precedes a word it is coordinated with ("do not build or
+// deploy", "never install, configure or deploy"); the walk back is bounded.
+function prohibited(text, at, hops = 0) {
+  const before = contextBefore(text, at)
+  if (NEGATED.test(before)) return true
+  const chain = hops < 5 && COORDINATED.exec(before)
+  return chain ? prohibited(text, at - before.length + chain.index, hops + 1) : false
+}
+// The question form, unless its comma follows something that is not a question ("Como especialista, escreva").
+function isQuestion(goal) {
+  const m = QUESTION_FORM.exec(goal)
+  if (!m || m[0].includes('?') || !m[0].includes(',')) return m
+  const head = m[0].slice(0, m[0].indexOf(','))
+  return QUESTION_HEAD.test(head) || firstSignal(head).verb ? m : null
+}
 // The earliest explicit verb decides; a noun signal counts only when no verb fired. Every match of a rule is
 // read, so a context noun ("The CSV is attached. Extract ...") does not hide a later verb of the same rule.
 function firstSignal(text) {
@@ -286,9 +312,8 @@ function firstSignal(text) {
     while ((m = all.exec(text))) {
       if (m[0] === '') { all.lastIndex++; continue }
       const word = m[0].trim()
-      // The sentinel keeps ^ from matching where the window was cut.
-      const before = m.index > CONTEXT_WINDOW ? '\u0000' + text.slice(m.index - CONTEXT_WINDOW, m.index) : text.slice(0, m.index)
-      if (NEGATED.test(before)) continue
+      if (prohibited(text, m.index)) continue
+      const before = contextBefore(text, m.index)
       const end = m.index + m[0].length
       const isNoun = NOUN_SIGNAL.test(word) && !SENTENCE_START.test(before) && !INFINITIVE_MARK.test(before) && !VERB_OBJECT.test(text.slice(end, end + CONTEXT_WINDOW))
       if (isNoun) { if (m.index < nounAt) { noun = id; nounAt = m.index }; continue }
@@ -308,14 +333,14 @@ function detect(b) {
   const goal = fold(b.goal).trim()
   // A question stays an answer, whatever verbs it contains; only an order after it ("How does it work? Fix the bug.")
   // is a task, and a style note ("Seja breve.") is not.
-  const question = QUESTION_FORM.exec(goal)
+  const question = isQuestion(goal)
   if (question) {
     let restAt = (text.length - text.trimStart().length) + question[0].length
     // Further questions ("Como instalar o Docker? Como configurar o nginx?") are still questions, not orders.
     for (;;) {
       const rest = text.slice(restAt)
       const pad = rest.length - rest.trimStart().length
-      const next = QUESTION_FORM.exec(rest.slice(pad))
+      const next = isQuestion(rest.slice(pad))
       if (!next) break
       restAt += pad + next[0].length
     }
@@ -713,8 +738,9 @@ const GENERATE_VERB = /^(gere|gerar|monte|montar)\b/
 // A question: the draft opens with a question word and its first sentence is a question (or one phrase without
 // punctuation, a plain period included; a period inside a name or version, "Node.js", "3.12", is not an end). The verbs
 // inside it ("Como instalar o Docker?") are what is asked about, not an order. A question may wrap onto the next
-// line ("How do I configure nginx\nwith TLS?"); a blank line ends it.
-const QUESTION_FORM = /^(?:como|o que|qual|quais|por que|porque|quando|onde|quem|quanto|how|what|why|which|who|when|where)\b(?:(?:[^.!?\n]|\.(?=\S)|\n(?!\s*\n))*\?|(?:[^.!?,\n]|\.(?=\S)|\n(?!\s*\n))*\.?\s*$)/
+// line ("How do I configure nginx\nwith TLS?") or carry a comma ("How do I configure nginx, with TLS."); a blank line
+// ends it, and so does a sentence mark, after which an order is a task ("What is Docker? Fix the login bug.").
+const QUESTION_FORM = /^(?:como|o que|qual|quais|por que|porque|quando|onde|quem|quanto|how|what|why|which|who|when|where)\b(?:(?:[^.!?\n]|\.(?=\S)|\n(?!\s*\n))*\?|(?:[^.!?\n]|\.(?=\S)|\n(?!\s*\n))*\.?\s*$)/
 // Languages: Portuguese (unaccented) + English.
 const DATA_NOUN = /\b(planilha|csv|xlsx|spreadsheet|dataset|dados|data|sql|tabela de vendas|metricas|metrics)\b/
 // Languages: Portuguese (unaccented) + English.
@@ -745,6 +771,12 @@ const VERB_OBJECT = /^\s+(?:the|a|an|our|my|your|this|these|those|all|each|every
 // A verb right after a negation (an adverb at most in between) is a prohibition, not the order ("do not run any
 // commands", "never ever deploy", "nao execute"). A reminder ("don't forget to review") still asks for the review.
 const NEGATED = /(?:^|[\s,;:(])(?:(?:do not|don't|dont|does not|doesn't|never|not|nao|nunca|jamais)(?:\s+(?:ever|even|just|simply|actually|really|ainda|mesmo|sequer|simplesmente))?|without|sem)\s*$/
+// The prohibition covers the verbs coordinated with the negated one ("do not build or deploy anything", "never
+// install, configure or deploy"): a coordinator or a list comma leads back to the previous word.
+const COORDINATED = /\b(\w+)\s*(?:,|,?\s+(?:or|nor|and|ou|nem|e))\s*$/
+// A mark-less question may carry a comma only when what precedes the comma already reads as a question ("How do
+// I configure nginx, with TLS."): a role opener ("Como especialista em redes, escreva ...") is not one.
+const QUESTION_HEAD = /\b(?:do|does|did|can|could|should|would|will|may|might|is|are|was|were|am|have|has|posso|devo|consigo|faco|funciona|funcionam|deveria|poderia|sao|esta|estao|ha)\b/
 // Only this many characters around a match are inspected, so the scan stays linear on long drafts; the prefixes
 // NEGATED and SENTENCE_START look for are far shorter than this.
 const CONTEXT_WINDOW = 120
@@ -753,6 +785,25 @@ const CONTEXT_WINDOW = 120
 // participle ("email announcing the app", "script that sends an e-mail", "app de blog") means the first word is the
 // artifact asked for. Nouns in -ing that name a field (marketing, landing, onboarding, billing) stay modifiers.
 const MODIFIER_GAP = /^\s+(?:(?!(?:that|which|who|to|for|of|on|about|with|and|or|in|by|que|para|de|do|da|dos|das|sobre|com|e|ou|em|no|na|por)\b)(?!(?!(?:marketing|landing|onboarding|billing)\b)\w+(?:ing|ndo)\b)\w+\s+){0,2}$/
+function contextBefore(text, at) {
+  // The sentinel keeps ^ from matching where the window was cut.
+  return at > CONTEXT_WINDOW ? '\u0000' + text.slice(at - CONTEXT_WINDOW, at) : text.slice(0, at)
+}
+// A verb is prohibited when a negation precedes it, or precedes a word it is coordinated with ("do not build or
+// deploy", "never install, configure or deploy"); the walk back is bounded.
+function prohibited(text, at, hops = 0) {
+  const before = contextBefore(text, at)
+  if (NEGATED.test(before)) return true
+  const chain = hops < 5 && COORDINATED.exec(before)
+  return chain ? prohibited(text, at - before.length + chain.index, hops + 1) : false
+}
+// The question form, unless its comma follows something that is not a question ("Como especialista, escreva").
+function isQuestion(goal) {
+  const m = QUESTION_FORM.exec(goal)
+  if (!m || m[0].includes('?') || !m[0].includes(',')) return m
+  const head = m[0].slice(0, m[0].indexOf(','))
+  return QUESTION_HEAD.test(head) || firstSignal(head).verb ? m : null
+}
 // The earliest explicit verb decides; a noun signal counts only when no verb fired. Every match of a rule is
 // read, so a context noun ("The CSV is attached. Extract ...") does not hide a later verb of the same rule.
 function firstSignal(text) {
@@ -766,9 +817,8 @@ function firstSignal(text) {
     while ((m = all.exec(text))) {
       if (m[0] === '') { all.lastIndex++; continue }
       const word = m[0].trim()
-      // The sentinel keeps ^ from matching where the window was cut.
-      const before = m.index > CONTEXT_WINDOW ? '\u0000' + text.slice(m.index - CONTEXT_WINDOW, m.index) : text.slice(0, m.index)
-      if (NEGATED.test(before)) continue
+      if (prohibited(text, m.index)) continue
+      const before = contextBefore(text, m.index)
       const end = m.index + m[0].length
       const isNoun = NOUN_SIGNAL.test(word) && !SENTENCE_START.test(before) && !INFINITIVE_MARK.test(before) && !VERB_OBJECT.test(text.slice(end, end + CONTEXT_WINDOW))
       if (isNoun) { if (m.index < nounAt) { noun = id; nounAt = m.index }; continue }
@@ -785,14 +835,14 @@ function detect(goal, requirements) {
   let { signal: kind, at } = firstSignal(text)
   // A question stays an answer, whatever verbs it contains; only an order after it ("How does it work? Fix the bug.")
   // is a task, and a style note ("Seja breve.") is not.
-  const question = QUESTION_FORM.exec(fold(goal).trim())
+  const question = isQuestion(fold(goal).trim())
   if (question) {
     let restAt = (text.length - text.trimStart().length) + question[0].length
     // Further questions ("Como instalar o Docker? Como configurar o nginx?") are still questions, not orders.
     for (;;) {
       const rest = text.slice(restAt)
       const pad = rest.length - rest.trimStart().length
-      const next = QUESTION_FORM.exec(rest.slice(pad))
+      const next = isQuestion(rest.slice(pad))
       if (!next) break
       restAt += pad + next[0].length
     }
@@ -888,7 +938,7 @@ const DELIVERABLE_LINES = {
 function buildSafe(brief) {
   const b = read(brief)
   const { deliverable, conflicts } = analyzeSafe(b)
-  const chosen = pick(b.deliverable, DELIVERABLES, 'auto') !== 'auto' && deliverable !== detect(b.goal).resolved
+  const chosen = pick(b.deliverable, DELIVERABLES, 'auto') !== 'auto' && deliverable !== detect(b.goal, b.requirements).resolved
   const autonomy = pick(b.autonomy, AUTONOMIES, 'balanced')
   const format = pick(b.format, FORMATS, 'auto')
   const length = pick(b.length, LENGTHS, 'balanced')
@@ -1251,8 +1301,9 @@ const GENERATE_VERB = /^(gere|gerar|monte|montar)\b/
 // A question: the draft opens with a question word and its first sentence is a question (or one phrase without
 // punctuation, a plain period included; a period inside a name or version, "Node.js", "3.12", is not an end). The verbs
 // inside it ("Como instalar o Docker?") are what is asked about, not an order. A question may wrap onto the next
-// line ("How do I configure nginx\nwith TLS?"); a blank line ends it.
-const QUESTION_FORM = /^(?:como|o que|qual|quais|por que|porque|quando|onde|quem|quanto|how|what|why|which|who|when|where)\b(?:(?:[^.!?\n]|\.(?=\S)|\n(?!\s*\n))*\?|(?:[^.!?,\n]|\.(?=\S)|\n(?!\s*\n))*\.?\s*$)/
+// line ("How do I configure nginx\nwith TLS?") or carry a comma ("How do I configure nginx, with TLS."); a blank line
+// ends it, and so does a sentence mark, after which an order is a task ("What is Docker? Fix the login bug.").
+const QUESTION_FORM = /^(?:como|o que|qual|quais|por que|porque|quando|onde|quem|quanto|how|what|why|which|who|when|where)\b(?:(?:[^.!?\n]|\.(?=\S)|\n(?!\s*\n))*\?|(?:[^.!?\n]|\.(?=\S)|\n(?!\s*\n))*\.?\s*$)/
 // Languages: Portuguese (unaccented) + English.
 // "Analise a planilha" stays a data task: the analysis verb with a data file as its subject.
 const DATA_NOUN = /\b(planilhas?|csv|datasets?|spreadsheets?)\b/
@@ -1289,6 +1340,12 @@ const VERB_OBJECT = /^\s+(?:the|a|an|our|my|your|this|these|those|all|each|every
 // A verb right after a negation (an adverb at most in between) is a prohibition, not the order ("do not run any
 // commands", "never ever deploy", "nao execute"). A reminder ("don't forget to review") still asks for the review.
 const NEGATED = /(?:^|[\s,;:(])(?:(?:do not|don't|dont|does not|doesn't|never|not|nao|nunca|jamais)(?:\s+(?:ever|even|just|simply|actually|really|ainda|mesmo|sequer|simplesmente))?|without|sem)\s*$/
+// The prohibition covers the verbs coordinated with the negated one ("do not build or deploy anything", "never
+// install, configure or deploy"): a coordinator or a list comma leads back to the previous word.
+const COORDINATED = /\b(\w+)\s*(?:,|,?\s+(?:or|nor|and|ou|nem|e))\s*$/
+// A mark-less question may carry a comma only when what precedes the comma already reads as a question ("How do
+// I configure nginx, with TLS."): a role opener ("Como especialista em redes, escreva ...") is not one.
+const QUESTION_HEAD = /\b(?:do|does|did|can|could|should|would|will|may|might|is|are|was|were|am|have|has|posso|devo|consigo|faco|funciona|funcionam|deveria|poderia|sao|esta|estao|ha)\b/
 // Only this many characters around a match are inspected, so the scan stays linear on long drafts; the prefixes
 // NEGATED and SENTENCE_START look for are far shorter than this.
 const CONTEXT_WINDOW = 120
@@ -1297,6 +1354,25 @@ const CONTEXT_WINDOW = 120
 // participle ("email announcing the app", "script that sends an e-mail", "app de blog") means the first word is the
 // artifact asked for. Nouns in -ing that name a field (marketing, landing, onboarding, billing) stay modifiers.
 const MODIFIER_GAP = /^\s+(?:(?!(?:that|which|who|to|for|of|on|about|with|and|or|in|by|que|para|de|do|da|dos|das|sobre|com|e|ou|em|no|na|por)\b)(?!(?!(?:marketing|landing|onboarding|billing)\b)\w+(?:ing|ndo)\b)\w+\s+){0,2}$/
+function contextBefore(text, at) {
+  // The sentinel keeps ^ from matching where the window was cut.
+  return at > CONTEXT_WINDOW ? '\u0000' + text.slice(at - CONTEXT_WINDOW, at) : text.slice(0, at)
+}
+// A verb is prohibited when a negation precedes it, or precedes a word it is coordinated with ("do not build or
+// deploy", "never install, configure or deploy"); the walk back is bounded.
+function prohibited(text, at, hops = 0) {
+  const before = contextBefore(text, at)
+  if (NEGATED.test(before)) return true
+  const chain = hops < 5 && COORDINATED.exec(before)
+  return chain ? prohibited(text, at - before.length + chain.index, hops + 1) : false
+}
+// The question form, unless its comma follows something that is not a question ("Como especialista, escreva").
+function isQuestion(goal) {
+  const m = QUESTION_FORM.exec(goal)
+  if (!m || m[0].includes('?') || !m[0].includes(',')) return m
+  const head = m[0].slice(0, m[0].indexOf(','))
+  return QUESTION_HEAD.test(head) || firstSignal(head).verb ? m : null
+}
 // The earliest explicit verb decides; a noun signal counts only when no verb fired. Every match of a rule is
 // read, so a context noun ("The CSV is attached. Extract ...") does not hide a later verb of the same rule.
 function firstSignal(text) {
@@ -1310,9 +1386,8 @@ function firstSignal(text) {
     while ((m = all.exec(text))) {
       if (m[0] === '') { all.lastIndex++; continue }
       const word = m[0].trim()
-      // The sentinel keeps ^ from matching where the window was cut.
-      const before = m.index > CONTEXT_WINDOW ? '\u0000' + text.slice(m.index - CONTEXT_WINDOW, m.index) : text.slice(0, m.index)
-      if (NEGATED.test(before)) continue
+      if (prohibited(text, m.index)) continue
+      const before = contextBefore(text, m.index)
       const end = m.index + m[0].length
       const isNoun = NOUN_SIGNAL.test(word) && !SENTENCE_START.test(before) && !INFINITIVE_MARK.test(before) && !VERB_OBJECT.test(text.slice(end, end + CONTEXT_WINDOW))
       if (isNoun) { if (m.index < nounAt) { noun = id; nounAt = m.index }; continue }
@@ -1332,14 +1407,14 @@ function detect(b) {
   const goal = fold(b.goal).trim()
   // A question stays an answer, whatever verbs it contains; only an order after it ("How does it work? Fix the bug.")
   // is a task, and a style note ("Seja breve.") is not.
-  const question = QUESTION_FORM.exec(goal)
+  const question = isQuestion(goal)
   if (question) {
     let restAt = (text.length - text.trimStart().length) + question[0].length
     // Further questions ("Como instalar o Docker? Como configurar o nginx?") are still questions, not orders.
     for (;;) {
       const rest = text.slice(restAt)
       const pad = rest.length - rest.trimStart().length
-      const next = QUESTION_FORM.exec(rest.slice(pad))
+      const next = isQuestion(rest.slice(pad))
       if (!next) break
       restAt += pad + next[0].length
     }
