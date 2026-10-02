@@ -2,12 +2,15 @@
 """Black-box checks for Prompt Studio's distributable installer."""
 from __future__ import annotations
 
+import ast
+import importlib.util
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 
 import yaml
 from pathlib import Path
@@ -289,6 +292,7 @@ class InstallerTests(unittest.TestCase):
             self.assertFalse(home.exists())
 
 @NOT_ON_WINDOWS
+@unittest.skipUnless(REAL_HERMES.exists(), "requires the real hermes CLI")
 class InstallerDefaultInstallTests(unittest.TestCase):
     """Read-only checks on ONE default install (shared via setUpClass; CT-09).
 
@@ -364,6 +368,26 @@ class InstallerArgumentTests(unittest.TestCase):
             self.assertIn("[ERROR]", result.stderr)
             self.assertIn("--home", result.stderr)
             self.assertFalse((root / "h").exists())
+
+
+class RealHermesSkipTests(unittest.TestCase):
+    """A machine without the real hermes CLI (a CI runner) must skip, not fail, every class that installs with it."""
+
+    def test_every_class_that_uses_the_real_hermes_is_skipped_when_it_is_absent(self) -> None:
+        path = Path(__file__).resolve()
+        # Import a fresh copy of this module as if hermes were not installed: the skip decorators are evaluated on import.
+        specification = importlib.util.spec_from_file_location("installer_without_hermes", path)
+        assert specification is not None and specification.loader is not None
+        module = importlib.util.module_from_spec(specification)
+        with unittest.mock.patch("shutil.which", return_value=None), \
+                unittest.mock.patch.object(Path, "exists", lambda self, *a, **k: False):
+            specification.loader.exec_module(module)
+        users = [node.name for node in ast.parse(path.read_text(encoding="utf-8")).body
+                 if isinstance(node, ast.ClassDef) and node.name != type(self).__name__
+                 and any(isinstance(inner, ast.Name) and inner.id == "REAL_HERMES" for inner in ast.walk(node))]
+        self.assertGreaterEqual(len(users), 2, users)
+        unskipped = [name for name in users if not getattr(getattr(module, name), "__unittest_skip__", False)]
+        self.assertEqual(unskipped, [], "these classes use REAL_HERMES but run without it")
 
 
 if __name__ == "__main__":
