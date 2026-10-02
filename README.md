@@ -199,10 +199,9 @@ Keys and scope:
   answer never triggers the app's composer.
 - **Alt:** either Alt key works, except where the right Alt is AltGr (some layouts), which does not trigger the
   shortcuts. Alt+digits follow the physical number row, whatever the keyboard layout.
-- **Apple keyboards:** to skip fn, open with ⌘⇧E and drive the flow with the Option (⌥) twins above (⌥Y, ⌥K, ⌥L,
-  ⌥B, ⌥G, ⌥X); or press fn with the F-keys (F4 is fn+F4) unless *Use F1, F2, etc. keys as standard function keys* is
-  on in macOS Keyboard settings. On a Mac the key caps and the F1 list show ⌥E, ⇧ and "fn F4" instead of Alt+E,
-  Shift and F4. Alt shortcuts follow the physical key, so ⌥E, ⌥N and ⌥I still work although macOS would start an
+- **Apple keyboards:** the F-keys are shown as plain F4, F9 and so on; whether your Mac needs fn for them is your
+  macOS Keyboard setting. The Option (⌥) twins above (⌥Y, ⌥K, ⌥L, ⌥B, ⌥G, ⌥X) and ⌘⇧E work without any F-key. On a
+  Mac the key caps and the F1 list show ⌥E and ⇧ instead of Alt+E and Shift. Alt shortcuts follow the physical key, so ⌥E, ⌥N and ⌥I still work although macOS would start an
   accent (a dead key) there; a real input-method composition, with no Alt chord, is still left alone.
 - **Conflicts checked:** these keys were checked against Hermes Desktop's own bindings and the Linux Mint
   (Cinnamon) desktop, which uses only Alt with the F-keys.

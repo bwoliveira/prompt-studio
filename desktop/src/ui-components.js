@@ -55,7 +55,8 @@ const digitCombo = (action, n) => SHORTCUTS[action].replace('1…9', String(n))
 // What the F1 list prints for an entry: the combo, or the three target combos joined.
 const shortcutLabel = value => (typeof value === 'string' ? value : Object.values(value).join(' / '))
 
-// Mac keyboards: Alt is the Option key (⌥), Shift is ⇧ and the F-keys need fn. Read when drawn, with the
+// Mac keyboards: Alt is the Option key (⌥) and Shift is ⇧; F-keys show as themselves (whether they need fn is the
+// Mac's own keyboard setting). Read when drawn, with the
 // same rule as the Desktop (userAgentData, then navigator.platform, then the user agent).
 const isMacPlatform = () => typeof navigator !== 'undefined' && /mac/i.test(navigator.userAgentData?.platform || navigator.platform || navigator.userAgent || '')
 const MAC_MODIFIERS = { alt: '⌥', shift: '⇧', ctrl: '⌃', mod: '⌘' }
@@ -67,7 +68,7 @@ function modifierGlyph(name) {
   return /^[⌘⌃⌥⇧]$/.test(sdk) ? sdk : MAC_MODIFIERS[key] ?? name
 }
 // How a combo of the map is shown to the user: as is, except on a Mac, where 'Alt+Shift+1…9' reads ⌥⇧1…9 and
-// 'F4' reads fn F4 (the three target combos stay joined with ' / '). Attributes and tooltips' machine
+// 'F4' stays F4 (the three target combos stay joined with ' / '). Attributes and tooltips' machine
 // readers keep the canonical combo.
 function displayCombo(combo) {
   if (!isMacPlatform()) return combo
@@ -75,7 +76,7 @@ function displayCombo(combo) {
     const parts = one.split('+')
     const base = parts.pop()
     if (!parts.length && MAC_MODIFIERS[base.toLowerCase()]) return modifierGlyph(base)
-    return /^F\d+$/.test(base) ? `fn ${base}` : parts.map(modifierGlyph).join('') + base
+    return /^F\d+$/.test(base) ? base : parts.map(modifierGlyph).join('') + base
   }).join(' / ')
 }
 // The Alt+letter that doubles a F-key combo, if there is one (F9 -> Alt+G).

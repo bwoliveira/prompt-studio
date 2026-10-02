@@ -4,6 +4,9 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
 
 ## Unreleased
 
+- Mac key caps: F-keys now read as plain F4, F9 and so on, on the controls, tooltips, notices and in the F1 list, instead
+  of "fn F4"; the F1 Mac note no longer tells you to press fn. Whether a Mac needs fn for the F-keys is its own keyboard
+  setting. The Option (⌥) twins and ⌘⇧E are unchanged.
 - Feature: Prompt Studio opens without an F-key. It adds a binding to Hermes Desktop's keybinds area, **Ctrl+Shift+E**
   (**⌘⇧E** on a Mac), which you can reassign in Desktop's settings; its default is a chord none of Desktop's own
   actions uses, and it runs the same opening as F4 (an empty or short draft and a missing message field are reported
