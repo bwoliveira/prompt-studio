@@ -255,8 +255,10 @@ const GENERATE_VERB = /^(gere|gerar|monte|montar)\b/
 // punctuation, a plain period included; a period inside a name or version, "Node.js", "3.12", is not an end). The verbs
 // inside it ("Como instalar o Docker?") are what is asked about, not an order. A question may wrap onto the next
 // line ("How do I configure nginx\nwith TLS?") or carry a comma ("How do I configure nginx, with TLS."); a blank line
-// ends it, and so does a sentence mark, after which an order is a task ("What is Docker? Fix the login bug.").
-const QUESTION_FORM = /^(?:como|o que|qual|quais|por que|porque|quando|onde|quem|quanto|how|what|why|which|who|when|where)\b(?:(?:[^.!?\n]|\.(?=\S)|\n(?!\s*\n))*\?|(?:[^.!?\n]|\.(?=\S)|\n(?!\s*\n))*\.?\s*$)/
+// ends it, and so does a sentence mark or a period followed by a space ("How do I configure nginx. Be brief."), after
+// which an order is a task ("What is Docker? Fix the login bug."). The scan is linear: no part of the form may
+// re-consume whitespace another part accepted, or a long run of spaces before a stray mark backtracks quadratically.
+const QUESTION_FORM = /^(?:como|o que|qual|quais|por que|porque|quando|onde|quem|quanto|how|what|why|which|who|when|where)\b(?:(?:[^.!?\n]|\.(?=\S)|\n(?![ \t]*\n))*\?|(?:[^.!?\n]|\.(?=\S)|\n(?![ \t]*\n))*(?:\.(?!\S)|$))/
 // Languages: Portuguese (unaccented) + English.
 // "Analise a planilha" stays a data task: the analysis verb with a data file as its subject.
 const DATA_NOUN = /\b(planilhas?|csv|datasets?|spreadsheets?)\b/
@@ -322,7 +324,7 @@ function prohibited(text, at, hops = 0) {
 // Languages: Portuguese (unaccented) + English.
 // A yes/no question, closed by its mark ("Can I configure nginx?", "Posso reiniciar o servidor?"). "Can you ..." and
 // "Voce pode ..." are requests, not questions, unless they ask what the reader thinks or knows.
-const YESNO_FORM = /^(?:(?:can|could|should|would|will|may|might|shall|must|do|does|did|is|are|was|were|am|have|has|posso|podemos|devo|devemos|consigo|conseguimos|preciso|precisamos|existe|existem|ha|tem como|da para|e possivel|e preciso|e necessario|e seguro|e melhor|sera que|vale)(?!\s+(?:you|voce|voces)\b(?!\s+(?:think|know|believe|recommend|suggest|mean|see|acha|sabe|recomenda|sugere|conhece)\b)))\b(?:[^?!\n]|\n(?!\s*\n))*\?/
+const YESNO_FORM = /^(?:(?:can|could|should|would|will|may|might|shall|must|do|does|did|is|are|was|were|am|have|has|posso|podemos|devo|devemos|consigo|conseguimos|preciso|precisamos|existe|existem|ha|tem como|da para|e possivel|e preciso|e necessario|e seguro|e melhor|sera que|vale)(?!\s+(?:you|voce|voces)\b(?!\s+(?:think|know|believe|recommend|suggest|mean|see|acha|sabe|recomenda|sugere|conhece)\b)))\b(?:[^?!\n]|\n(?![ \t]*\n))*\?/
 // The question form, unless its comma follows something that is not a question ("Como especialista, escreva").
 function isQuestion(goal) {
   const yesNo = YESNO_FORM.exec(goal)

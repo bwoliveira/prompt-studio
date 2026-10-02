@@ -247,6 +247,12 @@ const TABLE = [
   ['Você pode configurar o nginx?', 'workflow', 'near miss: pt request'],
   ['What is Docker? Can you configure nginx?', 'workflow', 'near miss: a request after the question'],
   ['Can I install Docker here? Then configure nginx.', 'workflow', 'near miss: an order after the yes/no question'],
+  // a period closes the question; what follows is read on its own (Codex P1)
+  ['How do I configure nginx. Be brief.', 'answer', 'period-closed question, then a style note'],
+  ['Como instalar o Docker. Seja breve.', 'answer', 'pt'],
+  ['How do I configure nginx. Can I do it without downtime?', 'answer', 'period-closed question, then a yes/no one'],
+  ['How do I install Docker. Then configure nginx.', 'workflow', 'near miss: an order after the period'],
+  ['How do I configure nginx!', 'workflow', 'near miss: an exclamation is not a question close (unchanged)'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
@@ -266,6 +272,18 @@ test('draft recognition: a long draft full of context nouns is analysed in linea
     // this test guards is the time, not the deliverable.
     assert.ok(typeof out.deliverable === 'string', id)
     assert.ok(took < 1500, `${id}: analyze took ${Math.round(took)} ms on a 210k-character draft`)
+  }
+})
+
+test('draft recognition: a question form that fails on a long run of spaces is still linear on every engine (Codex P2)', () => {
+  for (const goal of ['How do I configure nginx' + ' '.repeat(128000) + '!', 'Can I configure nginx' + ' '.repeat(128000) + '!', 'How do I configure nginx' + '\n '.repeat(64000) + '!']) {
+    for (const [id, engine] of Object.entries(ENGINES)) {
+      const started = performance.now()
+      const out = engine.analyze({ goal })
+      const took = performance.now() - started
+      assert.ok(typeof out.deliverable === 'string', id)
+      assert.ok(took < 1500, `${id}: analyze took ${Math.round(took)} ms on a ${goal.length}-character draft`)
+    }
   }
 })
 
