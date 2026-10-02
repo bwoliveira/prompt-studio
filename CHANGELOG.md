@@ -12,6 +12,10 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
 - Fix: a thinking block the model never closed (cut off by the token limit) no longer leaks its JSON into the
   suggestion, and a reply made of several parts keeps only the text parts, never the thinking parts. Both are
   treated as an empty reply.
+- Fix: `./install.sh` run from inside the installed plugin folder (the layout `hermes plugins install` leaves) deleted
+  the plugin it was installing. It now sees that source and destination are the same, skips the copy with a message
+  and keeps every file. Any other install is staged in a sibling folder and swapped in with `mv`, so a copy that
+  fails leaves the previous install intact.
 - New target: **Claude Sonnet 5.5** (Alt+T, or pick **Sonnet**), next to Opus and Astra. It has its own prompt engine,
   question help and AI writer rules from Anthropic's Sonnet 5.5 prompting guide, and is the default when the
   session's model is a Sonnet. Opus and Astra prompts do not change.

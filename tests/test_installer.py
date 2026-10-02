@@ -166,6 +166,77 @@ class InstallerTests(unittest.TestCase):
             self.assertEqual(first, second)
             self.assertEqual(second["plugins"]["enabled"].count("prompt-studio"), 1)
 
+    def install_into_home(self, home: Path) -> Path:
+        """Lay the whole repo out as `hermes plugins install` does: home/plugins/prompt-studio."""
+        installed = home / "plugins/prompt-studio"
+        shutil.copytree(REPO, installed, ignore=shutil.ignore_patterns(".git", "__pycache__", ".pytest_cache", "assets"))
+        return installed
+
+    def snapshot(self, directory: Path) -> dict[str, bytes]:
+        return {str(p.relative_to(directory)): p.read_bytes() for p in sorted(directory.rglob("*")) if p.is_file()}
+
+    def test_running_from_the_installed_plugin_directory_keeps_every_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary) / "tmp_home"
+            installed = self.install_into_home(home)
+            before = self.snapshot(installed)
+            result = self.run_install(installed, home, REAL_HERMES)
+            self.assert_ok(result)
+            self.assertIn("already installed here", result.stdout)
+            self.assertEqual(self.snapshot(installed), before)
+            self.assertIn("prompt-studio", load_config(home)["plugins"]["enabled"])
+            self.assertEqual(sorted(p.name for p in installed.parent.iterdir()), ["prompt-studio"])
+
+    def test_running_through_a_symlink_to_the_installed_directory_keeps_every_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            home = root / "tmp_home"
+            installed = self.install_into_home(home)
+            link = root / "link"
+            link.symlink_to(installed)
+            before = self.snapshot(installed)
+            self.assert_ok(self.run_install(link, home, REAL_HERMES))
+            self.assertEqual(self.snapshot(installed), before)
+
+    def test_failed_copy_leaves_the_previous_install_intact(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            home = root / "tmp_home"
+            source = copy_repo(root)
+            previous = home / "plugins/prompt-studio"
+            (previous / "dashboard").mkdir(parents=True)
+            (previous / "plugin.yaml").write_text("name: old\n", encoding="utf-8")
+            (previous / "dashboard/old.py").write_text("OLD = 1\n", encoding="utf-8")
+            before = self.snapshot(previous)
+            shim = root / "shim"
+            shim.mkdir()
+            cp = shim / "cp"
+            cp.write_text(
+                f'#!/usr/bin/env bash\ncase "$*" in *desktop/plugin.js*) echo "simulated cp failure" >&2; exit 1;; esac\n'
+                f'exec {shutil.which("cp")} "$@"\n', encoding="utf-8")
+            cp.chmod(0o755)
+            environment = os.environ.copy()
+            environment.update({"PYTHON_BIN": str(PYTHON), "HERMES_BIN": str(REAL_HERMES), "HERMES_HOME": str(home),
+                                "PATH": f"{shim}{os.pathsep}{environment['PATH']}"})
+            result = subprocess.run(["bash", "install.sh", "--home", str(home)], cwd=source, env=environment,
+                                    text=True, capture_output=True, check=False)
+            self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(self.snapshot(previous), before)
+            self.assertEqual(sorted(p.name for p in previous.parent.iterdir()), ["prompt-studio"], "no staging leftovers")
+
+    def test_reinstall_replaces_files_and_leaves_no_staging_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            home = root / "tmp_home"
+            source = copy_repo(root)
+            self.assert_ok(self.run_install(source, home, REAL_HERMES))
+            stale = home / "plugins/prompt-studio/stale.txt"
+            stale.write_text("leftover", encoding="utf-8")
+            self.assert_ok(self.run_install(source, home, REAL_HERMES))
+            self.assertFalse(stale.exists())
+            self.assertTrue((home / "plugins/prompt-studio/desktop/plugin.js").is_file())
+            self.assertEqual(sorted(p.name for p in (home / "plugins").iterdir()), ["prompt-studio"])
+
     def test_missing_hermes_cli_fails_clearly(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

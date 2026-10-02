@@ -51,7 +51,7 @@ if [[ "$PROFILE_GIVEN" == 1 ]] && ! [[ "$PROFILE" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ 
   echo "[ERROR] Invalid profile name '$PROFILE': use lowercase letters, numbers, '-' or '_', starting with a letter or number, up to 64 characters" >&2; exit 2
 fi
 
-SOURCE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SOURCE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 if [[ ! -f "$SOURCE/plugin.yaml" || ! -f "$SOURCE/scripts/validate_install.py" ]]; then
   echo "[ERROR] Run install.sh from a Prompt Studio checkout (plugin.yaml not found beside the script)" >&2
   exit 1
@@ -75,12 +75,32 @@ if [[ -n "$PROFILE" ]]; then TARGET_HOME="$BASE_HOME/profiles/$PROFILE"; fi
 # and writes its own .hermes-package.json marker, so this script never touches desktop-plugins/.
 PLUGIN_DIR="$TARGET_HOME/plugins/prompt-studio"
 LEGACY_DESKTOP_DIR="$TARGET_HOME/desktop-plugins/prompt-studio"
-rm -rf "$PLUGIN_DIR"
-mkdir -p "$PLUGIN_DIR/dashboard" "$PLUGIN_DIR/desktop"
-# Only the shipped files: a local __pycache__ or test leftovers never reach the target home.
-cp "$SOURCE/__init__.py" "$SOURCE/plugin.yaml" "$PLUGIN_DIR/"
-cp "$SOURCE"/dashboard/*.py "$SOURCE/dashboard/manifest.json" "$PLUGIN_DIR/dashboard/"
-cp "$SOURCE/desktop/plugin.js" "$PLUGIN_DIR/desktop/plugin.js"
+# Running this script from inside the installed plugin (the layout `hermes plugins install` leaves)
+# means source and destination are the same folder: copying would delete the source first.
+INSTALLED_REAL=""
+if [[ -d "$PLUGIN_DIR" ]]; then INSTALLED_REAL="$(cd -P "$PLUGIN_DIR" && pwd -P)"; fi
+if [[ "$INSTALLED_REAL" == "$SOURCE" ]]; then
+  echo "[OK] prompt-studio is already installed here ($PLUGIN_DIR); nothing to copy, registering only"
+else
+  # Stage next to the target, then swap with mv: a failed copy never touches the previous install.
+  STAGE_DIR="$PLUGIN_DIR.new"
+  OLD_DIR="$PLUGIN_DIR.old"
+  trap 'rm -rf "$STAGE_DIR"' EXIT
+  rm -rf "$STAGE_DIR" "$OLD_DIR"
+  mkdir -p "$STAGE_DIR/dashboard" "$STAGE_DIR/desktop"
+  # Only the shipped files: a local __pycache__ or test leftovers never reach the target home.
+  cp "$SOURCE/__init__.py" "$SOURCE/plugin.yaml" "$STAGE_DIR/"
+  cp "$SOURCE"/dashboard/*.py "$SOURCE/dashboard/manifest.json" "$STAGE_DIR/dashboard/"
+  cp "$SOURCE/desktop/plugin.js" "$STAGE_DIR/desktop/plugin.js"
+  if [[ -e "$PLUGIN_DIR" || -L "$PLUGIN_DIR" ]]; then mv "$PLUGIN_DIR" "$OLD_DIR"; fi
+  if ! mv "$STAGE_DIR" "$PLUGIN_DIR"; then
+    if [[ -e "$OLD_DIR" || -L "$OLD_DIR" ]]; then mv "$OLD_DIR" "$PLUGIN_DIR" || true; fi
+    echo "[ERROR] could not move the new install into $PLUGIN_DIR; the previous install was kept" >&2
+    exit 1
+  fi
+  trap - EXIT
+  rm -rf "$OLD_DIR"
+fi
 
 # Earlier versions of this script wrote desktop-plugins/prompt-studio/ with a {name,version,main}
 # marker. Electron's marker always has `package`; only remove the folder when the marker is ours.

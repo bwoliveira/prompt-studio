@@ -83,7 +83,9 @@ cd prompt-studio
 `--home` and `--profile` cannot be used together. The script checks the manifest and the Hermes version,
 copies the package (with its desktop half) into `plugins/prompt-studio/`, and changes configuration only
 through the `hermes` CLI (`hermes plugins enable`, `hermes config set`). It is safe to re-run; run it again
-after `git pull` to update.
+after `git pull` to update. Run from inside the installed folder itself (where `hermes plugins install` puts
+it), it skips the copy, says so, and only registers the plugin; a copy that fails midway leaves the previous
+install as it was.
 
 ## Usage
 
