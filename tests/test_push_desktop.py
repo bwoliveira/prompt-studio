@@ -327,6 +327,27 @@ class PushDesktopTests(unittest.TestCase):
         self.assertEqual((target / "notes.txt").read_text(encoding="utf-8"), "keep me\n", "other files are left alone")
         self.assertIn("[OK]", result.stdout)
 
+    def test_the_marker_goes_only_after_the_new_file_is_in_place(self) -> None:
+        """A Desktop rescan between the two steps must never see the OLD plugin.js without its marker: if that file
+        equals the local package's, Desktop stamps the marker back and the conversion is undone. Review round 2, P2."""
+        shim = self.bin / "rm"
+        shim.write_text(
+            "#!/usr/bin/env bash\n"
+            "for a in \"$@\"; do\n"
+            "  case \"$a\" in *" + MARKER + ") cp \"$(dirname \"$a\")/plugin.js\" \"$FAKE_SSH_LOG.atmarker\" ;; esac\n"
+            "done\n"
+            "exec /bin/rm \"$@\"\n",
+            encoding="utf-8",
+        )
+        shim.chmod(0o755)
+        app, target, _ = self.managed_target()
+        result = self.run_script("me@laptop", "--dir", str(app), "--replace-managed", mode="run")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        seen = Path(str(self.log) + ".atmarker")
+        self.assertTrue(seen.exists(), "the marker was removed through rm")
+        self.assertEqual(seen.read_bytes(), self.source.read_bytes(), "plugin.js is already the new file when the marker goes")
+        self.assertFalse((target / MARKER).exists())
+
     def test_replace_managed_on_an_unmarked_folder_is_a_plain_push(self) -> None:
         result = self.run_script("me@laptop", "--replace-managed", mode="run")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

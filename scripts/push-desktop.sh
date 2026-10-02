@@ -105,7 +105,10 @@ REMOTE_SCRIPT+='; t="$d/.plugin.js.$$"; trap '"'"'rm -f "$t"'"'"' EXIT; cat > "$
 # A prompt-studio package installed locally on the app machine (its Hermes home, or a profile's) with the very bytes
 # being pushed: Desktop's reconcile would adopt the folder (stamp the marker back) and delete it with the package.
 REMOTE_SCRIPT+='; h=$(dirname "$(dirname "$d")"); for p in "$h"/plugins/prompt-studio/desktop/plugin.js "$h"/profiles/*/plugins/prompt-studio/desktop/plugin.js; do if [ -f "$p" ] && cmp -s "$t" "$p"; then exit 6; fi; done'
-REMOTE_SCRIPT+='; if [ "$rm_marker" = 1 ]; then rm -f "$m"; fi; mv -f "$t" "$d/plugin.js"; [ -f "$d/plugin.js" ] && [ "$(cksum < "$d/plugin.js")" = "$sum" ] || exit 5'
+# The new file goes in BEFORE the marker is removed: Desktop may rescan at any moment, and the old plugin.js without
+# its marker could match the local package's and be adopted again. The final check also catches a folder Desktop
+# deleted in between.
+REMOTE_SCRIPT+='; mv -f "$t" "$d/plugin.js"; if [ "$rm_marker" = 1 ]; then rm -f "$m"; fi; [ -f "$d/plugin.js" ] && [ "$(cksum < "$d/plugin.js")" = "$sum" ] || exit 5'
 REMOTE_COMMAND="sh -c $(shq "$REMOTE_SCRIPT")"
 
 if [[ "$DRY_RUN" == 1 ]]; then
