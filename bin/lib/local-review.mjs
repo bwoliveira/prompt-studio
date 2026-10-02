@@ -89,19 +89,22 @@ function git(...args) {
 // The branch pull requests go into: BASE_BRANCH, else the current default branch of origin, else main. origin is
 // asked first: the cached origin/HEAD is not refreshed by a fetch and stays on the old branch after the repository
 // changes its default (main -> trunk), so it only serves when origin cannot be reached.
-export function resolveBaseBranch(env = process.env) {
+export function resolveBaseBranch(env = process.env, { remoteTimeoutMs = 20000 } = {}) {
   if (env.BASE_BRANCH && env.BASE_BRANCH.trim()) return env.BASE_BRANCH.trim();
-  try {
-    const ls = sh('git', ['ls-remote', '--symref', 'origin', 'HEAD'], { timeout: 20000 });
+  // Each lookup fails on its own: a query to origin that errors or times out still leaves the cached origin/HEAD.
+  const attempt = (lookup) => { try { return lookup(); } catch { return null; } };
+  const current = attempt(() => {
+    const ls = sh('git', ['ls-remote', '--symref', 'origin', 'HEAD'], { timeout: remoteTimeoutMs });
     const m = ls.status === 0 && /^ref: refs\/heads\/(\S+)\s+HEAD$/m.exec(ls.stdout);
-    if (m) return m[1];
+    return m ? m[1] : null;
+  });
+  if (current) return current;
+  const cached = attempt(() => {
     const sym = sh('git', ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD']);
     const ref = sym.stdout.trim();
-    if (sym.status === 0 && ref.startsWith('origin/')) return ref.slice('origin/'.length);
-  } catch {
-    // no origin: fall through
-  }
-  return 'main';
+    return sym.status === 0 && ref.startsWith('origin/') ? ref.slice('origin/'.length) : null;
+  });
+  return cached || 'main';
 }
 
 function parseArgs(argv) {

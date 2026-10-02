@@ -372,6 +372,24 @@ test('--print-base: a default branch changed on origin wins over the stale cache
   assert.equal(printBase(repo), 'main', 'origin unreachable: the cached origin/HEAD');
 });
 
+test('resolveBaseBranch: a query to origin that times out still falls back to the cached origin/HEAD', () => {
+  const repo = makeRepo('main', true);
+  git(repo, 'push', '-q', 'origin', 'main:refs/heads/trunk');
+  git(repo, 'fetch', '-q', 'origin');
+  git(repo, 'remote', 'set-head', 'origin', 'trunk');
+  // An origin that never answers: the ext transport runs a command that only sleeps.
+  git(repo, 'config', 'protocol.ext.allow', 'always');
+  git(repo, 'remote', 'set-url', 'origin', 'ext::sh -c sleep% 40');
+  const module = new URL('./local-review.mjs', import.meta.url).href;
+  const started = Date.now();
+  const r = spawnSync(process.execPath, ['--input-type=module', '-e',
+    `import { resolveBaseBranch } from ${JSON.stringify(module)}; console.log(resolveBaseBranch({}, { remoteTimeoutMs: 300 }))`],
+  { cwd: repo, encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stdout.trim(), 'trunk', 'the cached origin/HEAD, not the main fallback');
+  assert.ok(Date.now() - started < 4000, 'the query to origin was cut at its timeout');
+});
+
 test('entry: with no --base, the base is origin\'s default branch and is fetched', () => {
   const repo = makeRepo('trunk', true);
   const r = run(repo, { BASE_BRANCH: '', FAKE_OUTPUT: JSON.stringify({ findings: [] }) }, []);
