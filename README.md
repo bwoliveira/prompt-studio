@@ -161,28 +161,30 @@ The prompt itself follows the language of your request.
 
 Every control shows its key next to its label. Keys work with the cursor in the answer field.
 
-| Key | Action |
-|---|---|
-| F4, or ⌘⇧E / Ctrl+Shift+E | Open Prompt Studio (from the message field); the second one is a Hermes Desktop key you can reassign |
-| F1 | Show or hide the list of shortcuts |
-| F3 | Settings: models, session context, language |
-| F5 / Alt+Y | Accept the recommended choice, or confirm what you typed |
-| F6 / Alt+K | Skip, I don't have one, or use the default |
-| F7 / Alt+L | Use the AI suggestion (text goes into the field for F5 to confirm; if the AI offers the default, F7 accepts it) |
-| F8 / Alt+B | Back / undo the edit / back to the steps |
-| F9 / Alt+G | Generate the prompt; on the preview, send it now |
-| F10 / Alt+X | Close and return the draft |
-| Alt+1 … Alt+9 | Pick an option |
-| Alt+Shift+1 … Alt+Shift+9 | Edit an answered step |
-| Alt+S | Ask the AI, or try again |
-| Alt+N | Another suggestion |
-| Alt+D | Discard the suggestion, or stop the AI |
-| Alt+M | Improve my text |
-| Alt+C | Paste text |
-| Alt+O / Alt+A / Alt+T | Write for Opus / Astra / Sonnet |
-| Alt+I | Next AI mode (Auto, On request, Off) |
-| Alt+V | Other version in the preview |
-| Alt+E | Put the prompt in the composer to edit before sending |
+<!-- shortcut-table:start -->
+| Linux and Windows | Mac | Action |
+|---|---|---|
+| F4, or Ctrl+Shift+E | F4, or ⌘⇧E | Open Prompt Studio (from the message field) |
+| F1 | F1 | Show or hide this list |
+| F3 | F3 | Settings: models, session context, language |
+| F5 / Alt+Y | F5 / ⌥Y | Accept the recommended choice (in Auto mode, the AI pick) or confirm what you typed |
+| F6 / Alt+K | F6 / ⌥K | Skip, I don't have one, or use the default |
+| F7 / Alt+L | F7 / ⌥L | Use the AI text or the recommended one it offers |
+| F8 / Alt+B | F8 / ⌥B | Back, undo the edit, or back to the steps |
+| F9 / Alt+G | F9 / ⌥G | Generate the prompt; on the preview, send it now |
+| F10 / Alt+X | F10 / ⌥X | Close and return the draft |
+| Alt+1…9 | ⌥1…9 | Pick an option |
+| Alt+Shift+1…9 | ⌥⇧1…9 | Edit an answered step |
+| Alt+S | ⌥S | Ask the AI, or try again |
+| Alt+N | ⌥N | Another suggestion |
+| Alt+D | ⌥D | Discard the suggestion, or stop the AI |
+| Alt+M | ⌥M | Improve my text |
+| Alt+C | ⌥C | Paste text |
+| Alt+O / Alt+A / Alt+T | ⌥O / ⌥A / ⌥T | Model: Opus, Astra or Sonnet |
+| Alt+I | ⌥I | Next AI help mode |
+| Alt+V | ⌥V | Other version in the preview |
+| Alt+E | ⌥E | Put the prompt in the composer to edit before sending |
+<!-- shortcut-table:end -->
 
 Keys and scope:
 
