@@ -113,8 +113,8 @@ test('an enum step with no real choice is skipped; the deliverable step is alway
   assert.equal(stepCount('opus', WRITE, []), walk('opus', WRITE).order.length)
 })
 
-// Drafts the engines read as the wrong deliverable ("Como funciona o cron do Linux?" -> workflow, "Create a plan
-// for the product launch" -> implementation): the user must still see every deliverable and be able to correct it.
+// Drafts an engine may read as the wrong deliverable (what it detects depends on the heuristics, so the tests below
+// never hard-code it): the user must still see every deliverable and be able to correct it.
 const CRON = 'Como funciona o cron do Linux?'
 const PLAN = 'Create a plan for the product launch'
 
@@ -135,15 +135,13 @@ test('deliverable step lists every deliverable for every target, even for a misr
 })
 
 test('picking a deliverable that contradicts the draft keeps the choice and notes the conflict', () => {
-  // Opus and Sonnet read the cron question as a workflow and the plan draft as an implementation; Astra already
-  // reads the cron question as an answer. Whatever each engine guesses, a conflicting pick must reach the prompt.
-  assert.equal(OPUS.analyze({ goal: CRON }).deliverable, 'workflow')
-  assert.equal(OPUS.analyze({ goal: PLAN }).deliverable, 'implementation')
+  // Whatever deliverable each engine detects, picking another one that conflicts with the draft must reach the prompt.
   for (const target of ['opus', 'astra', 'sonnet']) {
     const engine = ENGINES[target]
     for (const intent of [CRON, PLAN]) {
-      const picked = ['answer', 'plan', 'text', 'implementation', 'workflow'].find(value => (engine.analyze({ goal: intent, deliverable: value }).conflicts.deliverable || []).includes(value))
-      assert.ok(picked, `${target}: some deliverable contradicts "${intent}"`)
+      const detectedValue = engine.analyze({ goal: intent }).deliverable
+      const picked = ENGINES[target].options.deliverable.find(value => value !== detectedValue && (engine.analyze({ goal: intent, deliverable: value }).conflicts.deliverable || []).includes(value))
+      assert.ok(picked, `${target}: some deliverable other than the detected "${detectedValue}" contradicts "${intent}"`)
       const label = nextQuestion(target, intent, [], 'en').options.find(l => answerToValue('deliverable', l, target) === picked)
       assert.ok(label, `${target}: ${picked} is offered`)
       const ladder = [{ category: 'deliverable', question: 'q', answer: label }]
