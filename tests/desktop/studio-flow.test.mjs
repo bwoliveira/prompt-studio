@@ -1049,6 +1049,74 @@ test('overlay guard: a foreign dialog in front of the open Settings keeps F1 and
   assert.ok($('[data-studio-settings-dialog]') === null, 'F3 closes Settings again once the foreign overlay is gone')
 })
 
+// R2: Hermes's DialogContent is the portal container for the menus and listboxes opened inside it, so a
+// role=menu / role=listbox nested in the Settings dialog is a real overlay in front of it.
+for (const role of ['menu', 'listbox', 'dialog']) {
+  test(`overlay guard: an open role=${role} nested inside the Settings dialog keeps F1 and F3 from reaching the studio`, { skip }, async () => {
+    await openStudio(INTENT, 'off')
+    await openSettings()
+    const nested = document.createElement('div')
+    nested.setAttribute('role', role)
+    $('[data-studio-settings-dialog]').appendChild(nested)
+    try {
+      assert.equal((await press(K().help)).defaultPrevented, false, 'F1 left to the nested overlay')
+      assert.ok($('[data-studio-shortcuts-list]') === null, 'F1 does not toggle the help')
+      assert.equal((await press(K().settings)).defaultPrevented, false, 'F3 left to the nested overlay')
+      assert.ok($('[data-studio-settings-dialog]'), 'F3 does not close Settings behind the picker')
+    } finally {
+      nested.remove()
+    }
+    await press(K().settings)
+    assert.ok($('[data-studio-settings-dialog]') === null, 'F3 closes Settings once the picker is gone')
+  })
+}
+
+test('overlay guard: the Settings dialog itself carrying role=dialog (or role=alertdialog) is not a foreign overlay', { skip }, async () => {
+  await openStudio(INTENT, 'off')
+  await openSettings()
+  for (const role of ['dialog', 'alertdialog']) {
+    const dialog = $('[data-studio-settings-dialog]')
+    dialog.setAttribute('role', role)
+    try {
+      await press(K().help)
+      assert.ok($('[data-studio-shortcuts-list]'), `F1 still works in role=${role} Settings`)
+      await press(K().help)
+    } finally {
+      dialog.removeAttribute('role')
+    }
+  }
+  await press(K().settings)
+  assert.ok($('[data-studio-settings-dialog]') === null, 'F3 closes Settings')
+})
+
+// R2: an overlay that is mounted but hidden through CSS does not count (jsdom has no layout: computed
+// display / visibility only).
+for (const [name, hide] of [
+  ['display:none on the dialog', (el) => { el.style.display = 'none' }],
+  ['visibility:hidden on the dialog', (el) => { el.style.visibility = 'hidden' }],
+  ['display:none on an ancestor', (el) => { const wrap = document.createElement('div'); wrap.style.display = 'none'; el.replaceWith(wrap); wrap.appendChild(el) }]
+]) {
+  test(`overlay guard: a role=dialog hidden by CSS (${name}) blocks nothing`, { skip }, async () => {
+    await openStudio(INTENT, 'off')
+    const overlay = document.createElement('div')
+    overlay.setAttribute('role', 'dialog')
+    document.body.appendChild(overlay)
+    hide(overlay)
+    try {
+      await press(K().generate)
+      assert.ok($('[data-studio-preview]'), 'F9 generates behind a CSS-hidden dialog')
+      await press(K().close)
+      assert.ok($('[data-studio-strip]') === null, 'F10 closes')
+      // Studio closed: F4 opens it though the hidden dialog is mounted.
+      $('[data-slot="composer-rich-input"]').textContent = INTENT
+      assert.equal((await press(K().open)).defaultPrevented, true)
+      assert.ok($('[data-studio-strip]'), 'F4 opened the studio')
+    } finally {
+      (overlay.parentElement === document.body ? overlay : overlay.parentElement).remove()
+    }
+  })
+}
+
 test('overlay guard: F4 does not open the studio behind an open menu', { skip }, async () => {
   const overlay = document.createElement('div')
   overlay.setAttribute('role', 'menu')

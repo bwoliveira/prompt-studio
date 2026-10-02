@@ -4107,15 +4107,30 @@ const isAltCodeChord = event => event.altKey && !event.ctrlKey && !event.metaKey
 // Behind an open overlay the studio's keys do nothing. Two kinds: the studio's own Settings dialog
 // ($settingsOpen), where only F1 (help) and F3 (closes Settings) still work, and a FOREIGN overlay (a model
 // menu, the command palette or any other dialog/menu/listbox in the document), behind which nothing the
-// studio owns reacts, F1 and F3 included. A hidden element does not count, nor one that holds the studio,
-// nor the studio's own Settings dialog.
+// studio owns reacts, F1 and F3 included. Not counted: an overlay that is not rendered (hidden, aria-hidden,
+// display:none or visibility:hidden on it or on an ancestor), one that holds the studio, and the Settings
+// dialog element itself. A menu or listbox nested INSIDE Settings does count: Hermes's DialogContent is the
+// portal container for the pickers opened in it.
 const OVERLAY_KEYS = [SHORTCUTS.help, SHORTCUTS.settings]
 const OVERLAY_SELECTOR = '[role="dialog"],[role="alertdialog"],[role="menu"],[role="listbox"]'
+// jsdom has no layout, so rendering is read from computed style; visibility inherits, display does not.
+function renderedHidden(el) {
+  if (el.closest('[hidden],[aria-hidden="true"]')) return true
+  const view = el.ownerDocument.defaultView
+  if (!view?.getComputedStyle) return false
+  const { visibility } = view.getComputedStyle(el)
+  if (visibility === 'hidden' || visibility === 'collapse') return true
+  for (let node = el; node; node = node.parentElement) {
+    if (view.getComputedStyle(node).display === 'none') return true
+  }
+  return false
+}
 function foreignOverlayOpen() {
   const strip = document.querySelector('[data-studio-strip]')
+  const settings = [...document.querySelectorAll('[data-studio-settings-dialog]')]
   return [...document.querySelectorAll(OVERLAY_SELECTOR)].some(el =>
-    !el.closest('[hidden],[aria-hidden="true"]') && !(strip && el.contains(strip)) &&
-    !el.closest('[data-studio-settings-dialog]') && !el.querySelector('[data-studio-settings-dialog]'))
+    !settings.some(dialog => dialog === el || el.contains(dialog)) &&
+    !(strip && el.contains(strip)) && !renderedHidden(el))
 }
 
 function shortcutTarget(root, combo) {

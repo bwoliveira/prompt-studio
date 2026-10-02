@@ -17,7 +17,11 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
   Studio's keys no longer reach the controls behind it: F9 does not generate, F10 does not cancel, F4 does not open
   the Studio and the Alt chords do nothing. F5-F10 are still swallowed while the Studio is open (no page reload).
   Behind a dialog, menu or palette that is not the Studio's own Settings, F1 and F3 do nothing either (no second
-  Settings dialog, no help toggled); with the Studio's own Settings open, F1 (help) still works and F3 closes Settings.
+  Settings dialog, no help toggled); with the Studio's own Settings open, F1 (help) still works and F3 closes Settings. A model or language menu opened
+  inside Settings counts as an overlay in front (F1 and F3 do nothing behind it), and a dialog, menu or listbox hidden
+  through CSS (`display:none`, `visibility:hidden`) does not block the keys. The key listener now reads which dialogs,
+  menus and listboxes are open (ARIA roles and visibility; it changes nothing in the app's DOM); README and
+  DESKTOP-DEV say so.
 - Fix: a reply with no answer text and JSON only inside the model's thinking no longer becomes the suggestion; it is
   treated as an empty reply (retried once, unless it ended on the token limit). On choice steps an AI value that is
   not exactly one of the options (for example "Not applicable here" with options Yes/No) is now reported as an
