@@ -233,7 +233,7 @@ const CATEGORY_RULES = [
 // Languages: Portuguese (unaccented) + English.
 const REVIEW_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija|redigir|monte|montar|gere|gerar|elabore|elaborar|write|create|build|make|draft|develop)\s+(?:(?:a|an|the|um|uma|o|os|as|our|nosso|nossa|new|novo|nova|detailed|detalhado|detalhada|simple|simples)\s+){0,2}(?:\w+\s+)?(?:reviews?|revisao|revisoes|audits?|auditoria|auditorias|diagnostico|diagnosticos|diagnosis|critique)\b(?:\s+(?:\w+ly|\w+mente|\w+(?:ed|ada|ado|ida|ido)|detailed|detalhada|detalhado|brief|short|breve|curta|curto|thorough|completa|completo|rigorosa|rigoroso|critica|critico|critical|tecnica|tecnico|technical|final|initial|inicial|rapida|rapido|quick|honest|honesta|honesto|independent|independente|formal|informal)){0,2}(?=\s*$|\s*[.,;:!?\n]|\s+(?:for|para|of|de|do|da|dos|das|on|sobre|about|to|that|which|que|with|com|in|em|no|na|nos|nas|by|por|and|e|from|at|before|after|ate|until|covering|explaining|so)\b)/
 const PLAN_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija|redigir|monte|montar|gere|gerar|elabore|elaborar|write|create|build|make|draft|develop)\s+(?:(?:a|an|the|um|uma|o|os|as|our|nosso|nossa|new|novo|nova|detailed|detalhado|detalhada|simple|simples)\s+){0,2}(?:\w+\s+)?(?:plan|plano|planos|roadmap|cronograma|strategy|estrategia)\b(?=\s*$|\s*[.,;:!?\n]|\s+(?:for|para|of|de|do|da|dos|das|on|sobre|about|to|that|which|que|with|com|in|em|no|na|nos|nas|by|por|and|e|from|at|before|after|ate|until|covering|explaining|so)\b)/
-const DATA_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija|redigir|monte|montar|gere|gerar|elabore|elaborar|write|create|build|make|draft|develop)\s+(?:(?:a|an|the|um|uma|o|os|as|our|nosso|nossa|new|novo|nova|detailed|detalhado|detalhada|simple|simples)\s+){0,2}(?:\w+\s+)?(?:planilhas?|spreadsheets?|csv|datasets?)\b(?=\s*$|\s*[.,;:!?\n]|\s+(?:for|para|of|de|do|da|dos|das|on|sobre|about|to|that|which|que|with|com|in|em|no|na|nos|nas|by|por|and|e|from|at|before|after|ate|until|covering|explaining|so)\b)/
+const DATA_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija|redigir|monte|montar|gere|gerar|elabore|elaborar|write|create|build|make|draft|develop)\s+(?:(?:a|an|the|um|uma|o|os|as|our|nosso|nossa|new|novo|nova|detailed|detalhado|detalhada|simple|simples)\s+){0,2}(?:\w+\s+)?(?:planilhas?|spreadsheets?|csv|datasets?)\b(?:\s+(?:\w+(?:ad[ao]s?|id[ao]s?|iv[ao]s?|os[ao]s?|ais|al|eis|el|ente|ante)|simples|nov[ao]s?|complet[ao]s?|detailed|simple|monthly|weekly|annual|complete|new|clean|tidy))?(?=\s*$|\s*[.,;:!?\n]|\s+(?:for|para|of|de|do|da|dos|das|on|sobre|about|to|that|which|que|with|com|in|em|no|na|nos|nas|by|por|and|e|from|at|before|after|ate|until|covering|explaining|so)\b)/
 const WORKFLOW_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija|redigir|monte|montar|gere|gerar|elabore|elaborar|write|create|build|make|draft|develop)\s+(?:(?:a|an|the|um|uma|o|os|as|our|nosso|nossa|new|novo|nova|detailed|detalhado|detalhada|simple|simples)\s+){0,2}(?:\w+\s+)?(?:workflows?|pipelines?)\b(?=\s*$|\s*[.,;:!?\n]|\s+(?:for|para|of|de|do|da|dos|das|on|sobre|about|to|that|which|que|with|com|in|em|no|na|nos|nas|by|por|and|e|from|at|before|after|ate|until|covering|explaining|so)\b)/
 
 // Verb signals: an explicit request in the draft. The first match in the text decides; on a tie the earlier rule wins.
@@ -273,6 +273,8 @@ const GENERATE_VERB = /^(gere|gerar|monte|montar)\b/
 // re-consume whitespace another part accepted, or a long run of spaces before a stray mark backtracks quadratically.
 const QUESTION_FORM = /^(?:como|o que|qual|quais|por que|porque|quando|onde|quem|quanto|how|what|why|which|who|when|where)\b(?:(?:[^.!?\n]|\.(?=\S)|\n(?![ \t]*\n))*\?|(?:[^.!?\n]|\.(?=\S)|\n(?![ \t]*\n))*(?:\.(?!\S)|$|(?=\n[ \t]*\n)))/
 // "What I need: build a dashboard", "O que eu quero e que voce construa ...": a question word opening a statement.
+// "Como especialista em seguranca, voce pode revisar esta API?": a role, not the question word "como".
+const ROLE_HEAD = /^(?:como|enquanto)\s+(?:um |uma )?(?:especialista|expert|engenheir[ao]|arquitet[ao]|desenvolvedor[a]?|analista|consultor[a]?|revisor[a]?|lider|gerente|professor[a]?|designer|cientista|advogad[ao]|medic[ao]|redator[a]?|editor[a]?|auditor[a]?|tester|dba|sre|devops|senior|junior|pleno|profissional|programador[a]?|pesquisador[a]?)\b/
 const DECLARATIVE = /^(?:what|o que)\s+(?:i|we|you|eu|nos|a gente|voce|voces)\s+(?:need|want|would like|'d like|expect|mean|ask|prefer|really (?:need|want)|preciso|precisamos|quero|queremos|gostaria|gostariamos|espero|esperamos)\b/
 // Languages: Portuguese (unaccented) + English.
 // "Analise a planilha" stays a data task: the analysis verb with a data file as its subject.
@@ -361,6 +363,9 @@ function coordinatedOrder(text) {
 }
 const INTRO_CLAUSE = /^([^.!?,:;\n]{1,60}),\s+/
 // "The configure script is broken", "I tried to configure nginx yesterday": the verb names a thing or tells the past.
+// "Ajude-me a revisar codigo": before a Portuguese infinitive, "a" is the preposition, not an article.
+const PT_INFINITIVE = /(?:ar|er|ir)$/
+const AFTER_A = /\ba\s+$/
 const MODIFIER_USE = /\b(?:the|a|an|this|that|these|those|my|our|your|o|os|a|as|um|uma|este|esta|esse|essa|meu|minha|nosso|nossa|seu|sua)\s+$/
 const COMPOUND_AFTER = /^\s+(?!(?:the|a|an|this|that|these|those|my|our|your|all|each|every|o|os|as|um|uma|uns|umas|este|esta|esse|essa|meu|minha|nosso|nossa|seu|sua|todos|todas|cada|and|or|e|ou|to|for|para|de|do|da|with|com|in|em|on|at|by|por|it|them|me|us|is|are|was|were|e|esta|estao)\b)\w+/
 const NARRATIVE = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:i|we|they|he|she|eu|nos|a gente|eles|elas|ele|ela)\s+)?(?:tried|attempted|managed|failed|forgot|happened|used|started|began|finished|stopped|tentei|tentamos|tentou|tentaram|consegui|conseguimos|conseguiu|esqueci|esquecemos|comecei|comecamos|comecou|parei|paramos|parou|terminei|terminamos|terminou)\s+(?:to\s+|de\s+|a\s+)?$/
@@ -433,8 +438,8 @@ function questionAt(goal) {
   if (!m) return null
   // "What I need is for you to build a React dashboard, can you do that?": a declarative request, with or without the mark.
   if (DECLARATIVE.test(m[0])) return null
-  if (m[0].includes('?')) return m
   if (!m[0].includes(',')) return m
+  if (m[0].includes('?') && !ROLE_HEAD.test(m[0])) return m
   const head = m[0].slice(0, m[0].indexOf(','))
   return QUESTION_HEAD.test(head) || firstSignal(head).verb ? m : null
 }
@@ -461,7 +466,8 @@ function firstSignal(text) {
       const isNoun = NOUN_SIGNAL.test(word) && (copula || (!SENTENCE_START.test(before) && !INFINITIVE_MARK.test(before) && !VERB_OBJECT.test(after) && !requested))
       if (isNoun) { if (m.index < nounAt) { noun = id; nounAt = m.index }; continue }
       // A verb that names a thing ("the configure script") or tells the past ("I tried to configure") is context.
-      if (!NOUN_SIGNAL.test(word) && (NARRATIVE.test(before) || (MODIFIER_USE.test(before) && COMPOUND_AFTER.test(after)))) continue
+      const article = MODIFIER_USE.test(before) && !(AFTER_A.test(before) && PT_INFINITIVE.test(word))
+      if (!NOUN_SIGNAL.test(word) && (NARRATIVE.test(before) || (article && COMPOUND_AFTER.test(after)))) continue
       if (m.index < at) { signal = id; at = m.index }
       break
     }
@@ -851,7 +857,7 @@ function read(brief) {
 // Languages: Portuguese (unaccented) + English.
 const REVIEW_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija|redigir|monte|montar|gere|gerar|elabore|elaborar|write|create|build|make|draft|develop)\s+(?:(?:a|an|the|um|uma|o|os|as|our|nosso|nossa|new|novo|nova|detailed|detalhado|detalhada|simple|simples)\s+){0,2}(?:\w+\s+)?(?:reviews?|revisao|revisoes|audits?|auditoria|auditorias|diagnostico|diagnosticos|diagnosis|critique)\b(?:\s+(?:\w+ly|\w+mente|\w+(?:ed|ada|ado|ida|ido)|detailed|detalhada|detalhado|brief|short|breve|curta|curto|thorough|completa|completo|rigorosa|rigoroso|critica|critico|critical|tecnica|tecnico|technical|final|initial|inicial|rapida|rapido|quick|honest|honesta|honesto|independent|independente|formal|informal)){0,2}(?=\s*$|\s*[.,;:!?\n]|\s+(?:for|para|of|de|do|da|dos|das|on|sobre|about|to|that|which|que|with|com|in|em|no|na|nos|nas|by|por|and|e|from|at|before|after|ate|until|covering|explaining|so)\b)/
 const PLAN_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija|redigir|monte|montar|gere|gerar|elabore|elaborar|write|create|build|make|draft|develop)\s+(?:(?:a|an|the|um|uma|o|os|as|our|nosso|nossa|new|novo|nova|detailed|detalhado|detalhada|simple|simples)\s+){0,2}(?:\w+\s+)?(?:plan|plano|planos|roadmap|cronograma|strategy|estrategia)\b(?=\s*$|\s*[.,;:!?\n]|\s+(?:for|para|of|de|do|da|dos|das|on|sobre|about|to|that|which|que|with|com|in|em|no|na|nos|nas|by|por|and|e|from|at|before|after|ate|until|covering|explaining|so)\b)/
-const DATA_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija|redigir|monte|montar|gere|gerar|elabore|elaborar|write|create|build|make|draft|develop)\s+(?:(?:a|an|the|um|uma|o|os|as|our|nosso|nossa|new|novo|nova|detailed|detalhado|detalhada|simple|simples)\s+){0,2}(?:\w+\s+)?(?:planilhas?|spreadsheets?|csv|datasets?)\b(?=\s*$|\s*[.,;:!?\n]|\s+(?:for|para|of|de|do|da|dos|das|on|sobre|about|to|that|which|que|with|com|in|em|no|na|nos|nas|by|por|and|e|from|at|before|after|ate|until|covering|explaining|so)\b)/
+const DATA_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija|redigir|monte|montar|gere|gerar|elabore|elaborar|write|create|build|make|draft|develop)\s+(?:(?:a|an|the|um|uma|o|os|as|our|nosso|nossa|new|novo|nova|detailed|detalhado|detalhada|simple|simples)\s+){0,2}(?:\w+\s+)?(?:planilhas?|spreadsheets?|csv|datasets?)\b(?:\s+(?:\w+(?:ad[ao]s?|id[ao]s?|iv[ao]s?|os[ao]s?|ais|al|eis|el|ente|ante)|simples|nov[ao]s?|complet[ao]s?|detailed|simple|monthly|weekly|annual|complete|new|clean|tidy))?(?=\s*$|\s*[.,;:!?\n]|\s+(?:for|para|of|de|do|da|dos|das|on|sobre|about|to|that|which|que|with|com|in|em|no|na|nos|nas|by|por|and|e|from|at|before|after|ate|until|covering|explaining|so)\b)/
 const WORKFLOW_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija|redigir|monte|montar|gere|gerar|elabore|elaborar|write|create|build|make|draft|develop)\s+(?:(?:a|an|the|um|uma|o|os|as|our|nosso|nossa|new|novo|nova|detailed|detalhado|detalhada|simple|simples)\s+){0,2}(?:\w+\s+)?(?:workflows?|pipelines?)\b(?=\s*$|\s*[.,;:!?\n]|\s+(?:for|para|of|de|do|da|dos|das|on|sobre|about|to|that|which|que|with|com|in|em|no|na|nos|nas|by|por|and|e|from|at|before|after|ate|until|covering|explaining|so)\b)/
 
 // Verb groups (pt + en). The earliest match in the draft decides the deliverable; on a tie the earlier entry wins.
@@ -890,6 +896,8 @@ const GENERATE_VERB = /^(gere|gerar|monte|montar)\b/
 // re-consume whitespace another part accepted, or a long run of spaces before a stray mark backtracks quadratically.
 const QUESTION_FORM = /^(?:como|o que|qual|quais|por que|porque|quando|onde|quem|quanto|how|what|why|which|who|when|where)\b(?:(?:[^.!?\n]|\.(?=\S)|\n(?![ \t]*\n))*\?|(?:[^.!?\n]|\.(?=\S)|\n(?![ \t]*\n))*(?:\.(?!\S)|$|(?=\n[ \t]*\n)))/
 // "What I need: build a dashboard", "O que eu quero e que voce construa ...": a question word opening a statement.
+// "Como especialista em seguranca, voce pode revisar esta API?": a role, not the question word "como".
+const ROLE_HEAD = /^(?:como|enquanto)\s+(?:um |uma )?(?:especialista|expert|engenheir[ao]|arquitet[ao]|desenvolvedor[a]?|analista|consultor[a]?|revisor[a]?|lider|gerente|professor[a]?|designer|cientista|advogad[ao]|medic[ao]|redator[a]?|editor[a]?|auditor[a]?|tester|dba|sre|devops|senior|junior|pleno|profissional|programador[a]?|pesquisador[a]?)\b/
 const DECLARATIVE = /^(?:what|o que)\s+(?:i|we|you|eu|nos|a gente|voce|voces)\s+(?:need|want|would like|'d like|expect|mean|ask|prefer|really (?:need|want)|preciso|precisamos|quero|queremos|gostaria|gostariamos|espero|esperamos)\b/
 // Languages: Portuguese (unaccented) + English.
 const DATA_NOUN = /\b(planilha|csv|xlsx|spreadsheet|dataset|dados|data|sql|tabela de vendas|metricas|metrics)\b/
@@ -972,6 +980,9 @@ function coordinatedOrder(text) {
 }
 const INTRO_CLAUSE = /^([^.!?,:;\n]{1,60}),\s+/
 // "The configure script is broken", "I tried to configure nginx yesterday": the verb names a thing or tells the past.
+// "Ajude-me a revisar codigo": before a Portuguese infinitive, "a" is the preposition, not an article.
+const PT_INFINITIVE = /(?:ar|er|ir)$/
+const AFTER_A = /\ba\s+$/
 const MODIFIER_USE = /\b(?:the|a|an|this|that|these|those|my|our|your|o|os|a|as|um|uma|este|esta|esse|essa|meu|minha|nosso|nossa|seu|sua)\s+$/
 const COMPOUND_AFTER = /^\s+(?!(?:the|a|an|this|that|these|those|my|our|your|all|each|every|o|os|as|um|uma|uns|umas|este|esta|esse|essa|meu|minha|nosso|nossa|seu|sua|todos|todas|cada|and|or|e|ou|to|for|para|de|do|da|with|com|in|em|on|at|by|por|it|them|me|us|is|are|was|were|e|esta|estao)\b)\w+/
 const NARRATIVE = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:i|we|they|he|she|eu|nos|a gente|eles|elas|ele|ela)\s+)?(?:tried|attempted|managed|failed|forgot|happened|used|started|began|finished|stopped|tentei|tentamos|tentou|tentaram|consegui|conseguimos|conseguiu|esqueci|esquecemos|comecei|comecamos|comecou|parei|paramos|parou|terminei|terminamos|terminou)\s+(?:to\s+|de\s+|a\s+)?$/
@@ -1044,8 +1055,8 @@ function questionAt(goal) {
   if (!m) return null
   // "What I need is for you to build a React dashboard, can you do that?": a declarative request, with or without the mark.
   if (DECLARATIVE.test(m[0])) return null
-  if (m[0].includes('?')) return m
   if (!m[0].includes(',')) return m
+  if (m[0].includes('?') && !ROLE_HEAD.test(m[0])) return m
   const head = m[0].slice(0, m[0].indexOf(','))
   return QUESTION_HEAD.test(head) || firstSignal(head).verb ? m : null
 }
@@ -1072,7 +1083,8 @@ function firstSignal(text) {
       const isNoun = NOUN_SIGNAL.test(word) && (copula || (!SENTENCE_START.test(before) && !INFINITIVE_MARK.test(before) && !VERB_OBJECT.test(after) && !requested))
       if (isNoun) { if (m.index < nounAt) { noun = id; nounAt = m.index }; continue }
       // A verb that names a thing ("the configure script") or tells the past ("I tried to configure") is context.
-      if (!NOUN_SIGNAL.test(word) && (NARRATIVE.test(before) || (MODIFIER_USE.test(before) && COMPOUND_AFTER.test(after)))) continue
+      const article = MODIFIER_USE.test(before) && !(AFTER_A.test(before) && PT_INFINITIVE.test(word))
+      if (!NOUN_SIGNAL.test(word) && (NARRATIVE.test(before) || (article && COMPOUND_AFTER.test(after)))) continue
       if (m.index < at) { signal = id; at = m.index }
       break
     }
@@ -1519,7 +1531,7 @@ const CATEGORY_RULES = [
 // Languages: Portuguese (unaccented) + English.
 const REVIEW_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija|redigir|monte|montar|gere|gerar|elabore|elaborar|write|create|build|make|draft|develop)\s+(?:(?:a|an|the|um|uma|o|os|as|our|nosso|nossa|new|novo|nova|detailed|detalhado|detalhada|simple|simples)\s+){0,2}(?:\w+\s+)?(?:reviews?|revisao|revisoes|audits?|auditoria|auditorias|diagnostico|diagnosticos|diagnosis|critique)\b(?:\s+(?:\w+ly|\w+mente|\w+(?:ed|ada|ado|ida|ido)|detailed|detalhada|detalhado|brief|short|breve|curta|curto|thorough|completa|completo|rigorosa|rigoroso|critica|critico|critical|tecnica|tecnico|technical|final|initial|inicial|rapida|rapido|quick|honest|honesta|honesto|independent|independente|formal|informal)){0,2}(?=\s*$|\s*[.,;:!?\n]|\s+(?:for|para|of|de|do|da|dos|das|on|sobre|about|to|that|which|que|with|com|in|em|no|na|nos|nas|by|por|and|e|from|at|before|after|ate|until|covering|explaining|so)\b)/
 const PLAN_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija|redigir|monte|montar|gere|gerar|elabore|elaborar|write|create|build|make|draft|develop)\s+(?:(?:a|an|the|um|uma|o|os|as|our|nosso|nossa|new|novo|nova|detailed|detalhado|detalhada|simple|simples)\s+){0,2}(?:\w+\s+)?(?:plan|plano|planos|roadmap|cronograma|strategy|estrategia)\b(?=\s*$|\s*[.,;:!?\n]|\s+(?:for|para|of|de|do|da|dos|das|on|sobre|about|to|that|which|que|with|com|in|em|no|na|nos|nas|by|por|and|e|from|at|before|after|ate|until|covering|explaining|so)\b)/
-const DATA_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija|redigir|monte|montar|gere|gerar|elabore|elaborar|write|create|build|make|draft|develop)\s+(?:(?:a|an|the|um|uma|o|os|as|our|nosso|nossa|new|novo|nova|detailed|detalhado|detalhada|simple|simples)\s+){0,2}(?:\w+\s+)?(?:planilhas?|spreadsheets?|csv|datasets?)\b(?=\s*$|\s*[.,;:!?\n]|\s+(?:for|para|of|de|do|da|dos|das|on|sobre|about|to|that|which|que|with|com|in|em|no|na|nos|nas|by|por|and|e|from|at|before|after|ate|until|covering|explaining|so)\b)/
+const DATA_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija|redigir|monte|montar|gere|gerar|elabore|elaborar|write|create|build|make|draft|develop)\s+(?:(?:a|an|the|um|uma|o|os|as|our|nosso|nossa|new|novo|nova|detailed|detalhado|detalhada|simple|simples)\s+){0,2}(?:\w+\s+)?(?:planilhas?|spreadsheets?|csv|datasets?)\b(?:\s+(?:\w+(?:ad[ao]s?|id[ao]s?|iv[ao]s?|os[ao]s?|ais|al|eis|el|ente|ante)|simples|nov[ao]s?|complet[ao]s?|detailed|simple|monthly|weekly|annual|complete|new|clean|tidy))?(?=\s*$|\s*[.,;:!?\n]|\s+(?:for|para|of|de|do|da|dos|das|on|sobre|about|to|that|which|que|with|com|in|em|no|na|nos|nas|by|por|and|e|from|at|before|after|ate|until|covering|explaining|so)\b)/
 const WORKFLOW_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija|redigir|monte|montar|gere|gerar|elabore|elaborar|write|create|build|make|draft|develop)\s+(?:(?:a|an|the|um|uma|o|os|as|our|nosso|nossa|new|novo|nova|detailed|detalhado|detalhada|simple|simples)\s+){0,2}(?:\w+\s+)?(?:workflows?|pipelines?)\b(?=\s*$|\s*[.,;:!?\n]|\s+(?:for|para|of|de|do|da|dos|das|on|sobre|about|to|that|which|que|with|com|in|em|no|na|nos|nas|by|por|and|e|from|at|before|after|ate|until|covering|explaining|so)\b)/
 
 // Verb signals: an explicit request in the draft. The first match in the text decides; on a tie the earlier rule wins.
@@ -1559,6 +1571,8 @@ const GENERATE_VERB = /^(gere|gerar|monte|montar)\b/
 // re-consume whitespace another part accepted, or a long run of spaces before a stray mark backtracks quadratically.
 const QUESTION_FORM = /^(?:como|o que|qual|quais|por que|porque|quando|onde|quem|quanto|how|what|why|which|who|when|where)\b(?:(?:[^.!?\n]|\.(?=\S)|\n(?![ \t]*\n))*\?|(?:[^.!?\n]|\.(?=\S)|\n(?![ \t]*\n))*(?:\.(?!\S)|$|(?=\n[ \t]*\n)))/
 // "What I need: build a dashboard", "O que eu quero e que voce construa ...": a question word opening a statement.
+// "Como especialista em seguranca, voce pode revisar esta API?": a role, not the question word "como".
+const ROLE_HEAD = /^(?:como|enquanto)\s+(?:um |uma )?(?:especialista|expert|engenheir[ao]|arquitet[ao]|desenvolvedor[a]?|analista|consultor[a]?|revisor[a]?|lider|gerente|professor[a]?|designer|cientista|advogad[ao]|medic[ao]|redator[a]?|editor[a]?|auditor[a]?|tester|dba|sre|devops|senior|junior|pleno|profissional|programador[a]?|pesquisador[a]?)\b/
 const DECLARATIVE = /^(?:what|o que)\s+(?:i|we|you|eu|nos|a gente|voce|voces)\s+(?:need|want|would like|'d like|expect|mean|ask|prefer|really (?:need|want)|preciso|precisamos|quero|queremos|gostaria|gostariamos|espero|esperamos)\b/
 // Languages: Portuguese (unaccented) + English.
 // "Analise a planilha" stays a data task: the analysis verb with a data file as its subject.
@@ -1647,6 +1661,9 @@ function coordinatedOrder(text) {
 }
 const INTRO_CLAUSE = /^([^.!?,:;\n]{1,60}),\s+/
 // "The configure script is broken", "I tried to configure nginx yesterday": the verb names a thing or tells the past.
+// "Ajude-me a revisar codigo": before a Portuguese infinitive, "a" is the preposition, not an article.
+const PT_INFINITIVE = /(?:ar|er|ir)$/
+const AFTER_A = /\ba\s+$/
 const MODIFIER_USE = /\b(?:the|a|an|this|that|these|those|my|our|your|o|os|a|as|um|uma|este|esta|esse|essa|meu|minha|nosso|nossa|seu|sua)\s+$/
 const COMPOUND_AFTER = /^\s+(?!(?:the|a|an|this|that|these|those|my|our|your|all|each|every|o|os|as|um|uma|uns|umas|este|esta|esse|essa|meu|minha|nosso|nossa|seu|sua|todos|todas|cada|and|or|e|ou|to|for|para|de|do|da|with|com|in|em|on|at|by|por|it|them|me|us|is|are|was|were|e|esta|estao)\b)\w+/
 const NARRATIVE = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:i|we|they|he|she|eu|nos|a gente|eles|elas|ele|ela)\s+)?(?:tried|attempted|managed|failed|forgot|happened|used|started|began|finished|stopped|tentei|tentamos|tentou|tentaram|consegui|conseguimos|conseguiu|esqueci|esquecemos|comecei|comecamos|comecou|parei|paramos|parou|terminei|terminamos|terminou)\s+(?:to\s+|de\s+|a\s+)?$/
@@ -1719,8 +1736,8 @@ function questionAt(goal) {
   if (!m) return null
   // "What I need is for you to build a React dashboard, can you do that?": a declarative request, with or without the mark.
   if (DECLARATIVE.test(m[0])) return null
-  if (m[0].includes('?')) return m
   if (!m[0].includes(',')) return m
+  if (m[0].includes('?') && !ROLE_HEAD.test(m[0])) return m
   const head = m[0].slice(0, m[0].indexOf(','))
   return QUESTION_HEAD.test(head) || firstSignal(head).verb ? m : null
 }
@@ -1747,7 +1764,8 @@ function firstSignal(text) {
       const isNoun = NOUN_SIGNAL.test(word) && (copula || (!SENTENCE_START.test(before) && !INFINITIVE_MARK.test(before) && !VERB_OBJECT.test(after) && !requested))
       if (isNoun) { if (m.index < nounAt) { noun = id; nounAt = m.index }; continue }
       // A verb that names a thing ("the configure script") or tells the past ("I tried to configure") is context.
-      if (!NOUN_SIGNAL.test(word) && (NARRATIVE.test(before) || (MODIFIER_USE.test(before) && COMPOUND_AFTER.test(after)))) continue
+      const article = MODIFIER_USE.test(before) && !(AFTER_A.test(before) && PT_INFINITIVE.test(word))
+      if (!NOUN_SIGNAL.test(word) && (NARRATIVE.test(before) || (article && COMPOUND_AFTER.test(after)))) continue
       if (m.index < at) { signal = id; at = m.index }
       break
     }
