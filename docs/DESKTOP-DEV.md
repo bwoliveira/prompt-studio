@@ -47,7 +47,9 @@ are described in `CONTRIBUTING.md`. The doc snapshots behind `scripts/docs_sourc
 
 The UI is English-first through the Desktop plugin i18n API: `ctx.i18n.register(bundles)` in `register()`,
 `usePluginI18n(id)` in React, `ctx.i18n.t` outside React. Rule: the `en` and `pt` bundles must have exactly the same
-keys (the tests check it). Add a key to both in the same change. Generated prompts are not translated: section
+keys and every key must be read by the UI code (the tests check both: a key no `ui-*.js` module reads fails
+`tests/desktop/studio-core.test.mjs`; keys built from a template such as `` `shortcuts.${key}` `` count when the value is in the code).
+Add a key to both in the same change and delete it from both when its last use goes. Generated prompts are not translated: section
 headers and rule lines stay English, and the user's text is copied as written.
 
 ## Draft recognition languages

@@ -282,6 +282,36 @@ test('core i18n: en and pt have identical keys; core and UI bundles never clobbe
   }
 })
 
+// Which keys of the UI bundle does the code read? A key is used when its dotted name is a quoted literal in the UI
+// modules, or when a template such as t(`ai.${errorKey}`) can build it from a value that is written in the code:
+// the quoted literals of the lines that set errorKey, the SHORTCUTS names, or (for the other templates) any quoted
+// literal. `errors.<code>` is the backend's code table: tests/test_contract.py checks it against CONTRACT.md.
+async function unusedUiKeys(messages = UI_MESSAGES.en, files) {
+  const dir = new URL('../../desktop/src/', import.meta.url)
+  const names = files ?? (await readdir(dir)).filter(f => /^(ui-.*|studio-state|plugin-head)\.js$/.test(f))
+  const source = (await Promise.all(names.map(f => readFile(new URL(f, dir), 'utf8')))).join('\n')
+  const quoted = text => new Set([...text.matchAll(/'([^'\n]*)'/g)].map(m => m[1]))
+  const literals = quoted(source)
+  const errorKeys = quoted(source.split('\n').filter(line => /errorKey/.test(line)).join('\n'))
+  const shortcuts = new Set([...source.match(/export const SHORTCUTS = \{\n([\s\S]*?)\n\}/)[1].matchAll(/^  (\w+):/gm)].map(m => m[1]))
+  const templates = [...source.matchAll(/`([\w.]*)\$\{[^}]*\}(\w*)`/g)].map(m => ({ prefix: m[1], suffix: m[2] }))
+  const keys = (obj, prefix = '') => Object.entries(obj).flatMap(([k, v]) => (v && typeof v === 'object' ? keys(v, `${prefix}${k}.`) : [`${prefix}${k}`]))
+  const built = key => templates.some(({ prefix, suffix }) => {
+    if (!key.startsWith(prefix) || !key.endsWith(suffix) || key.length <= prefix.length + suffix.length) return false
+    const middle = key.slice(prefix.length, key.length - suffix.length)
+    if (prefix === 'errors.') return true
+    if (prefix === 'shortcuts.') return shortcuts.has(middle)
+    return (prefix === 'ai.' ? errorKeys : literals).has(middle)
+  })
+  return keys(messages).filter(key => !literals.has(key) && !built(key))
+}
+
+test('i18n: every key of the UI bundle is read by the code (an unused key fails)', async () => {
+  assert.deepEqual(await unusedUiKeys(), [], 'keys in src/i18n-ui.js that no ui-*.js module reads: delete them from en and pt')
+  // The check itself: a key nothing reads is reported, one built from a template is not.
+  assert.deepEqual(await unusedUiKeys({ ai: { ghost: 'x', failed: 'y' }, shortcuts: { open: 'z' }, notify: { sessionChangedLost: 'w' } }), ['ai.ghost'])
+})
+
 test('studio-core.js imports only the engines and its i18n bundle', async () => {
   const src = await readFile(new URL('../../desktop/src/studio-core.js', import.meta.url), 'utf8')
   assert.deepEqual([...src.matchAll(/from '([^']+)'/g)].map(m => m[1]).sort(), ['./engine-astra.js', './engine-opus.js', './engine-sonnet.js', './i18n-core.js'])
