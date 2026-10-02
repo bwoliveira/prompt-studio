@@ -59,7 +59,7 @@ def test_workflow_runs_every_check(workflow):
     assert any(u.startswith("gitleaks/gitleaks-action@") for u in uses)
 
 
-def test_gitleaks_scans_the_whole_history(workflow):
+def test_gitleaks_checkout_fetches_the_history_its_commit_range_needs(workflow):
     steps = next(job["steps"] for job in workflow["jobs"].values() if any(s.get("uses", "").startswith("gitleaks/") for s in job["steps"]))
     checkout = next(s for s in steps if s.get("uses", "").startswith("actions/checkout@"))
     assert checkout["with"]["fetch-depth"] == 0
@@ -84,3 +84,17 @@ def test_docs_name_the_declared_files():
     agents = (REPO / "AGENTS.md").read_text()
     ci_lines = [line for line in agents.splitlines() if "ci.yml" in line]
     assert len(ci_lines) == 1 and "bin/pr" in ci_lines[0], ci_lines
+
+
+def test_bin_pr_requires_exactly_the_jobs_of_the_workflow(workflow):
+    """The merge gate names the jobs it waits for; they must stay equal to the job names in ci.yml."""
+    declared = re.search(r"^REQUIRED_CHECKS=\((.*)\)$", (REPO / "bin" / "pr").read_text(), re.M)
+    assert declared, "bin/pr declares REQUIRED_CHECKS"
+    required = re.findall(r'"([^"]+)"', declared.group(1))
+    assert sorted(required) == sorted(job["name"] for job in workflow["jobs"].values())
+
+
+def test_docs_say_gitleaks_scans_the_commit_range_not_the_whole_history():
+    for doc in ("README.md", "docs/DESKTOP-DEV.md"):
+        text = (REPO / doc).read_text()
+        assert "gitleaks over the full history" not in " ".join(text.split()), doc

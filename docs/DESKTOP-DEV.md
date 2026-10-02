@@ -48,10 +48,14 @@ version: `npm install --save-exact --save-dev <pkg>@<version>` and commit both `
 memory cap from `AGENTS.md`. Python test dependencies are in `requirements-dev.txt` (`pip install -r requirements-dev.txt`).
 
 CI (`.github/workflows/ci.yml`, GitHub-hosted `ubuntu-latest`) runs on every pull request and push to `main`: the build
-check, `npm test`, `npm run test:bin`, `pytest -q tests` and gitleaks over the full history. `bin/pr` waits for those
-checks after the push (`gh pr checks`, polled every `CHECKS_POLL_SECONDS`, default 10) and refuses to merge while they
-are pending past `CHECKS_TIMEOUT_SECONDS` (default 1200), failing, or not reported within `CHECKS_REGISTER_SECONDS`
-(default 180). A green run on the PR is the gate; the local Codex review still runs before the push.
+check, `npm test`, `npm run test:bin`, `pytest -q tests` and gitleaks over the commits of the pull request (or the pushed commits on `main`): the checkout
+fetches the whole history, but gitleaks-action scans only that commit range, so old synthetic test keys in earlier
+commits do not fail it. After the push `bin/pr` reads the check runs of the commit it reviewed (`gh api`, polled
+every `CHECKS_POLL_SECONDS`, default 10) and merges only when `Build check and Node tests`, `Python tests` and
+`gitleaks` all ended in success. It refuses on a failed, cancelled, skipped or neutral one, on a job still running
+past `CHECKS_TIMEOUT_SECONDS` (default 1200) and on a job not reported within `CHECKS_REGISTER_SECONDS` (default
+180); `gh pr checks` is not used because it exits 0 for cancelled or skipped checks and for a partial set of jobs.
+A green run on the PR is the gate; the local Codex review still runs before the push.
 
 The doc snapshots live outside the plugin; see `docs/sources/README.md`.
 

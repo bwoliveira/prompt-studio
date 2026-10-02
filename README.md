@@ -382,9 +382,11 @@ python3 scripts/docs_sources.py check --docs-dir <snapshot dir>   # every doc qu
 - The Python test dependencies are in `requirements-dev.txt` (the plugin itself needs none), for the `uvx` command
   above and for `pip install -r requirements-dev.txt`.
 - CI: `.github/workflows/ci.yml` runs on every pull request and every push to `main`: `node scripts/build.mjs
-  --check`, `npm test`, `npm run test:bin`, the Python tests and gitleaks over the full history. `bin/pr` waits for
-  those checks and does not merge while they are pending (up to `CHECKS_TIMEOUT_SECONDS`, default 1200), failing or
-  not reported (`CHECKS_REGISTER_SECONDS`, default 180).
+  --check`, `npm test`, `npm run test:bin`, the Python tests and gitleaks over the commits of the pull request
+  (or the commits of a push to `main`), not the whole history. `bin/pr` reads the check runs of the commit it
+  reviewed and merges only when all three jobs (`Build check and Node tests`, `Python tests`, `gitleaks`) ended in
+  success: it waits while one is running (up to `CHECKS_TIMEOUT_SECONDS`, default 1200) or missing
+  (`CHECKS_REGISTER_SECONDS`, default 180) and refuses on a failed, cancelled, skipped or neutral one.
 - The official doc snapshots used by `docs_sources.py` live outside the repository; see `docs/sources/README.md`.
 - `.gitattributes` keeps every text file with LF line endings, also on Windows checkouts, so
   `node scripts/build.mjs --check` compares the same bytes on every system.
