@@ -163,15 +163,15 @@ Every control shows its key next to its label. Keys work with the cursor in the 
 
 | Key | Action |
 |---|---|
-| F4 | Open Prompt Studio (from the message field) |
+| F4, or ⌘⇧E / Ctrl+Shift+E | Open Prompt Studio (from the message field); the second one is a Hermes Desktop key you can reassign |
 | F1 | Show or hide the list of shortcuts |
 | F3 | Settings: models, session context, language |
-| F5 | Accept the recommended choice, or confirm what you typed |
-| F6 | Skip, I don't have one, or use the default |
-| F7 | Use the AI suggestion (text goes into the field for F5 to confirm; if the AI offers the default, F7 accepts it) |
-| F8 | Back / undo the edit / back to the steps |
-| F9 | Generate the prompt; on the preview, send it now |
-| F10 | Close and return the draft |
+| F5 / Alt+Y | Accept the recommended choice, or confirm what you typed |
+| F6 / Alt+K | Skip, I don't have one, or use the default |
+| F7 / Alt+L | Use the AI suggestion (text goes into the field for F5 to confirm; if the AI offers the default, F7 accepts it) |
+| F8 / Alt+B | Back / undo the edit / back to the steps |
+| F9 / Alt+G | Generate the prompt; on the preview, send it now |
+| F10 / Alt+X | Close and return the draft |
 | Alt+1 … Alt+9 | Pick an option |
 | Alt+Shift+1 … Alt+Shift+9 | Edit an answered step |
 | Alt+S | Ask the AI, or try again |
@@ -186,17 +186,24 @@ Every control shows its key next to its label. Keys work with the cursor in the 
 
 Keys and scope:
 
-- **Studio closed:** only F4 is used, and only from the message field.
-- **Never captured:** the studio's key listener never takes Tab, Enter, Esc or chords with Ctrl or Super.
+- **Studio closed:** the studio's own keys are only F4, and only from the message field. The opening key Prompt
+  Studio adds to Hermes Desktop (**Ctrl+Shift+E**, **⌘⇧E** on a Mac) belongs to Desktop, not to the studio: it
+  shows under Keybinds in Desktop's settings (and next to the Prompt Studio command in ⌘K), where you can
+  reassign it. Like F4, it reads the message field and tells you when it is empty, shorter than 10 characters or
+  not available. Its default is a chord none of Desktop's own actions uses.
+- **No F-key needed:** F5 to F10 each have an Alt+letter twin (the table above shows both, the controls print
+  both, F1 lists both). The letters skip E, I, N and U, the Option dead keys on a Mac. F5 to F10 keep working.
+- **Never captured:** the studio's key listener never takes Tab, Enter, Esc (Alt+Enter and Ctrl+Enter included)
+  or chords with Ctrl or Super.
   Inside the studio's own answer field, keys stay in that field (Enter makes a new line), so typing an
   answer never triggers the app's composer.
 - **Alt:** either Alt key works, except where the right Alt is AltGr (some layouts), which does not trigger the
   shortcuts. Alt+digits follow the physical number row, whatever the keyboard layout.
-- **Apple keyboards:** press fn with the F-keys (F4 is fn+F4) unless *Use F1, F2, etc. keys as standard
-  function keys* is on in macOS Keyboard settings. Alt is the Option (⌥) key. On a Mac the key caps and the F1
-  list show ⌥E, ⇧ and "fn F4" instead of Alt+E, Shift and F4. Alt shortcuts follow the physical key, so ⌥E,
-  ⌥N and ⌥I still work although macOS would start an accent (a dead key) there; a real input-method
-  composition, with no Alt chord, is still left alone.
+- **Apple keyboards:** to skip fn, open with ⌘⇧E and drive the flow with the Option (⌥) twins above (⌥Y, ⌥K, ⌥L,
+  ⌥B, ⌥G, ⌥X); or press fn with the F-keys (F4 is fn+F4) unless *Use F1, F2, etc. keys as standard function keys* is
+  on in macOS Keyboard settings. On a Mac the key caps and the F1 list show ⌥E, ⇧ and "fn F4" instead of Alt+E,
+  Shift and F4. Alt shortcuts follow the physical key, so ⌥E, ⌥N and ⌥I still work although macOS would start an
+  accent (a dead key) there; a real input-method composition, with no Alt chord, is still left alone.
 - **Conflicts checked:** these keys were checked against Hermes Desktop's own bindings and the Linux Mint
   (Cinnamon) desktop, which uses only Alt with the F-keys.
 

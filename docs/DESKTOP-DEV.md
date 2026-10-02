@@ -65,8 +65,13 @@ the detection constants drift apart.
 ## Keyboard
 
 - While the studio is closed, only **F4** is handled (open the studio, and only when the composer is on screen).
+  The other way in is a binding in Hermes Desktop's `keybinds` area (`OPEN_BINDING`, default `mod+shift+e`, id
+  `prompt-studio.start` like the palette command): Desktop dispatches it and runs `startFromComposer`, so the
+  studio's listener never sees it. Its default must stay out of Desktop's own default actions
+  (`tests/desktop/fixtures/hermes-desktop-default-keybinds-*.txt`).
 - While it is open, a key works only if a visible control prints it. The key is shown on the control, so what is
-  shown is what runs. F5-F10 are always swallowed while open (F5 could reload the window).
+  shown is what runs. F5-F10 and their Alt letters (`SHORTCUTS.alt`) are always swallowed while open (F5 could
+  reload the window; a Mac would type the Option symbol). The Alt letters never use E, I, N or U (Option dead keys).
 - Never taken by the key listener: Tab, Enter, Esc, and any Ctrl or Super chord. F-keys with a modifier are ignored.
   The answer textarea stops propagation of its own keys so typing never reaches the composer's handlers.
 - Capture phase, so keys work with the cursor in the answer field; IME composition is left alone.
@@ -77,12 +82,12 @@ the detection constants drift apart.
 | F4 | Open Prompt Studio |
 | F1 | Shortcut help |
 | F3 | Settings (models, session context, language) |
-| F5 | Confirm / use the recommendation |
-| F6 | Skip |
-| F7 | Use the AI suggestion |
-| F8 | Back (or undo the edit) |
-| F9 | Generate the prompt |
-| F10 | Close |
+| F5 / Alt+Y | Confirm / use the recommendation |
+| F6 / Alt+K | Skip |
+| F7 / Alt+L | Use the AI suggestion |
+| F8 / Alt+B | Back (or undo the edit) |
+| F9 / Alt+G | Generate the prompt |
+| F10 / Alt+X | Close |
 | Alt+1…9 | Pick option N |
 | Alt+Shift+1…9 | Edit option N |
 | Alt+S | Ask the AI |

@@ -307,7 +307,6 @@ test('plugin claims one key listener (printed keys only) and exposes the button 
   assert.equal((ui.match(/ctx\.addEventListener\(\s*window,\s*'keydown'/g) || []).length, 1)
   assert.doesNotMatch(ui, /(window|document)\.addEventListener\(/)
   assert.match(ui, /target = root && shortcutTarget\(root, combo\)/, 'open studio: only keys printed on a control')
-  assert.doesNotMatch(ui, /KEYBINDS_AREA/)
   assert.doesNotMatch(ui, /event\.key === '(Tab|Enter|Escape)'/)
   assert.match(ui, /area: COMPOSER_AREAS\.actions/)
   for (const marker of ['data-studio-recommend', 'data-studio-option', 'data-studio-cancel', 'data-studio-generate', 'data-studio-ai-toggle', 'data-studio-ai-suggest', 'data-studio-ai-improve', 'data-studio-ai-discard']) {

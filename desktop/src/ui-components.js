@@ -9,7 +9,7 @@ const QUESTION_TEXT_ID = 'prompt-studio-question-text'
 const QUESTION_HELP_ID = 'prompt-studio-question-help'
 
 // Keyboard: every studio control has a key, and the key is printed on the control itself.
-// F4 opens the studio from the composer; everything else lives on the buttons: a button with a
+// F4 opens the studio from the composer (so does the Hermes Desktop keybind, see OPEN_BINDING); everything else lives on the buttons: a button with a
 // `keyHint` is the one that key presses, so what is shown is always what runs. SHORTCUTS (below) is the
 // one map of every key (F1 shows it). Tab, Enter and Esc are never taken: they stay the app's.
 // Conflicts checked: Hermes Desktop binds none of these (it uses Ctrl/Ctrl+Shift/Ctrl+Alt chords,
@@ -40,8 +40,16 @@ export const SHORTCUTS = {
   model: Object.fromEntries(TARGETS.map(target => [target.id, target.key])),
   mode: 'Alt+I',
   version: 'Alt+V',
-  editPrompt: 'Alt+E'
+  editPrompt: 'Alt+E',
+  // A second key, with no F-key, for each of F5-F10 (an Apple keyboard needs fn for those). Never E, I, N or U:
+  // those Option chords are dead keys on a Mac. Free in the map above, in Hermes Desktop and in Cinnamon.
+  // Not a row of its own in F1: each combo is listed next to the F-key it doubles.
+  alt: { accept: 'Alt+Y', skip: 'Alt+K', useAi: 'Alt+L', back: 'Alt+B', generate: 'Alt+G', close: 'Alt+X' }
 }
+// The Hermes Desktop keybind that opens the studio (the `keybinds` area; the user can reassign it in Desktop
+// settings). Desktop's own notation, `mod` = Cmd on a Mac and Ctrl elsewhere. Desktop's default actions use
+// mod+shift with M N F B S L H T K G W C V 0 [ ] and \, so E is free; the Studio's own listener never sees it.
+const OPEN_BINDING = 'mod+shift+e'
 // The combo of digit `n` for a range entry of the map ('pick' → Alt+3, 'edit' → Alt+Shift+3).
 const digitCombo = (action, n) => SHORTCUTS[action].replace('1…9', String(n))
 // What the F1 list prints for an entry: the combo, or the three target combos joined.
@@ -70,9 +78,17 @@ function displayCombo(combo) {
     return /^F\d+$/.test(base) ? `fn ${base}` : parts.map(modifierGlyph).join('') + base
   }).join(' / ')
 }
+// The Alt+letter that doubles a F-key combo, if there is one (F9 -> Alt+G).
+const altOf = combo => {
+  const action = Object.keys(SHORTCUTS.alt).find(key => SHORTCUTS[key] === combo)
+  return action && SHORTCUTS.alt[action]
+}
 // While open these are always swallowed, even when no control shows them right now: F5 would
-// otherwise reach the window (reload in some Electron setups).
-const STUDIO_FKEYS = [SHORTCUTS.accept, SHORTCUTS.skip, SHORTCUTS.useAi, SHORTCUTS.back, SHORTCUTS.generate, SHORTCUTS.close]
+// otherwise reach the window (reload in some Electron setups), and a Mac would type the Option symbol.
+const isFKeyAction = combo => Object.keys(SHORTCUTS.alt).some(key => SHORTCUTS[key] === combo || SHORTCUTS.alt[key] === combo)
+// Behind an overlay only the F-keys themselves stay swallowed (F5 would reload the window); an Alt twin belongs to the
+// overlay's own field there, where on a Mac it is a printable Option symbol.
+const isBareFKeyAction = combo => Object.keys(SHORTCUTS.alt).some(key => SHORTCUTS[key] === combo)
 
 function keyCombo(event) {
   if (event.ctrlKey || event.metaKey) return ''
@@ -121,7 +137,7 @@ function foreignOverlayOpen() {
 
 function shortcutTarget(root, combo) {
   for (const el of root.querySelectorAll('[data-studio-shortcut]')) {
-    if (el.getAttribute('data-studio-shortcut') === combo && !el.disabled) return el
+    if ((el.getAttribute('data-studio-shortcut') === combo || el.getAttribute('data-studio-shortcut-alt') === combo) && !el.disabled) return el
   }
   return null
 }
@@ -129,7 +145,7 @@ function shortcutTarget(root, combo) {
 // Installed once at register time through ctx.addEventListener, so the host removes it on
 // dispose, on hot reload and when register() fails half way. While the studio is closed only F4
 // is looked at (and only when the composer is on screen); while it is open, only combos printed
-// on a visible control, plus F5-F10 swallowed.
+// on a visible control, plus F5-F10 and their Alt letters swallowed.
 function installStudioKeys(ctx) {
   if (typeof window === 'undefined' || !ctx?.addEventListener) return
   const onKey = event => {
@@ -141,14 +157,14 @@ function installStudioKeys(ctx) {
     const blocked = foreignOverlayOpen() || ($settingsOpen.get() && !OVERLAY_KEYS.includes(combo))
     let target = null
     if (blocked) {
-      // Nothing behind the overlay: F5-F10 are still swallowed below while the studio is open.
+      // Nothing behind the overlay: F5-F10 are still swallowed below while the studio is open; their Alt twins are not.
     } else if (open) {
       const root = document.querySelector('[data-studio-strip]')
       target = root && shortcutTarget(root, combo)
     } else if (combo === SHORTCUTS.open) {
       target = document.querySelector('[data-studio-open]')
     }
-    if (!target && !(open && STUDIO_FKEYS.includes(combo))) return
+    if (!target && !(open && (blocked ? isBareFKeyAction(combo) : isFKeyAction(combo)))) return
     event.preventDefault()
     event.stopPropagation()
     if (target && !event.repeat) target.click()
@@ -174,7 +190,14 @@ function KeyCap({ combo, primary, reserved }) {
 
 function keyProps(t, keyHint, title) {
   if (!keyHint) return { title }
-  return { 'aria-keyshortcuts': keyHint, 'data-studio-shortcut': keyHint, title: [title, t('keys.shortcut', displayCombo(keyHint))].filter(Boolean).join(' · ') }
+  const alt = altOf(keyHint)
+  return {
+    // aria-keyshortcuts takes a space-separated list; the visible and tooltip text read "F9 / Alt+G" (⌥G on a Mac).
+    'aria-keyshortcuts': alt ? `${keyHint} ${alt}` : keyHint,
+    'data-studio-shortcut': keyHint,
+    ...(alt ? { 'data-studio-shortcut-alt': alt } : {}),
+    title: [title, t('keys.shortcut', displayCombo(alt ? `${keyHint} / ${alt}` : keyHint))].filter(Boolean).join(' · ')
+  }
 }
 
 function Button({ children, onClick, variant = 'default', disabled = false, title, data, keyHint, reserveKey, ariaLabel }) {
@@ -213,7 +236,7 @@ function Button({ children, onClick, variant = 'default', disabled = false, titl
     ...keyProps(t, live, title),
     type: 'button',
     children: live || reserved
-      ? jsxs(Fragment, { children: [children, jsx(KeyCap, { combo: live || reserved, primary, reserved: Boolean(reserved) })] })
+      ? jsxs(Fragment, { children: [children, jsx(KeyCap, { combo: live || reserved, primary, reserved: Boolean(reserved) }), altOf(live || reserved) ? jsx(KeyCap, { combo: altOf(live || reserved), primary, reserved: Boolean(reserved) }) : null] })
       : children
   })
 }
@@ -931,8 +954,8 @@ function ShortcutsList() {
       jsx('span', { style: { color: 'var(--ui-text-primary, inherit)', display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px' }, children: t('shortcuts.title') }),
       jsx('dl', {
         style: { columnGap: '10px', display: 'grid', gridTemplateColumns: 'max-content minmax(0, 1fr)', margin: 0, rowGap: '4px' },
-        children: Object.entries(SHORTCUTS).flatMap(([key, value]) => {
-          const combo = shortcutLabel(value)
+        children: Object.entries(SHORTCUTS).filter(([key]) => key !== 'alt').flatMap(([key, value]) => {
+          const combo = [shortcutLabel(value), SHORTCUTS.alt[key]].filter(Boolean).join(' / ')
           return [
             jsx('dt', { 'data-studio-shortcut-row': combo, style: { margin: 0 }, children: jsx(Kbd, { size: 'sm', children: displayCombo(combo) }) }, `k-${combo}`),
             jsx('dd', { style: { ...typeStyle, fontSize: '12px', lineHeight: '18px', margin: 0 }, children: t(`shortcuts.${key}`) }, `d-${combo}`)
@@ -1107,6 +1130,15 @@ export default {
         // While the studio is open the composer is intentionally empty; a send that reaches
         // the app's submit path anyway must not fire a blank turn.
         data: { handler: draft => ($studio.get().status !== 'idle' ? null : draft) }
+      },
+      {
+        id: 'keybind-start',
+        area: KEYBINDS_AREA,
+        // The same entry as the palette command (same id, so ⌘K shows the live key), and F4's own path: the
+        // draft is read, a short or empty one is reported, a missing composer is reported.
+        // Desktop guards nothing for a contributed keybind: behind a dialog, menu, listbox or the Studio's own Settings it
+        // does nothing, like F4. The palette command below is chosen from the palette itself, so it is not guarded.
+        data: { id: `${ID}.start`, defaults: [OPEN_BINDING], label: tr('palette.keybind'), run: () => (foreignOverlayOpen() || $settingsOpen.get() ? undefined : startFromComposer()) }
       },
       {
         id: 'palette-start',
