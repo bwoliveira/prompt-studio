@@ -402,9 +402,24 @@ test('entry: with no --base, the base is origin\'s default branch and is fetched
 function singleBranch(dir, only) {
   git(dir, 'config', 'remote.origin.fetch', `+refs/heads/${only}:refs/remotes/origin/${only}`);
   for (const ref of git(dir, 'for-each-ref', '--format=%(refname)', 'refs/remotes/origin/').split('\n').filter(Boolean)) {
-    if (ref !== `refs/remotes/origin/${only}`) git(dir, 'update-ref', '-d', ref);
+    // origin/HEAD stays, as in a real single-branch clone; --no-deref: never delete what a symbolic ref points at.
+    if (ref !== `refs/remotes/origin/${only}` && ref !== 'refs/remotes/origin/HEAD') git(dir, 'update-ref', '--no-deref', '-d', ref);
   }
 }
+
+// Since git 2.48 a plain `git fetch` also creates refs/remotes/origin/HEAD (a symbolic ref to origin/<default>), as a clone
+// does. `git update-ref -d` follows a symbolic ref and deletes its target, so the helper must not do that.
+test('singleBranch keeps origin/<only> when origin/HEAD exists, whatever the git version, and drops the other branches', () => {
+  const repo = makeRepo('main', true);
+  git(repo, 'push', '-q', 'origin', 'main:refs/heads/release');
+  git(repo, 'fetch', '-q', 'origin');
+  git(repo, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main');
+  singleBranch(repo, 'main');
+  const refs = git(repo, 'for-each-ref', '--format=%(refname)', 'refs/remotes/origin/').split('\n');
+  assert.ok(refs.includes('refs/remotes/origin/main'), refs.join(','));
+  assert.ok(!refs.includes('refs/remotes/origin/release'), refs.join(','));
+  assert.equal(git(repo, 'rev-parse', 'origin/main'), git(repo, 'rev-parse', 'main'));
+});
 
 test('entry: the base is fetched into origin/<base>, also in a single-branch clone with BASE_BRANCH', () => {
   const repo = makeRepo('main', true);
