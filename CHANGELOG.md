@@ -17,10 +17,10 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
   dead keys (key `Dead`, keyCode 229 or `isComposing`) and the key listener dropped every such event. An Alt chord on
   a letter or digit key is now read by its physical key even then; a real input-method composition without an Alt
   chord is still ignored. The listener still never handles Enter, Tab, Esc or Ctrl/Super chords (now covered by a test).
-- Mac key caps: on a Mac the key caps, tooltips, notices and the F1 list show ⌥E, ⇧ and "fn F4" instead of Alt+E,
-  Shift and F4 (the modifier glyphs come from the Desktop SDK's `formatModifierToken` when it has one, a local table
+- Mac key caps: on a Mac the key caps, tooltips, notices and the F1 list show ⌥E and ⇧ instead of Alt+E and Shift;
+  F-keys read as plain F4, F9 and so on (whether a Mac needs fn for them is its own keyboard setting) (the modifier glyphs come from the Desktop SDK's `formatModifierToken` when it has one, a local table
   otherwise). Other platforms are unchanged, and `aria-keyshortcuts` keeps the canonical combo. The F1 help gains a Mac
-  note (Option, fn) and no longer says "use the left Alt": either Alt works, only an AltGr (right Alt on some
+  note (Alt is Option) and no longer says "use the left Alt": either Alt works, only an AltGr (right Alt on some
   layouts) does not.
 - Fix: with the Settings dialog, a model menu, the command palette or any other open dialog/menu/listbox in front, the
   Studio's keys no longer reach the controls behind it: F9 does not generate, F10 does not cancel, F4 does not open

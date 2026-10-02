@@ -219,7 +219,7 @@ export const UI_MESSAGES = {
       version: 'Other version in the preview',
       editPrompt: 'Put the prompt in the composer to edit before sending',
       noteAlt: 'Alt shortcuts work with either Alt key, except where the right Alt is AltGr (some layouts): AltGr does not trigger them.',
-      noteMac: (option, keys) => `On a Mac, Alt is the Option key (${option}) and the F-keys need fn, unless macOS is set to use them as standard function keys. ${keys} are shortcuts here, so they do not start an accent.`,
+      noteMac: (option, keys) => `On a Mac, Alt is the Option key (${option}). ${keys} are shortcuts here, so they do not start an accent.`,
       noteDigits: modifier => `${modifier}+digits follow the physical number row, whatever the keyboard layout.`,
       noteKeys: 'Tab, Enter and Esc keep working as usual.'
     }
@@ -438,7 +438,7 @@ export const UI_MESSAGES = {
       version: 'Outra versão na prévia',
       editPrompt: 'Pôr o prompt no composer para editar antes de enviar',
       noteAlt: 'Os atalhos com Alt funcionam com qualquer Alt, exceto onde o Alt da direita é o AltGr (alguns layouts): o AltGr não os aciona.',
-      noteMac: (option, keys) => `No Mac, o Alt é a tecla Option (${option}) e as teclas F precisam de fn, a menos que o macOS esteja configurado para usá-las como teclas de função padrão. ${keys} são atalhos aqui, então não iniciam um acento.`,
+      noteMac: (option, keys) => `No Mac, o Alt é a tecla Option (${option}). ${keys} são atalhos aqui, então não iniciam um acento.`,
       noteDigits: modifier => `${modifier}+dígito segue a fileira física de números, qualquer que seja o layout do teclado.`,
       noteKeys: 'Tab, Enter e Esc continuam funcionando como sempre.'
     }

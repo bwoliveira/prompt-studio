@@ -2236,20 +2236,21 @@ test('KEYS-MAC-DEAD: a real IME composition without an Alt chord is still ignore
   }
 })
 
-// What a Mac shows for a canonical combo, written out here and not taken from the plugin: ⌥ ⇧ before the key, "fn " before an F-key.
+// What a Mac shows for a canonical combo, written out here and not taken from the plugin: ⌥ ⇧ before the key; an F-key reads
+// as itself (whether fn is needed is the Mac's own keyboard setting, not the Studio's business).
 const macCap = combo => combo.split(' / ').map(one => {
   const parts = one.split('+')
   const base = parts.pop()
-  if (/^F\d+$/.test(base)) return `fn ${base}`
+  if (/^F\d+$/.test(base)) return base
   return parts.map(part => ({ Alt: '⌥', Shift: '⇧' })[part]).join('') + base
 }).join(' / ')
 
-test('KEYS-MAC-CAPS: on a Mac every key cap, tooltip and F1 row reads ⌥E / ⇧ / "fn F4"; the canonical combo stays in the attributes; Linux is unchanged', { skip }, async () => {
+test('KEYS-MAC-CAPS: on a Mac every key cap, tooltip and F1 row reads ⌥E / ⇧ / plain F4, never "fn"; the canonical combo stays in the attributes; Linux is unchanged', { skip }, async () => {
   const map = K()
   // The three that name the forms.
   assert.equal(macCap('Alt+E'), '⌥E')
   assert.equal(macCap('Alt+Shift+1…9'), '⌥⇧1…9')
-  assert.equal(macCap('F4'), 'fn F4')
+  assert.equal(macCap('F4'), 'F4')
   const visibleCaps = () => [...$('[data-studio-strip]').querySelectorAll('[data-studio-key]')]
   // Linux first: the caps are the canonical combos, no glyph and no fn.
   await withPlatform('Linux x86_64', async () => {
@@ -2270,10 +2271,10 @@ test('KEYS-MAC-CAPS: on a Mac every key cap, tooltip and F1 row reads ⌥E / ⇧
     // The platform is read at render time: a studio open and closed again redraws the F4 button.
     await openStudio(INTENT, 'manual')
     await click('[data-studio-cancel]')
-    assert.ok($('[data-studio-open] [data-studio-key]').textContent === macCap(map.open), 'the open button says fn F4')
-    assert.equal($('[data-studio-open] [data-studio-key]').textContent, 'fn F4')
+    assert.ok($('[data-studio-open] [data-studio-key]').textContent === macCap(map.open), 'the open button says F4')
+    assert.equal($('[data-studio-open] [data-studio-key]').textContent, 'F4')
     assert.equal($('[data-studio-open]').getAttribute('aria-keyshortcuts'), map.open, 'aria-keyshortcuts stays canonical')
-    assert.ok($('[data-studio-open]').getAttribute('title').includes('fn F4') && !$('[data-studio-open]').getAttribute('title').includes('Shortcut: F4'), $('[data-studio-open]').getAttribute('title'))
+    assert.ok($('[data-studio-open]').getAttribute('title').includes('F4') && !/\bfn\b/.test($('[data-studio-open]').getAttribute('title')), $('[data-studio-open]').getAttribute('title'))
     await openStudio(INTENT, 'manual')
     for (let i = 0; i < 3 && !$('[data-studio-ladder]'); i += 1) await press(map.skip)
     assert.ok($('[data-studio-ladder]'), 'ladder with steps to edit')
@@ -2285,13 +2286,13 @@ test('KEYS-MAC-CAPS: on a Mac every key cap, tooltip and F1 row reads ⌥E / ⇧
       assert.ok(!/Alt|Shift/.test(cap.textContent), `no Alt/Shift word: ${cap.textContent}`)
     }
     const text = selector => $(`${selector} [data-studio-key]`)?.textContent
-    assert.equal(text('[data-studio-skip]'), 'fn F6')
+    assert.equal(text('[data-studio-skip]'), 'F6')
     assert.equal(text('[data-studio-paste-open]'), '⌥C')
     assert.equal(text('[data-studio-ai-toggle]'), '⌥I')
     assert.equal(text('[data-studio-target-option="opus"]'), '⌥O')
-    assert.equal(text('[data-studio-settings]'), 'fn F3')
-    assert.equal(text('[data-studio-shortcuts-help]'), 'fn F1')
-    assert.equal(text('[data-studio-cancel]'), 'fn F10')
+    assert.equal(text('[data-studio-settings]'), 'F3')
+    assert.equal(text('[data-studio-shortcuts-help]'), 'F1')
+    assert.equal(text('[data-studio-cancel]'), 'F10')
     const edits = [...$('[data-studio-ladder]').querySelectorAll('[data-studio-key]')].map(cap => cap.textContent)
     edits.forEach((cap, i) => assert.equal(cap, `⌥⇧${i + 1}`, `step ${i + 1} edit cap`))
     // Canonical combo in the attributes, the Mac form in the tooltip.
@@ -2305,7 +2306,7 @@ test('KEYS-MAC-CAPS: on a Mac every key cap, tooltip and F1 row reads ⌥E / ⇧
       if (title.includes('Shortcut: ')) { titled += 1; assert.ok(title.endsWith(`Shortcut: ${macCap(shown)}`), `tooltip of ${shown} shows the Mac form: ${title}`) }
     }
     assert.ok(titled > 5, 'tooltips checked')
-    assert.ok($('[data-studio-skip]').getAttribute('title').includes('Shortcut: fn F6'), $('[data-studio-skip]').getAttribute('title'))
+    assert.ok($('[data-studio-skip]').getAttribute('title').includes('Shortcut: F6'), $('[data-studio-skip]').getAttribute('title'))
     assert.ok($('[data-studio-ai-toggle] span[title]').getAttribute('title').includes('⌥I'), 'AI mode tooltip')
     // F1: rows show the Mac form, keep the canonical combo in data-studio-shortcut-row, and the Mac note is there.
     await press(map.help)
@@ -2316,9 +2317,9 @@ test('KEYS-MAC-CAPS: on a Mac every key cap, tooltip and F1 row reads ⌥E / ⇧
       const combo = row.getAttribute('data-studio-shortcut-row')
       assert.equal(row.textContent, macCap(combo), `F1 row ${combo}`)
     }
-    assert.ok(rows.some(row => row.textContent === 'fn F4') && rows.some(row => row.textContent === '⌥O / ⌥A / ⌥T') && rows.some(row => row.textContent === '⌥⇧1…9'))
+    assert.ok(rows.some(row => row.textContent === 'F4') && rows.some(row => row.textContent === '⌥O / ⌥A / ⌥T') && rows.some(row => row.textContent === '⌥⇧1…9'))
     assert.match(list.textContent, /Mac/, 'Mac note in F1')
-    assert.match(list.textContent, /fn/)
+    assert.ok(!/\bfn\b/.test(list.textContent), 'no fn anywhere in F1: whether F-keys need fn is the Mac setting')
     assert.match(list.textContent, /⌥\+digits/, 'digit note uses the Option glyph')
     assert.ok(!/left Alt/.test(list.textContent))
     await press(map.help)
@@ -2342,19 +2343,19 @@ test('KEYS-MAC-CAPS: the done text, the empty-draft notice and Settings errors n
         $('[data-slot="composer-rich-input"]').textContent = ''
         ui.notifications.length = 0
         await click('[data-studio-open]')
-        assert.ok((ui.notifications.at(-1)?.message ?? '').includes('fn F4'), `${locale}: empty-draft notice: ${ui.notifications.at(-1)?.message}`)
+        assert.ok((ui.notifications.at(-1)?.message ?? '').includes('F4') && !(ui.notifications.at(-1)?.message ?? '').includes('fn F4'), `${locale}: empty-draft notice: ${ui.notifications.at(-1)?.message}`)
         await openStudio(INTENT, 'off')
         for (let i = 0; i < 20 && $('[data-studio-step]'); i += 1) await press($('[data-studio-skip]') ? original.skip : original.accept)
-        assert.ok(currentText().includes('(fn F9)'), `${locale}: done state: ${currentText()}`)
+        assert.ok(currentText().includes('(F9)') && !currentText().includes('fn F9'), `${locale}: done state: ${currentText()}`)
         await press(original.help)
         const notes = $('[data-studio-shortcuts-list]').textContent
-        assert.ok(/fn/.test(notes) && /⌥/.test(notes), `${locale}: Mac note: ${notes}`)
+        assert.ok(!/\bfn\b/.test(notes) && /⌥/.test(notes), `${locale}: Mac note: ${notes}`)
         assert.ok(!/left Alt|Alt da esquerda/.test(notes), `${locale}: no left-Alt advice`)
         await press(original.help)
         await freshSettings('sess-1')
         backend.context = () => ({ ok: false, code: 'provider_refused', error: 'provider refused: PermissionDeniedError' })
         await openFresh()
-        await waitFor(() => $('[data-studio-context-status]')?.textContent.includes('(fn F3)'))
+        await waitFor(() => $('[data-studio-context-status]')?.textContent.includes('(F3)'))
         if ($('[data-studio-cancel]')) await click('[data-studio-cancel]')
       })
       // Off a Mac the same notes carry no Mac text and still no left-Alt advice.
@@ -3142,16 +3143,16 @@ test('ALT-4: the listener never handles Enter, Alt+Enter, Ctrl+Enter, Tab, Esc o
   await press(K().close)
 })
 
-test('ALT-5: on a Mac the Alt+letter twins read fn F9 / ⌥G on the control and in F1, and run even when macOS marks the chord keyCode 229 / isComposing', { skip }, async () => {
+test('ALT-5: on a Mac the Alt+letter twins read F9 / ⌥G on the control and in F1, and run even when macOS marks the chord keyCode 229 / isComposing', { skip }, async () => {
   const alt = K().alt
   await withPlatform('MacIntel', async () => {
     await openStudio(INTENT, 'manual')
-    assert.deepEqual(capsOf($('[data-studio-skip]')), [macCap(K().skip), macCap(alt.skip)], 'fn F6, ⌥K')
-    assert.deepEqual(capsOf($('[data-studio-cancel]')), ['fn F10', '⌥X'])
+    assert.deepEqual(capsOf($('[data-studio-skip]')), [macCap(K().skip), macCap(alt.skip)], 'F6, ⌥K')
+    assert.deepEqual(capsOf($('[data-studio-cancel]')), ['F10', '⌥X'])
     assert.ok($('[data-studio-skip]').getAttribute('title').endsWith(`Shortcut: ${macCap(`${K().skip} / ${alt.skip}`)}`), $('[data-studio-skip]').getAttribute('title'))
     assert.equal($('[data-studio-skip]').getAttribute('aria-keyshortcuts'), `${K().skip} ${alt.skip}`, 'announced with the canonical combos')
     await press(K().help)
-    assert.ok($(`[data-studio-shortcuts-list] [data-studio-shortcut-row="${K().generate} / ${alt.generate}"]`).textContent === 'fn F9 / ⌥G', 'F1 row')
+    assert.ok($(`[data-studio-shortcuts-list] [data-studio-shortcut-row="${K().generate} / ${alt.generate}"]`).textContent === 'F9 / ⌥G', 'F1 row')
     await press(K().help)
     // The twin runs by its physical key although the event looks like a dead key or a composition.
     for (const extra of DEAD_KEYS) {
