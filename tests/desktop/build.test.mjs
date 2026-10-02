@@ -128,6 +128,25 @@ test('walk: a comment between the keyword and the regex literal does not turn it
   assert.ok(stripExports("const q = obj.in / 2 + '/'\nexport const r = 1\n").includes('const r = 1'))
 })
 
+test('walk: a regex literal after a control-flow condition is a regex, and a misread quote never hides the next line (Codex P2)', () => {
+  for (const source of [
+    "function matches(s) { if (s) /'/.test(s) }\nexport const ENGINE = { matches }\n",
+    "function matches(s) { while (s.next()) /\"/.test(s) }\nexport const ENGINE = { matches }\n",
+    "function matches(s) { for (const x of s) /'/.test(x) }\nexport const ENGINE = { matches }\n",
+    // Not recognised as a regex (a slash after a block's brace), but the quote it holds ends with its line.
+    "function matches(s) { { } /'/.test(s) }\nexport const ENGINE = { matches }\n",
+  ]) {
+    const out = stripExports(source)
+    assert.ok(!/^export\b/m.test(out), out)
+    assert.ok(/^const ENGINE = \{ matches \}$/m.test(out), out)
+  }
+  // Near misses: a call or a grouped expression divided stays a division.
+  assert.ok(stripExports("const r1 = f(a) / 2 / 3\nexport const r = (b) / 4 / 5\n").includes('const r = (b) / 4 / 5'))
+  assert.ok(stripExports("const ok = obj.if(a) / 2 + '/'\nexport const r = 1\n").includes('const r = 1'))
+  // A template literal still spans lines.
+  assert.ok(stripExports('export const t = `a\nexport { x }\n`\n').includes('`a\nexport { x }\n`'))
+})
+
 test('topLevelNames: astral characters (emoji) in a comment do not shift the masks after them (Codex P2)', () => {
   const source = `// ${'😀'.repeat(15)}\nconst real = \`\nconst fake = 1\n\`\n`
   assert.deepEqual([...topLevelNames(source)], ['real'])
