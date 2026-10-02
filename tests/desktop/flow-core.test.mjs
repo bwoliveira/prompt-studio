@@ -113,5 +113,5 @@ test('composer only through host.composer (no app DOM, no attachment reach-in); 
   assert.equal((plugin.match(/addEventListener\((window, )?['"]key(down|up)/g) || []).length, 1, 'one listener (the studio keys)')
   assert.match(plugin, /ctx\.addEventListener\(window, 'keydown'/, 'tracked by the host')
   assert.doesNotMatch(plugin, /event\.key === ['"](Tab|Enter|Escape)/)
-  assert.match(plugin, /const OPEN_KEY = 'F4'/)
+  assert.match(plugin, /export const SHORTCUTS = \{[^}]*open: 'F4'/, 'the studio opens on F4, held in the shortcut map')
 })

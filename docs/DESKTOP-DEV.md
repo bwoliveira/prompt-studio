@@ -67,7 +67,7 @@ English + Portuguese. Each pattern carries a `Languages:` comment; other languag
 - Never taken by the key listener: Tab, Enter, Esc, and any Ctrl or Super chord. F-keys with a modifier are ignored.
   The answer textarea stops propagation of its own keys so typing never reaches the composer's handlers.
 - Capture phase, so keys work with the cursor in the answer field; IME composition is left alone.
-- F1 shows the full map. Keep `SHORTCUT_MAP` in `plugin.js` and the help strings in `i18n-ui.js` in sync.
+- F1 shows the full map. Keep the `SHORTCUTS` map in `desktop/src/ui-components.js` (the only place a key is written) and the help strings in `i18n-ui.js` in sync.
 
 | Key | Action |
 |---|---|

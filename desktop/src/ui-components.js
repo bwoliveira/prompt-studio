@@ -10,40 +10,45 @@ const QUESTION_HELP_ID = 'prompt-studio-question-help'
 
 // Keyboard: every studio control has a key, and the key is printed on the control itself.
 // F4 opens the studio from the composer; everything else lives on the buttons: a button with a
-// `keyHint` is the one that key presses, so what is shown is always what runs. SHORTCUT_MAP is the
-// full list (F1 shows it). Tab, Enter and Esc are never taken: they stay the app's.
+// `keyHint` is the one that key presses, so what is shown is always what runs. SHORTCUTS (below) is the
+// one map of every key (F1 shows it). Tab, Enter and Esc are never taken: they stay the app's.
 // Conflicts checked: Hermes Desktop binds none of these (it uses Ctrl/Ctrl+Shift/Ctrl+Alt chords,
 // Alt+Space, Alt+Right, F12, Shift+F10); Cinnamon binds only Alt/Ctrl+Alt/Super+F-keys and
 // Alt+Space/Tab/`/Print. F-keys with any modifier and Ctrl/Super chords are never taken. Capture
 // phase, so the keys also work with the cursor in the answer field.
-const OPEN_KEY = 'F4'
-const HELP_KEY = 'F1'
-const SETTINGS_KEY = 'F3'
-const SHORTCUT_MAP = [
-  [OPEN_KEY, 'open'],
-  [HELP_KEY, 'help'],
-  [SETTINGS_KEY, 'settings'],
-  ['F5', 'accept'],
-  ['F6', 'skip'],
-  ['F7', 'useAi'],
-  ['F8', 'back'],
-  ['F9', 'generate'],
-  ['F10', 'close'],
-  ['Alt+1…9', 'pick'],
-  ['Alt+Shift+1…9', 'edit'],
-  ['Alt+S', 'ask'],
-  ['Alt+N', 'another'],
-  ['Alt+D', 'discard'],
-  ['Alt+M', 'improve'],
-  ['Alt+C', 'paste'],
-  ['Alt+O / Alt+A / Alt+T', 'model'],
-  ['Alt+I', 'mode'],
-  ['Alt+V', 'version'],
-  ['Alt+E', 'editPrompt']
-]
+// The one shortcut map: every key printed on a control, listed under F1, switching a target or
+// editing a step is read from here, never written as a string elsewhere. Entries are in F1 order;
+// each key is also the name of its `shortcuts.<key>` label. `pick` / `edit` hold the digit range
+// (see digitCombo) and `model` holds one combo per target id.
+export const SHORTCUTS = {
+  open: 'F4',
+  help: 'F1',
+  settings: 'F3',
+  accept: 'F5',
+  skip: 'F6',
+  useAi: 'F7',
+  back: 'F8',
+  generate: 'F9',
+  close: 'F10',
+  pick: 'Alt+1…9',
+  edit: 'Alt+Shift+1…9',
+  ask: 'Alt+S',
+  another: 'Alt+N',
+  discard: 'Alt+D',
+  improve: 'Alt+M',
+  paste: 'Alt+C',
+  model: { opus: 'Alt+O', astra: 'Alt+A', sonnet: 'Alt+T' },
+  mode: 'Alt+I',
+  version: 'Alt+V',
+  editPrompt: 'Alt+E'
+}
+// The combo of digit `n` for a range entry of the map ('pick' → Alt+3, 'edit' → Alt+Shift+3).
+const digitCombo = (action, n) => SHORTCUTS[action].replace('1…9', String(n))
+// What the F1 list prints for an entry: the combo, or the three target combos joined.
+const shortcutLabel = value => (typeof value === 'string' ? value : Object.values(value).join(' / '))
 // While open these are always swallowed, even when no control shows them right now: F5 would
 // otherwise reach the window (reload in some Electron setups).
-const STUDIO_FKEYS = /^F(5|6|7|8|9|10)$/
+const STUDIO_FKEYS = [SHORTCUTS.accept, SHORTCUTS.skip, SHORTCUTS.useAi, SHORTCUTS.back, SHORTCUTS.generate, SHORTCUTS.close]
 
 function keyCombo(event) {
   if (event.ctrlKey || event.metaKey) return ''
@@ -52,7 +57,7 @@ function keyCombo(event) {
   const letter = /^Key([A-Z])$/.exec(event.code || '')
   if (letter) return event.shiftKey ? '' : `Alt+${letter[1]}`
   const digit = /^Digit([1-9])$/.exec(event.code || '')
-  if (digit) return `${event.shiftKey ? 'Alt+Shift+' : 'Alt+'}${digit[1]}`
+  if (digit) return digitCombo(event.shiftKey ? 'edit' : 'pick', digit[1])
   return ''
 }
 
@@ -79,10 +84,10 @@ function installStudioKeys(ctx) {
     if (open) {
       const root = document.querySelector('[data-studio-strip]')
       target = root && shortcutTarget(root, combo)
-    } else if (combo === OPEN_KEY) {
+    } else if (combo === SHORTCUTS.open) {
       target = document.querySelector('[data-studio-open]')
     }
-    if (!target && !(open && STUDIO_FKEYS.test(combo))) return
+    if (!target && !(open && STUDIO_FKEYS.includes(combo))) return
     event.preventDefault()
     event.stopPropagation()
     if (target && !event.repeat) target.click()
@@ -163,7 +168,7 @@ function Ladder({ ladder, canEdit, editing }) {
     style: { display: 'grid', marginTop: '12px', rowGap: '2px' },
     children: rows.map(({ rung, index }, position) => {
       const isEditing = index < 0
-      const combo = `Alt+Shift+${index + 1}`
+      const combo = digitCombo('edit', index + 1)
       const cells = [
         jsx('span', { style: { ...typeStyle, fontSize: '12px', fontVariantNumeric: 'tabular-nums' }, children: String(position + 1) }),
         jsx('span', { style: { fontSize: '12px', minWidth: 0, overflow: 'hidden', textAlign: 'left', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, title: rung.question, children: rung.question }),
@@ -249,7 +254,7 @@ function SuggestionRow({ state }) {
   const children = []
   let status = ''
   if (!mine || mine.status === 'dismissed') {
-    children.push(jsx(Button, { data: { 'data-studio-ai-suggest': true }, onClick: () => requestSuggestion('suggest'), keyHint: 'Alt+S', children: isEnum ? t('ai.askEnum') : t('ai.askText') }))
+    children.push(jsx(Button, { data: { 'data-studio-ai-suggest': true }, onClick: () => requestSuggestion('suggest'), keyHint: SHORTCUTS.ask, children: isEnum ? t('ai.askEnum') : t('ai.askText') }))
   } else if (mine.status === 'loading') {
     status = t('ai.status.loading')
     children.push(jsxs('span', {
@@ -257,12 +262,12 @@ function SuggestionRow({ state }) {
       style: { ...typeStyle, alignItems: 'center', display: 'inline-flex', fontSize: '12px', gap: '6px' },
       children: [jsx(GlyphSpinner, { ariaLabel: t('ai.spinner') }), improving ? t('ai.improving') : t('ai.analyzing')]
     }))
-    children.push(jsx(Button, { data: { 'data-studio-ai-stop': true }, onClick: clearSuggestion, keyHint: 'Alt+D', children: t('ai.stop') }))
+    children.push(jsx(Button, { data: { 'data-studio-ai-stop': true }, onClick: clearSuggestion, keyHint: SHORTCUTS.discard, children: t('ai.stop') }))
   } else if (mine.status === 'error') {
     status = t('ai.status.error')
     // Plain words on screen; the technical detail only in the tooltip.
     children.push(jsx('span', { 'data-studio-ai-error': true, style: { color: 'var(--dt-destructive)', fontSize: '12px' }, title: mine.detail || undefined, children: t(`ai.${mine.errorKey || 'failed'}`) }))
-    children.push(jsx(Button, { data: { 'data-studio-ai-retry-error': true }, onClick: () => requestSuggestion(mine.mode), keyHint: 'Alt+S', children: t('ai.retry') }))
+    children.push(jsx(Button, { data: { 'data-studio-ai-retry-error': true }, onClick: () => requestSuggestion(mine.mode), keyHint: SHORTCUTS.ask, children: t('ai.retry') }))
   } else {
     status = t('ai.status.ready')
     const empty = !mine.value
@@ -291,19 +296,19 @@ function SuggestionRow({ state }) {
     if (isEnum) {
       // nothing
     } else if (empty && hasDefault) {
-      children.push(jsx(Button, { variant: 'accent', data: { 'data-studio-ai-use': true }, onClick: () => commitAnswer(''), keyHint: 'F7', children: t('ai.useDefault') }))
+      children.push(jsx(Button, { variant: 'accent', data: { 'data-studio-ai-use': true }, onClick: () => commitAnswer(''), keyHint: SHORTCUTS.useAi, children: t('ai.useDefault') }))
     } else if (!empty) {
       const label = improving ? t('ai.useVersion') : t('ai.putInField')
-      children.push(jsx(Button, { variant: 'accent', data: { 'data-studio-ai-use': true }, onClick: useSuggestion, keyHint: 'F7', children: label }))
+      children.push(jsx(Button, { variant: 'accent', data: { 'data-studio-ai-use': true }, onClick: useSuggestion, keyHint: SHORTCUTS.useAi, children: label }))
     }
-    children.push(jsx(Button, { data: { 'data-studio-ai-discard': true }, onClick: discardSuggestion, keyHint: 'Alt+D', children: t('ai.discard') }))
+    children.push(jsx(Button, { data: { 'data-studio-ai-discard': true }, onClick: discardSuggestion, keyHint: SHORTCUTS.discard, children: t('ai.discard') }))
     if (!improving) {
       children.push(jsx(Button, {
         ariaLabel: t('ai.anotherAria'),
         data: { 'data-studio-ai-retry': true },
         onClick: () => { suggestionCache.delete(mine.key); requestSuggestion('suggest') },
         title: t('ai.anotherAria'),
-        keyHint: 'Alt+N',
+        keyHint: SHORTCUTS.another,
         children: t('ai.another')
       }))
     }
@@ -349,11 +354,11 @@ function EnumAnswer({ state }) {
     style: { display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '10px' },
     children: [
       rec.value
-        ? jsx(Button, { variant: 'primary', data: { 'data-studio-recommend': true, 'data-studio-ai-pick': rec.byAi ? 'true' : undefined }, onClick: () => commitAnswer(rec.value), title: rec.byAi ? t('ai.pickTitle') : t('answer.recommendedTitle'), keyHint: 'F5', reserveKey: 'F5', children: rec.byAi ? t('answer.recommendedByAi', rec.value) : t('answer.recommended', rec.value) })
+        ? jsx(Button, { variant: 'primary', data: { 'data-studio-recommend': true, 'data-studio-ai-pick': rec.byAi ? 'true' : undefined }, onClick: () => commitAnswer(rec.value), title: rec.byAi ? t('ai.pickTitle') : t('answer.recommendedTitle'), keyHint: SHORTCUTS.accept, reserveKey: SHORTCUTS.accept, children: rec.byAi ? t('answer.recommendedByAi', rec.value) : t('answer.recommended', rec.value) })
         : null,
       ...options.map((option, index) => jsx(Button, {
         data: { 'data-studio-option': option },
-        keyHint: index < 9 ? `Alt+${index + 1}` : undefined,
+        keyHint: index < 9 ? digitCombo('pick', index + 1) : undefined,
         onClick: () => commitAnswer(option),
         children: option
       }, option))
@@ -369,8 +374,8 @@ function PasteAnswer({ state }) {
   return jsxs('div', {
     style: { display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '10px' },
     children: [
-      jsx(Button, { variant: 'primary', data: { 'data-studio-skip': true }, onClick: () => commitAnswer(''), keyHint: 'F6', children: t('answer.none') }),
-      jsx(Button, { data: { 'data-studio-paste-open': true }, onClick: () => setOpen(true), keyHint: 'Alt+C', children: t('answer.paste') })
+      jsx(Button, { variant: 'primary', data: { 'data-studio-skip': true }, onClick: () => commitAnswer(''), keyHint: SHORTCUTS.skip, children: t('answer.none') }),
+      jsx(Button, { data: { 'data-studio-paste-open': true }, onClick: () => setOpen(true), keyHint: SHORTCUTS.paste, children: t('answer.paste') })
     ]
   })
 }
@@ -410,18 +415,18 @@ function TextAnswer({ state, placeholder }) {
       jsxs('div', {
         style: { display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' },
         children: [
-          jsx(Button, { variant: typed ? 'primary' : 'default', data: { 'data-studio-confirm': true }, disabled: !typed, onClick: () => commitAnswer(state.answer), keyHint: 'F5', reserveKey: 'F5', children: t('answer.confirm') }),
+          jsx(Button, { variant: typed ? 'primary' : 'default', data: { 'data-studio-confirm': true }, disabled: !typed, onClick: () => commitAnswer(state.answer), keyHint: SHORTCUTS.accept, reserveKey: SHORTCUTS.accept, children: t('answer.confirm') }),
           aiText
-            ? jsx(Button, { variant: typed ? 'default' : 'primary', data: { 'data-studio-recommend': true, 'data-studio-ai-pick': 'true' }, onClick: () => commitAnswer(aiText), title: t('ai.pickTitle'), keyHint: typed ? undefined : 'F5', reserveKey: 'F5', children: t('answer.useAi') })
+            ? jsx(Button, { variant: typed ? 'default' : 'primary', data: { 'data-studio-recommend': true, 'data-studio-ai-pick': 'true' }, onClick: () => commitAnswer(aiText), title: t('ai.pickTitle'), keyHint: typed ? undefined : SHORTCUTS.accept, reserveKey: SHORTCUTS.accept, children: t('answer.useAi') })
             : null,
           aiText
-            ? jsx(Button, { data: { 'data-studio-use-default': true }, onClick: () => commitAnswer(''), title: current.hint || '', keyHint: 'F6', children: t('answer.useDefault', current.recommended) })
+            ? jsx(Button, { data: { 'data-studio-use-default': true }, onClick: () => commitAnswer(''), title: current.hint || '', keyHint: SHORTCUTS.skip, children: t('answer.useDefault', current.recommended) })
             : waiting
             ? null
             : hasDefault
-            ? jsx(Button, { variant: typed ? 'default' : 'primary', data: { 'data-studio-recommend': true }, onClick: () => commitAnswer(''), title: current.hint || '', keyHint: typed ? undefined : 'F5', reserveKey: 'F5', children: t('answer.recommended', current.recommended) })
-            : jsx(Button, { variant: typed ? 'default' : 'primary', data: { 'data-studio-skip': true }, onClick: () => commitAnswer(''), keyHint: 'F6', children: t('answer.skip') }),
-          ...(current.options || []).map((option, index) => jsx(Button, { data: { 'data-studio-option': option }, onClick: () => commitAnswer(option), keyHint: index < 9 ? `Alt+${index + 1}` : undefined, children: option }, option)),
+            ? jsx(Button, { variant: typed ? 'default' : 'primary', data: { 'data-studio-recommend': true }, onClick: () => commitAnswer(''), title: current.hint || '', keyHint: typed ? undefined : SHORTCUTS.accept, reserveKey: SHORTCUTS.accept, children: t('answer.recommended', current.recommended) })
+            : jsx(Button, { variant: typed ? 'default' : 'primary', data: { 'data-studio-skip': true }, onClick: () => commitAnswer(''), keyHint: SHORTCUTS.skip, children: t('answer.skip') }),
+          ...(current.options || []).map((option, index) => jsx(Button, { data: { 'data-studio-option': option }, onClick: () => commitAnswer(option), keyHint: index < 9 ? digitCombo('pick', index + 1) : undefined, children: option }, option)),
           jsx(ImproveButton, { state })
         ]
       })
@@ -449,18 +454,18 @@ function ActionBar({ state }) {
         variant: finished ? 'primary' : 'default',
         data: { 'data-studio-generate': true },
         onClick: generatePrompt,
-        keyHint: 'F9',
-        reserveKey: 'F9',
+        keyHint: SHORTCUTS.generate,
+        reserveKey: SHORTCUTS.generate,
         title: [finished ? '' : t('actions.generateRest'), mode === 'off' ? t('actions.generateOff') : t('actions.generateOn')].filter(Boolean).join(' '),
         children: generateLabel(t, finished, mode)
       }),
       busy
         ? null
         : state.editing
-        ? jsx(Button, { data: { 'data-studio-back': true }, onClick: goBack, title: t('actions.undoEditTitle'), keyHint: 'F8', reserveKey: 'F8', children: t('actions.undoEdit') })
-        : jsx(Button, { data: { 'data-studio-back': true }, disabled: !state.ladder.length, onClick: goBack, keyHint: 'F8', reserveKey: 'F8', children: t('actions.back') }),
+        ? jsx(Button, { data: { 'data-studio-back': true }, onClick: goBack, title: t('actions.undoEditTitle'), keyHint: SHORTCUTS.back, reserveKey: SHORTCUTS.back, children: t('actions.undoEdit') })
+        : jsx(Button, { data: { 'data-studio-back': true }, disabled: !state.ladder.length, onClick: goBack, keyHint: SHORTCUTS.back, reserveKey: SHORTCUTS.back, children: t('actions.back') }),
       // Cancel stays available while the AI writes the prompt.
-      jsx(Button, { data: { 'data-studio-cancel': true }, onClick: cancelStudio, title: t('actions.cancelTitle'), keyHint: 'F10', children: t('actions.cancel') }),
+      jsx(Button, { data: { 'data-studio-cancel': true }, onClick: cancelStudio, title: t('actions.cancelTitle'), keyHint: SHORTCUTS.close, children: t('actions.cancel') }),
       jsx('span', { style: { flex: 1 } }),
       jsx(AiToggle, {})
     ]
@@ -479,7 +484,7 @@ function ImproveButton({ state }) {
     disabled: busy,
     onClick: () => requestSuggestion('improve'),
     title: t('ai.improveTitle'),
-    keyHint: 'Alt+M',
+    keyHint: SHORTCUTS.improve,
     children: t('ai.improve')
   })
 }
@@ -503,16 +508,16 @@ function AiToggle() {
   const mode = useValue($aiMode)
   const next = AI_MODES[(AI_MODES.indexOf(mode) + 1) % AI_MODES.length]
   return jsxs('div', {
-    'aria-keyshortcuts': 'Alt+I',
+    'aria-keyshortcuts': SHORTCUTS.mode,
     'aria-label': t('ai.group'),
     'data-studio-ai-toggle': true,
     'data-studio-ai-state': mode,
     role: 'radiogroup',
     style: { ...typeStyle, alignItems: 'center', display: 'inline-flex', fontSize: '12px', gap: '4px' },
     children: [
-      jsxs('span', { style: { alignItems: 'center', display: 'inline-flex', marginRight: '2px' }, title: t('ai.cycle'), children: [t('ai.label'), jsx(KeyCap, { combo: 'Alt+I' })] }),
+      jsxs('span', { style: { alignItems: 'center', display: 'inline-flex', marginRight: '2px' }, title: t('ai.cycle'), children: [t('ai.label'), jsx(KeyCap, { combo: SHORTCUTS.mode })] }),
       ...AI_MODES.map(item => jsx('button', {
-        ...(item === next ? { 'data-studio-shortcut': 'Alt+I' } : {}),
+        ...(item === next ? { 'data-studio-shortcut': SHORTCUTS.mode } : {}),
         'aria-checked': item === mode,
         'data-studio-ai-mode-option': item,
         onClick: event => { event.preventDefault(); setAiMode(item) },
@@ -580,20 +585,20 @@ function PreviewPanel({ state }) {
       jsxs('div', {
         style: { display: 'flex', flexWrap: 'wrap', gap: '6px' },
         children: [
-          jsx(Button, { variant: 'primary', data: { 'data-studio-send-prompt': true }, onClick: sendPreview, disabled: placing, title: t('preview.sendTitle'), keyHint: 'F9', children: t('preview.send') }),
-          jsx(Button, { data: { 'data-studio-use-prompt': true }, onClick: usePreview, disabled: placing, title: t('preview.editTitle'), keyHint: 'Alt+E', children: t('preview.edit') }),
+          jsx(Button, { variant: 'primary', data: { 'data-studio-send-prompt': true }, onClick: sendPreview, disabled: placing, title: t('preview.sendTitle'), keyHint: SHORTCUTS.generate, children: t('preview.send') }),
+          jsx(Button, { data: { 'data-studio-use-prompt': true }, onClick: usePreview, disabled: placing, title: t('preview.editTitle'), keyHint: SHORTCUTS.editPrompt, children: t('preview.edit') }),
           ai && engine
             ? jsx(Button, {
                 data: { 'data-studio-switch-version': true },
                 disabled: placing,
                 onClick: () => update({ type: 'SHOW_VERSION', version: showing === 'ai' ? 'engine' : 'ai' }),
                 title: t('preview.switchTitle'),
-                keyHint: 'Alt+V',
+                keyHint: SHORTCUTS.version,
                 children: showing === 'ai' ? t('preview.showEngine') : t('preview.showAi')
               })
             : null,
-          jsx(Button, { data: { 'data-studio-back-to-steps': true }, disabled: placing, onClick: () => update({ type: 'BACK_TO_STEPS' }), keyHint: 'F8', children: t('preview.backToSteps') }),
-          jsx(Button, { data: { 'data-studio-cancel': true }, onClick: cancelStudio, disabled: placing, title: t('actions.cancelTitle'), keyHint: 'F10', children: t('actions.cancel') })
+          jsx(Button, { data: { 'data-studio-back-to-steps': true }, disabled: placing, onClick: () => update({ type: 'BACK_TO_STEPS' }), keyHint: SHORTCUTS.back, children: t('preview.backToSteps') }),
+          jsx(Button, { data: { 'data-studio-cancel': true }, onClick: cancelStudio, disabled: placing, title: t('actions.cancelTitle'), keyHint: SHORTCUTS.close, children: t('actions.cancel') })
         ]
       }),
       // host.composer.submit sends text only; attachments stay in the composer (see sendPreview).
@@ -626,8 +631,6 @@ function StudioMotionStyles() {
   })
 }
 
-const TARGET_KEYS = { opus: 'Alt+O', astra: 'Alt+A', sonnet: 'Alt+T' }
-
 // Exclusive choice: radiogroup + radio, like the AI mode selector.
 function TargetSwitch() {
   const t = useT()
@@ -640,7 +643,7 @@ function TargetSwitch() {
     children: [
       jsx('span', { children: t('target.label') }),
       ...TARGETS.map(item => jsx('button', {
-        ...keyProps(t, TARGET_KEYS[item.id], t('target.title', item.model)),
+        ...keyProps(t, SHORTCUTS.model[item.id], t('target.title', item.model)),
         'aria-checked': item.id === target,
         'data-studio-target-option': item.id,
         onClick: () => setTarget(item.id),
@@ -648,7 +651,7 @@ function TargetSwitch() {
         role: 'radio',
         style: { ...segmentStyle(item.id === target), alignItems: 'center', display: 'inline-flex', padding: '2px 10px' },
         type: 'button',
-        children: TARGET_KEYS[item.id] ? jsxs(Fragment, { children: [item.label, jsx(KeyCap, { combo: TARGET_KEYS[item.id] })] }) : item.label
+        children: SHORTCUTS.model[item.id] ? jsxs(Fragment, { children: [item.label, jsx(KeyCap, { combo: SHORTCUTS.model[item.id] })] }) : item.label
       }, item.id))
     ]
   })
@@ -661,7 +664,7 @@ function ShortcutsButton() {
   return jsx(Button, {
     data: { 'data-studio-shortcuts-help': true, 'aria-expanded': open, 'aria-controls': 'prompt-studio-shortcuts' },
     onClick: () => $helpOpen.set(!$helpOpen.get()),
-    keyHint: HELP_KEY,
+    keyHint: SHORTCUTS.help,
     children: t('shortcuts.button')
   })
 }
@@ -672,7 +675,7 @@ function SettingsButton() {
     ariaLabel: t('settings.button'),
     data: { 'data-studio-settings': true, 'aria-haspopup': 'dialog' },
     onClick: () => $settingsOpen.set(true),
-    keyHint: SETTINGS_KEY,
+    keyHint: SHORTCUTS.settings,
     title: t('settings.button'),
     children: jsx(Codicon, { name: 'settings-gear' })
   })
@@ -863,10 +866,13 @@ function ShortcutsList() {
       jsx('span', { style: { color: 'var(--ui-text-primary, inherit)', display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px' }, children: t('shortcuts.title') }),
       jsx('dl', {
         style: { columnGap: '10px', display: 'grid', gridTemplateColumns: 'max-content minmax(0, 1fr)', margin: 0, rowGap: '4px' },
-        children: SHORTCUT_MAP.flatMap(([combo, key]) => [
-          jsx('dt', { 'data-studio-shortcut-row': combo, style: { margin: 0 }, children: jsx(Kbd, { size: 'sm', children: combo }) }, `k-${combo}`),
-          jsx('dd', { style: { ...typeStyle, fontSize: '12px', lineHeight: '18px', margin: 0 }, children: t(`shortcuts.${key}`) }, `d-${combo}`)
-        ])
+        children: Object.entries(SHORTCUTS).flatMap(([key, value]) => {
+          const combo = shortcutLabel(value)
+          return [
+            jsx('dt', { 'data-studio-shortcut-row': combo, style: { margin: 0 }, children: jsx(Kbd, { size: 'sm', children: combo }) }, `k-${combo}`),
+            jsx('dd', { style: { ...typeStyle, fontSize: '12px', lineHeight: '18px', margin: 0 }, children: t(`shortcuts.${key}`) }, `d-${combo}`)
+          ]
+        })
       }),
       jsxs('ul', { style: { margin: '8px 0 0', paddingLeft: '16px' }, children: [note(t('shortcuts.noteAlt')), note(t('shortcuts.noteDigits')), note(t('shortcuts.noteKeys'))] })
     ]
@@ -952,7 +958,7 @@ function StudioLadder() {
       jsx(Ladder, { canEdit, editing: state.editing, ladder: state.ladder }),
       body,
       reading
-        ? jsx('div', { style: { display: 'flex', marginTop: '12px' }, children: jsx(Button, { data: { 'data-studio-cancel': true }, onClick: cancelStudio, title: t('actions.cancelTitle'), keyHint: 'F10', children: t('actions.cancel') }) })
+        ? jsx('div', { style: { display: 'flex', marginTop: '12px' }, children: jsx(Button, { data: { 'data-studio-cancel': true }, onClick: cancelStudio, title: t('actions.cancelTitle'), keyHint: SHORTCUTS.close, children: t('actions.cancel') }) })
         : canEdit || state.status === 'briefing' ? jsx(ActionBar, { state }) : null
     ]
   })
@@ -965,7 +971,7 @@ function StudioButton() {
   const state = useValue($studio)
   if (state.status !== 'idle') return null
   return jsx('button', {
-    'aria-keyshortcuts': OPEN_KEY,
+    'aria-keyshortcuts': SHORTCUTS.open,
     'aria-label': t('open.aria'),
     'data-studio-open': true,
     onClick: event => {
@@ -989,9 +995,9 @@ function StudioButton() {
       padding: '0 8px',
       whiteSpace: 'nowrap'
     },
-    title: `${t('open.title')} · ${t('keys.shortcut', OPEN_KEY)}`,
+    title: `${t('open.title')} · ${t('keys.shortcut', SHORTCUTS.open)}`,
     type: 'button',
-    children: [t('open.label'), jsx(KeyCap, { combo: OPEN_KEY }, 'key')]
+    children: [t('open.label'), jsx(KeyCap, { combo: SHORTCUTS.open }, 'key')]
   })
 }
 
