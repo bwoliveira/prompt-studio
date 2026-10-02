@@ -75,7 +75,8 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   and "Plan is ready. Build a React dashboard." is the build. "Can you help me fix the login bug?" is the fix,
   "help me understand" is a question, and a video or podcast script is writing, while a Python script for a video
   is code. "Do you configure nginx by default?" is a question, and "Do not build the app or configure nginx"
-  forbids both.
+  forbids both. "Please carefully plan before you configure nginx" asks for the plan, "Can you tell me how to
+  configure nginx" is a question even without its mark, and a school test is writing while a test for the API is code.
 - Fix: *Gere um e-mail*, *Monte uma mensagem* and the like stay text, reports and summaries are text even when they
   mention tests ("Write a summary of the test results", "Escreva um relatório dos testes"), and a question such as
   "Como instalar o Docker?" or "Como resumir um livro?" stays an answer on Opus, Sonnet and Astra.
