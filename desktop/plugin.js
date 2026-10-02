@@ -183,6 +183,10 @@ const ARTIFACT_REQUEST = /^(?:(?:please|pls|por favor),?\s+)?(?:(?:can|could|wou
 // "Can you tell me an existing Python module for parsing ISO dates?": a word that picks among things that already exist
 // (existing, available, good, best, recommended ...) asks about an artifact, not for one to be made.
 // Languages: Portuguese (unaccented) + English.
+// "Can you show me my function?", "... o nosso script": an artifact the writer already owns is looked up, not made.
+// Languages: Portuguese (unaccented) + English.
+const OWNED_ARTIFACT = /\b(?:my|our|meu|minha|meus|minhas|nosso|nossa|nossos|nossas)\s+$/
+const OWNED_HEAD = /^\s*(?:my|our|meu|minha|meus|minhas|nosso|nossa|nossos|nossas)\b/
 const LOOKUP_MODIFIER = /\b(?:existing|available|good|better|best|recommended|popular|common|standard|built-in|well-known|open-source|free|existente|existentes|disponivel|disponiveis|bom|boa|melhor|melhores|recomendado|recomendada|populares|conhecido|conhecida|padrao|nativo|nativa)\b/
 // "Can you show me a module for parsing dates?", "Voce pode me mostrar uma API para clima?": a module, library, package or
 // API named for a purpose is a thing to be found, not written.
@@ -470,7 +474,7 @@ function createDetector(profile = {}) {
       if (EXPLAIN_TAIL.test(tail) || QUESTION_TAIL.test(tail)) signal = 'answer'
       else if (CODE_ARTIFACT_END.test(head) && pickArtifact(rest.split(/[.!?\n]/, 1)[0]) === 'code') {
         // Asking about an existing artifact, or for a recommendation, is a question; asking for one to be made is a task.
-        if (LOOKUP_MODIFIER.test(head) || LOOKUP_AFTER.test(rest.slice(head.length)) || LOOKUP_SOURCE.test(rest.slice(head.length)) || (REFERENCE_NOUN_END.test(head) && FOR_PURPOSE.test(rest.slice(head.length)))) signal = 'answer'
+        if (OWNED_ARTIFACT.test(shown[0]) || OWNED_HEAD.test(head) || LOOKUP_MODIFIER.test(head) || LOOKUP_AFTER.test(rest.slice(head.length)) || LOOKUP_SOURCE.test(rest.slice(head.length)) || (REFERENCE_NOUN_END.test(head) && FOR_PURPOSE.test(rest.slice(head.length)))) signal = 'answer'
         else { signal = 'implementation'; category = 'code' }
       }
     }

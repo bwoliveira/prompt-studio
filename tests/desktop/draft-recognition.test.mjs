@@ -840,6 +840,12 @@ const TABLE = [
   ['Code the API', 'implementation', 'near miss: code the api'],
   ['Fix the code review bot', 'implementation', 'near miss: fix comes first'],
   ['Review the code of the API', 'review', 'near miss: review comes first'],
+  ['Can you show me my function?', 'answer', 'bin/pr R1 F1: my names an owned artifact'],
+  ['Can you show me our API?', 'answer', 'bin/pr R1 F1: our names an owned artifact'],
+  ['Could you show us our deploy script', 'answer', 'bin/pr R1 F1: our, no mark'],
+  ['Você pode me mostrar minha função?', 'answer', 'bin/pr R1 F1: pt minha'],
+  ['Você pode me mostrar o nosso script de backup?', 'answer', 'bin/pr R1 F1: pt o nosso'],
+  ['Can you show me your function that parses dates?', 'implementation', 'bin/pr R1 F1 near miss: your asks the assistant to produce one'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
