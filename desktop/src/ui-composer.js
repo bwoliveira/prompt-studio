@@ -8,7 +8,7 @@
 const FOCUS_SETTLE_MS = 50
 function hostFocusSettled() {
   return new Promise(resolve => {
-    const done = () => later(resolve, globalThis.__promptStudioFocusSettleMs ?? FOCUS_SETTLE_MS)
+    const done = () => later(resolve, globalThis.__promptStudioTest?.focusSettleMs ?? FOCUS_SETTLE_MS)
     if (typeof requestAnimationFrame !== 'function') return done()
     requestAnimationFrame(() => requestAnimationFrame(done))
   })
@@ -206,7 +206,7 @@ function startContextRead() {
     const text = tr(key, displayCombo(SHORTCUTS.settings))
     return { status: 'error', reason: text && text !== key ? text : tr('errors.unavailable') }
   }
-  lifecycle.contextPromise = withTimeout(lifecycle.pluginContext.rest('/context', { method: 'POST', body }), globalThis.__promptStudioContextTimeoutMs ?? CONTEXT_CLIENT_TIMEOUT_MS)
+  lifecycle.contextPromise = withTimeout(lifecycle.pluginContext.rest('/context', { method: 'POST', body }), globalThis.__promptStudioTest?.contextTimeoutMs ?? CONTEXT_CLIENT_TIMEOUT_MS)
     .then(
       response => (response?.ok && typeof response.summary === 'string' && response.summary.trim()
         ? { status: 'ready', summary: response.summary, model: response.model || '', ms: Number(response.ms) || 0 }
@@ -298,7 +298,7 @@ function placePrompt(text) {
   return run
 }
 
-async function usePreview() {
+async function placePreview() {
   const state = $studio.get()
   if (state.status !== 'preview' || !state.preview || $placing.get()) return
   $placing.set(true)
@@ -346,16 +346,15 @@ async function sendPreview() {
   closeStudio({ restoreDraft: false })
 }
 
-// Session context indicator: reading / used (model, seconds) / not available (short reason).
+// Session context indicator: used (model, seconds) / not available (short reason). While it is still reading,
+// the strip shows its own loading row (StudioLadder), so nothing is drawn here.
 function ContextStatus() {
   const t = useT()
   const context = useValue($context)
   if (!context || context.status === 'reading') return null
-  const text = context.status === 'reading'
-    ? t('context.reading')
-    : context.status === 'ready'
-      ? t('context.used', context.model || '-', (context.ms / 1000).toFixed(1))
-      : t('context.failed', context.reason)
+  const text = context.status === 'ready'
+    ? t('context.used', context.model || '-', (context.ms / 1000).toFixed(1))
+    : t('context.failed', context.reason)
   return jsx('span', { 'aria-live': 'polite', 'data-studio-context-status': context.status, role: 'status', style: { ...typeStyle, display: 'block', fontSize: '11px', lineHeight: '16px', marginTop: '4px' }, children: text })
 }
 

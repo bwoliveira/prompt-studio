@@ -412,7 +412,7 @@ const OPUS_ENGINE = (() => {
 //   top of your prompt, above your query, instructions, and examples.")
 //   TASK, CONTEXT, THIRD-PARTY MATERIAL (short paste), REQUIREMENTS, AUTONOMY, SUBAGENTS, EXAMPLE(S),
 //   OUTPUT, DONE WHEN.
-// Deliberately absent: tool lists and effort ([review] C12: effort is a Hermes session setting), personas,
+// Deliberately absent: tool lists and effort ([review] section 1, "Not emitted": effort is a Hermes session setting), personas,
 // "show your reasoning" ([opus55] "If your prompt asked the model to write out its reasoning in the response
 // as a substitute for thinking, remove that instruction"), re-check lines ([opus5] "Claude Opus 5 verifies
 // its own work without being told to. ... remove them").
@@ -425,7 +425,7 @@ const LENGTHS = ['concise', 'balanced', 'detailed']
 const SUBAGENT_MODES = ['team', 'auto', 'direct']
 
 const PASTE_CAP = 12000
-// [review] C4: "limite de 2.000 caracteres: escolha nossa".
+// [review] O1: the 2,000-character threshold is our own choice (local).
 const LONG_PASTE = 2000
 const MAX_FIELD = 200000
 
@@ -480,7 +480,7 @@ const AUTONOMY_LINES = {
   unattended: "A standing instruction from the user, the person you are working for. It is about how your turns end. A message with no tool call in it ends your turn, and the work stops there until you are asked to continue. The user has seen you end turns in four ways while work they asked for was still owed, and does not want any of them. One: a long summary of what was done that closes by announcing the next step and has no tool call, so the next thing never starts. Two: an offer to carry on with something unless the user would prefer otherwise, which stops to wait for an answer the user was not going to give. Three: a list of decisions for the user when, by your own account, none of them blocks the rest of the work. Four: deciding that this is a good place to report, because the turn has been long or a milestone is done. Status notes are welcome, and so are your recommendations on open decisions, but put them in the same message as your next tool call and carry on with whatever does not depend on the user's answer. If you notice yourself inviting the user to redirect you or offering to wait, delete it and do the next thing. The stops the user does want are the ones where nothing can move without them, or where the thing blocking you is deliberately protected from you. This does not override the need for confirmation on risky or destructive actions.",
 }
 
-// SUBAGENTS ([review] section 5 and E3/E4; user's own wording built on the quotes below).
+// SUBAGENTS ([review] section 3 and O16-O21a; user's own wording built on the quotes below).
 // [pe] "Use subagents when tasks can run in parallel, require isolated context, or involve independent
 // workstreams that don't need to share state."; [opus5] "Delegation pays off on genuinely independent, sizeable tracks of work".
 const SUBAGENT_SPLIT = 'Use subagents. Split the task into parts that can run in parallel without sharing state (separate modules, files, sources or questions) and give each part to its own subagent, with its goal, the context it needs and the result to hand back. Launch independent parts together rather than one at a time. Keep dependent steps, integration and the final answer with the lead agent.'
@@ -490,7 +490,7 @@ const SUBAGENT_SIZE = 'Work directly on steps you can finish in a handful of too
 // diff and the criteria you give it, not the reasoning that produced the change"; "Tell the reviewer to flag only
 // gaps that affect correctness or the stated requirements, and treat the rest as optional."
 const SUBAGENT_REVIEWER = 'Name one subagent as the reviewer. The reviewer did not write any of the work and starts from a fresh context: give it only the integrated result, the requirements and the definition of done, not the reasoning behind the work. It checks the result once and reports only gaps that affect correctness or the stated requirements, each with its evidence; style preferences are not findings. Writers do not review their own work; the lead agent fixes or sends back what the reviewer finds and treats the rest as optional.'
-// [review] D6 (report only delegation that happened).
+// [review] O19 (report only delegation that happened).
 const SUBAGENT_REAL = 'Only report delegation that actually happened through subagent tools; if they are not available, do the parts yourself in the same order and say so.'
 // [opus55] "Time signals for multiagent harnesses" (verbatim sentence).
 const TIME_LINE = 'Time matters here: do not spend time that can be avoided, and the earlier a correct result is obtained, the better.'
@@ -520,7 +520,7 @@ const LENGTH_LINES = {
   detailed: 'Give a complete, detailed response: cover every part of the task with the specifics needed to act on it.'
 }
 
-// DONE WHEN evidence lines. [review] E1: [opus5] "Claude Opus 5 verifies its own work without being told to";
+// DONE WHEN evidence lines. [review] O28: [opus5] "Claude Opus 5 verifies its own work without being told to";
 // [pe] "remove these instructions rather than rewriting them"; [cc] "Have Claude show evidence rather than
 // asserting success". Plan, text and answer get no line. Data and workflow name what to get right.
 // Implementation is two sentences: the generic "behavior works" one, and the evidence one. After a user
@@ -763,7 +763,7 @@ const ASTRA_ENGINE = (() => {
 //   place and state each rule once." and "Use ALWAYS, NEVER, must, and only for true invariants".
 // - No tool list, no reasoning-effort or chain-of-thought lines. reasoning-best-practices.md:
 //   "prompting them to "think step by step" or "explain your reasoning" is unnecessary." Hermes owns
-//   tools and effort; no doc asks to confirm tool availability (PROMPT-DOCS-REVIEW E9).
+//   tools and effort; no doc asks to confirm tool availability (PROMPT-DOCS-REVIEW section 2, "Not emitted").
 // - No extra testing/verification lines. gpt6-rethinking-prompts.md: "GPT-6 Astra does that on its
 //   own, so the same instructions can lead to unnecessary testing."
 
@@ -781,7 +781,7 @@ const PASTE_CAP = 12000
 const LANGUAGE_LINE = 'Write the answer in the language of the task above; switch only if the requirements name another language.'
 
 // gpt6-using.md: "The user's instructions take precedence over guidelines provided in a skill." and
-// "Make the priority of user instructions and skills explicit." (widened to AGENTS.md, PROMPT-DOCS-REVIEW E8)
+// "Make the priority of user instructions and skills explicit." (widened to AGENTS.md, PROMPT-DOCS-REVIEW A5)
 const PRIORITY_LINE = 'The instructions in this request take precedence over guidelines in a skill or an instruction file such as AGENTS.md; if they conflict, follow this request.'
 // gpt6-using.md: "If a skill causes you to ask for permission or confirmation, pause, leave requested
 // work unfinished, or diverge from the user's intent, name and link to the exact SKILL.md file you
@@ -803,7 +803,7 @@ const CONFIRM_LINE = 'Require confirmation for external writes, destructive acti
 // inspect the relevant materials and report the result. Do not implement changes unless the request
 // also asks for them."
 const READ_ONLY_LINE = 'For requests to answer, explain, review, diagnose, or plan, inspect the relevant materials and report the result. Do not implement changes unless the request also asks for them.'
-// gpt6-using.md, adapted from system prompt to this request (PROMPT-DOCS-REVIEW E7): "treat these as
+// gpt6-using.md, adapted from system prompt to this request (PROMPT-DOCS-REVIEW A7): "treat these as
 // instructions to do the work and take action. Do not stop at acknowledging capability (e.g. "Yes…"),
 // proposing a plan, or offering to continue. Do not settle for a partial or "helpful enough" solution
 // that does not fully satisfy the user's task to save time, effort or tokens. If a task requires sustained
@@ -873,7 +873,7 @@ const DONE_LINES = {
 // gpt6-using.md, writing style (verbatim): "Use plain, simple language: familiar words, concrete
 // examples, and precise verbs. Prefer active voice and direct statements."
 const PLAIN_LINE = 'Use plain, simple language: familiar words, concrete examples, and precise verbs. Prefer active voice and direct statements.'
-// gpt6-using.md, anti-slop prompt (two sentences, examples trimmed; PROMPT-DOCS-REVIEW E10).
+// gpt6-using.md, anti-slop prompt (two sentences, examples trimmed; PROMPT-DOCS-REVIEW A21).
 const STYLE_LINE = 'Do not use concluding summary statements such as "In short:". Do not use contrastive framing such as "X, not Y" that introduces an unprompted alternative that the user didn\'t ask about.'
 // Format lines, only when the user chose one. gpt6-using.md: "Specify the writing style and structure
 // your application needs." prose = verbatim from gpt6-using.md.
@@ -896,12 +896,12 @@ const LENGTH_LINES = {
 const EXAMPLE_NOTE_ONE = 'Follow the pattern of this example; do not copy its content.'
 const EXAMPLE_NOTE_MANY = 'Follow the pattern of these examples; do not copy their content.'
 
-// Subagents (user's wording + gpt6-using.md verbatim lines; PROMPT-DOCS-REVIEW section 5).
+// Subagents (user's wording + gpt6-using.md verbatim lines; PROMPT-DOCS-REVIEW section 3 and A27-A31).
 // gpt6-using.md (verbatim).
 const DELEGATE_LINE = 'If at any point you can parallelize work by delegating tasks to another agent (no matter if you are the root or subagent), you should do so using collaboration tools if it could save time or improve quality.'
 // gpt6-using.md: "Specify when and how much it should use subagents for parallel work."
 const SPLIT_LINE = 'Use subagents. Split the task into parts that can run in parallel without sharing state (separate modules, files, sources or questions) and give each part to its own subagent, with its goal, the context it needs and the result to hand back. Launch independent parts together rather than one at a time. Keep dependent steps, integration and the final answer with the lead agent.'
-// PROMPT-DOCS-REVIEW E3 (reviewer from a fresh context, gaps only; extrapolated to Astra).
+// PROMPT-DOCS-REVIEW A29 (reviewer from a fresh context, gaps only; extrapolated to Astra).
 const REVIEWER_LINE = 'Name one subagent as the reviewer. The reviewer did not write any of the work and starts from a fresh context: give it only the integrated result, the requirements and the definition of done, not the reasoning behind the work. It checks the result once and reports only gaps that affect correctness or the stated requirements, each with its evidence; style preferences are not findings. Writers do not review their own work; the lead agent fixes or sends back what the reviewer finds and treats the rest as optional.'
 // gpt6-using.md (verbatim).
 const LEGIBLE_LINE = 'Messages that you send to other agents and your final answer may be read by a human, so ensure they are legible. Always put proper spaces between words and/or numbers.'
@@ -1176,7 +1176,7 @@ const SONNET_ENGINE = (() => {
 //   top of your prompt, above your query, instructions, and examples.")
 //   TASK, CONTEXT, THIRD-PARTY MATERIAL (short paste), REQUIREMENTS, AUTONOMY, SUBAGENTS, EXAMPLE(S),
 //   OUTPUT, DONE WHEN.
-// Deliberately absent: tool lists and effort ([review] C12: effort is a Hermes session setting), personas,
+// Deliberately absent: tool lists and effort ([review] section 5, "Not emitted": effort is a Hermes session setting), personas,
 // "show your reasoning" ([sonnet55] "If your prompts ask the model to include its reasoning in the response, remove
 // those instructions, because they invite `reasoning_extraction` declines"), <pasted_content> tags (an Opus 5.5 feature,
 // not in the Sonnet docs), the Opus "time matters" sentence and the Opus unattended paragraph.
@@ -1189,7 +1189,7 @@ const LENGTHS = ['concise', 'balanced', 'detailed']
 const SUBAGENT_MODES = ['team', 'auto', 'direct']
 
 const PASTE_CAP = 12000
-// [review] C4: "limite de 2.000 caracteres: escolha nossa".
+// [review] S1: the 2,000-character threshold is our own choice (local).
 const LONG_PASTE = 2000
 const MAX_FIELD = 200000
 
@@ -1213,7 +1213,7 @@ const SCOPE_LINE = "When the work the user asked for is done and checked, stop a
 const PLAN_LINE = "When the user asks for ideas, options or a plan, give them that and stop. Don't start building or changing anything until they say to go ahead."
 
 // [sonnet55] "Tool use in chat and knowledge work" snippet. Adapted: opens with "If a search tool is available" because
-// Hermes owns the tool list ([review] C12); the rest is verbatim. Not emitted next to a paste (the paste is the source).
+// Hermes owns the tool list ([review] S11); the rest is verbatim. Not emitted next to a paste (the paste is the source).
 const SEARCH_LINE = 'If a search tool is available, use it to check specifics that may have changed since your training, such as what is allowed, required or charged, even when you feel confident. For researched work such as a report or a comparison, gather current sources rather than writing from your training knowledge.'
 const SEARCH_DELIVERABLES = ['analysis', 'answer']
 
@@ -1259,7 +1259,7 @@ const AUTONOMY_LINES = {
   unattended: "Nobody is available to answer while you work. Keep working until everything the user asked for is done: do not pause to confirm a plan, ask a question you could answer yourself, or stop after one part of a multipart task to ask whether to continue. Stop only when you can't go on without the user or before a risky step, and say what you need.",
 }
 
-// SUBAGENTS ([review] section 3; Sonnet 5.5 has no delegation section, so these lines are vendor fallback plus the
+// SUBAGENTS ([review] section 3 and S17-S22; Sonnet 5.5 has no delegation section, so these lines are vendor fallback plus the
 // user's own wording).
 // [pe] "Use subagents when tasks can run in parallel, require isolated context, or involve independent
 // workstreams that don't need to share state."
@@ -1272,7 +1272,7 @@ const SUBAGENT_SIZE = 'Work directly on simple tasks, sequential steps and singl
 // subagent context sees only the diff and the criteria you give it, not the reasoning that produced the change"; "Tell
 // the reviewer to flag only gaps that affect correctness or the stated requirements, and treat the rest as optional."
 const SUBAGENT_REVIEWER = 'The user asks for an independent review of the result: name one subagent as the reviewer. The reviewer did not write any of the work and starts from a fresh context: give it only the integrated result, the requirements and the definition of done, not the reasoning behind the work. It checks the result once and reports only gaps that affect correctness or the stated requirements, each with its evidence; style preferences are not findings. Writers do not review their own work; the lead agent fixes or sends back what the reviewer finds and treats the rest as optional.'
-// [review] D6 (report only delegation that happened).
+// [review] S20 (report only delegation that happened).
 const SUBAGENT_REAL = 'Only report delegation that actually happened through subagent tools; if they are not available, do the parts yourself in the same order and say so.'
 const SUBAGENT_DIRECT = 'Do not use subagents; perform the work directly.'
 // [pe] the sample prompt for subagent usage, verbatim (first two sentences), then the [sonnet55] "Thoroughness" snippet
@@ -1320,7 +1320,7 @@ const DELIVERABLE_LINES = {
   answer: 'Deliverable: a direct answer to the question; do not build or change anything.'
 }
 
-// DONE WHEN lines. [review] E1. Plan, text and answer get no line.
+// DONE WHEN lines. [review] S30-S32. Plan, text and answer get no line.
 const DONE_LINES = {
   // [sonnet55] "Verification on coding tasks": the doc's paragraph, verbatim ("If you see changes reported as complete
   // without test or build output in the transcript, add this paragraph"; at low effort the model "sometimes reports a

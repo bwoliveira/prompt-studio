@@ -6,6 +6,7 @@ import re
 import types
 from pathlib import Path
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -57,6 +58,17 @@ def test_registers_the_prompt_studio_auxiliary_task():
     assert "auxiliary.prompt_studio.timeout 20 " in (ROOT / "install.sh").read_text(encoding="utf-8")
     assert "    timeout: 20\n" in (ROOT / "README.md").read_text(encoding="utf-8")
     assert "      timeout: 20\n" in (ROOT / "docs" / "CONFIGURATION.md").read_text(encoding="utf-8")
+
+
+def test_register_calls_register_auxiliary_task_directly_so_a_host_without_it_errors():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("prompt_studio_init_min_under_test", ROOT / "__init__.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    # The minimum Hermes (plugin.yaml requires_hermes) always offers register_auxiliary_task: a context without it is
+    # an unsupported host, and register() says so instead of silently skipping the picker entry.
+    with pytest.raises(AttributeError, match="register_auxiliary_task"):
+        module.register(types.SimpleNamespace())
 
 
 def test_desktop_plugin_uses_only_ctx_tracked_listeners_and_storage():

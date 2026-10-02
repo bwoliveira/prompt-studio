@@ -540,7 +540,7 @@ COMPOSE_TARGET_RULES = {
         "- Do not ask the model to write out or include its reasoning in the response."
     ),
 }
-# Both targets: the SUBAGENTS section is either the user's explicit team/direct choice or the default
+# All three targets: the SUBAGENTS section is either the user's explicit team/direct choice or the default
 # delegation rule (one conditional line, no split or reviewer lines); keep exactly what the BASELINE has.
 COMPOSE_SUBAGENT_RULE = (
     "- If the BASELINE has a SUBAGENTS section, keep it as its own section with every line it has, word for word, "

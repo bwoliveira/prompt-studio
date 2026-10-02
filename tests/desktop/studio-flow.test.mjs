@@ -33,14 +33,13 @@ if (!nodeModules) {
   console.error(`studio-flow: SKIPPING UI tests: ${reason}`)
 }
 
-// PROMPT_STUDIO_LEGACY_SDK=1 runs the file against an SDK stub without ListRow/ToggleRow (Hermes
-// 0.20.0..0.21.4); tests/desktop/sdk-compat.test.mjs runs the settings tests that way.
-const LEGACY_SDK = process.env.PROMPT_STUDIO_LEGACY_SDK === '1'
 const REMOVED = ['category', 'effort', 'tools', 'browsing', 'delegation', 'structure', 'language', 'depth']
 const INTENT = 'Crie um app web simples para registrar gastos da casa por categoria, com React e Supabase.'
 // A clear code draft: "O que você quer receber" is detected with no real alternative, so it is skipped.
 const VAGUE = 'me ajuda com o projeto da empresa, preciso de algo bom'
 
+// The one global the plugin reads its test seams from (docs/DESKTOP-DEV.md, "Test seams"); the SDK stub below keeps its own flags on it too.
+globalThis.__promptStudioTest = { translated: new Set() } // translated: every key the UI asked ctx.i18n.t for
 let ui // the loaded bundle + DOM helpers
 const openPorts = []
 let tmp
@@ -66,12 +65,12 @@ before(async () => {
   }
   g.IS_REACT_ACT_ENVIRONMENT = true
   // Auto-mode suggestion debounce (SP-2): 0 ms keeps the other tests fast; the SP-2 test sets the real delay.
-  g.__promptStudioAutoSuggestDelayMs = 0
+  g.__promptStudioTest.autoSuggestDelayMs = 0
   // Frames run as 0 ms timers (jsdom paces them at 16 ms) and the studio waits 0 ms after the app's composer
   // focus retries (real: 50 ms), so opening settles within settle(); the focus-retry test proves the order.
   g.requestAnimationFrame = fn => setTimeout(() => fn(Date.now()), 0)
   g.cancelAnimationFrame = id => clearTimeout(id)
-  g.__promptStudioFocusSettleMs = 0
+  g.__promptStudioTest.focusSettleMs = 0
   // React's scheduler and act() queue work on MessageChannel ports, which keep node:test from
   // exiting. Track every port so after() can close them.
   const RealChannel = globalThis.MessageChannel
@@ -84,15 +83,12 @@ before(async () => {
   })
 
   tmp = mkdtempSync(join(tmpdir(), 'studio-flow-'))
-  // Legacy mode drops the ListRow/ToggleRow exports entirely, as Hermes 0.20.0..0.21.4 do: a named
-  // import of them then fails to link, exactly like the Desktop blob shim.
   const sdkSource = `
 import { atom as nanoAtom } from 'nanostores'
 import { useStore } from '@nanostores/react'
 import { jsx, jsxs } from 'react/jsx-runtime'
 import { createContext, useContext } from 'react'
 export const atom = nanoAtom
-export const sdkHasRows = ${JSON.stringify(!LEGACY_SDK)}
 // Settings dialog stubs (CX-1): just enough of the SDK components to drive them from tests.
 export const Codicon = ({ name }) => jsx('span', { 'data-codicon': name })
 export const Dialog = ({ open, children }) => (open ? jsx('div', { 'data-sdk-dialog': true, children }) : null)
@@ -113,7 +109,7 @@ export const DropdownMenuTrigger = ({ children }) => children
 export const DropdownMenuContent = ({ children }) => jsx('div', { children })
 export const ModelMenuCloseContext = createContext(() => {})
 // The catalog menu exposes its controller so a test can play select / setOptions.
-export const ModelCatalogMenu = ({ controller }) => { if (globalThis.__promptStudioBreakCatalog) throw new Error('catalog failed'); return jsx('div', { 'data-model-menu': true, ref: el => { if (el) el.__controller = controller } }) }
+export const ModelCatalogMenu = ({ controller }) => { if (globalThis.__promptStudioTest.breakCatalog) throw new Error('catalog failed'); return jsx('div', { 'data-model-menu': true, ref: el => { if (el) el.__controller = controller } }) }
 export const reasoningEffortLabel = effort => 'effort ' + effort
 export const useValue = useStore
 export const COMPOSER_AREAS = { top: 'top', middleware: 'middleware', actions: 'actions' }
@@ -121,7 +117,7 @@ export const PALETTE_AREA = 'palette'
 export const KEYBINDS_AREA = 'keybinds'
 // The Desktop SDK's formatModifierToken (0.21.4+): glyphs on a Mac, words elsewhere; counts calls so a test can tell it was used.
 const sdkFormatModifier = mod => {
-  globalThis.__sdkModifierCalls = (globalThis.__sdkModifierCalls || 0) + 1
+  globalThis.__promptStudioTest.sdkModifierCalls = (globalThis.__promptStudioTest.sdkModifierCalls || 0) + 1
   const mac = /mac/i.test(navigator.platform || '')
   return ({ mod: mac ? '⌘' : 'Ctrl', ctrl: mac ? '⌃' : 'Ctrl', alt: mac ? '⌥' : 'Alt', shift: mac ? '⇧' : 'Shift' })[mod] ?? mod
 }
@@ -138,6 +134,7 @@ function resolve(locale, key, args) {
   return typeof value === 'function' ? value(...args) : typeof value === 'string' ? value : null
 }
 export function translate(key, ...args) {
+  if (typeof key === 'string') globalThis.__promptStudioTest.translated?.add(key)
   return resolve(i18n.locale, key, args) ?? resolve('en', key, args) ?? key
 }
 export const $locale = nanoAtom('en')
@@ -163,10 +160,10 @@ export const host = {
     target(address) {
       const editor = document.querySelector('[data-slot="composer-rich-input"]')
       // null = the composer typed in last: the one on screen unless a test sets another pane's.
-      const active = globalThis.__promptStudioActiveComposer
+      const active = globalThis.__promptStudioTest.activeComposer
       if (address === null && active && active !== this.shown()) return { key: active }
       if (address === null || address === this.shown() || address === host.state.focusedSessionId.get()) return { editor }
-      if (globalThis.__promptStudioSessionUnmounted) return null
+      if (globalThis.__promptStudioTest.sessionUnmounted) return null
       return { key: address }
     },
     read(target) { return target.editor ? target.editor.textContent : (this.offscreen.get(target.key) ?? '') },
@@ -184,14 +181,14 @@ export const host = {
       }, 0)
     },
     async getDraft(sessionId) {
-      await globalThis.__promptStudioComposerGate
-      if (globalThis.__promptStudioNoActiveComposer) return null
+      await globalThis.__promptStudioTest.composerGate
+      if (globalThis.__promptStudioTest.noActiveComposer) return null
       const target = this.target(sessionId)
       return target ? this.read(target) : null
     },
     async setDraft(sessionId, text) {
-      await globalThis.__promptStudioComposerGate
-      if (globalThis.__promptStudioSetDraftFails) return false
+      await globalThis.__promptStudioTest.composerGate
+      if (globalThis.__promptStudioTest.setDraftFails) return false
       const target = this.target(sessionId)
       if (!target) return false
       this.writes.push({ sessionId, text })
@@ -201,8 +198,8 @@ export const host = {
     inserts: [],
     // insertText appends a paragraph (block mode), keeping what is there.
     async insertText(sessionId, text, opts) {
-      await globalThis.__promptStudioComposerGate
-      if (globalThis.__promptStudioSetDraftFails) return false
+      await globalThis.__promptStudioTest.composerGate
+      if (globalThis.__promptStudioTest.setDraftFails) return false
       const target = this.target(sessionId)
       if (!target) return false
       this.inserts.push({ sessionId, text, mode: opts?.mode })
@@ -217,10 +214,10 @@ export const host = {
   notifyError: (_e, message) => { notifications.push({ kind: 'error', message }) }
 }
 `
-  writeFileSync(join(tmp, 'sdk.js'), LEGACY_SDK ? sdkSource.replace(/^export const (ListRow|ToggleRow|formatModifierToken) = .*\n/gm, '') : sdkSource)
+  writeFileSync(join(tmp, 'sdk.js'), sdkSource)
   writeFileSync(join(tmp, 'entry.js'), `
 export { default as plugin, SHORTCUTS } from ${JSON.stringify(process.env.PROMPT_STUDIO_PLUGIN || join(repo, 'desktop', 'plugin.js'))}
-export { notifications, i18n, translate, $locale, host, sdkHasRows } from './sdk.js'
+export { notifications, i18n, translate, $locale, host } from './sdk.js'
 export { createRoot } from 'react-dom/client'
 export { act } from 'react'
 export { jsx } from 'react/jsx-runtime'
@@ -237,7 +234,6 @@ export { jsx } from 'react/jsx-runtime'
     logLevel: 'error'
   })
   const mod = await import(pathToFileURL(join(tmp, 'bundle.mjs')).href)
-  if (LEGACY_SDK) assert.ok(mod.sdkHasRows === false, 'legacy SDK stub has no ListRow/ToggleRow')
 
   // Fixed test markup (no user content): a minimal Hermes composer skeleton.
   document.body.innerHTML = `
@@ -283,7 +279,7 @@ export { jsx } from 'react/jsx-runtime'
       return clear
     },
     onDispose(fn) { disposers.push(fn) },
-    os: { clipboard: [], async writeClipboard(text) { if (globalThis.__promptStudioClipboardFails) return false; this.clipboard.push(text); return true } },
+    os: { clipboard: [], async writeClipboard(text) { if (globalThis.__promptStudioTest.clipboardFails) return false; this.clipboard.push(text); return true } },
     registerMany(items) { for (const item of items) slots[item.area] = item },
     async rest(path, { body }) {
       backend.calls.push({ path, body })
@@ -1649,6 +1645,7 @@ test('CT-01: an error code from the backend shows a localized tooltip; unknown o
   await pasteStep('')
   await waitFor(() => $('[data-studio-ai-error]'))
   assert.equal($('[data-studio-ai-error]').getAttribute('title'), 'raw detail 1')
+  globalThis.__promptStudioTest.translated.delete('errors.brand_new_code') // asked on purpose: it has no text
 })
 
 test('#32: auth_failed, rate_limited and provider_timeout show their own text in the /suggest and /compose tooltips and the context note, in en and pt', { skip }, async () => {
@@ -1704,7 +1701,7 @@ test('#25: a too_long reply shows its own localized message, not the generic "co
 })
 
 test('SP-2: in Auto, clicking through steps fast sends one /suggest, for the step the user stops on, after the delay', { skip }, async () => {
-  globalThis.__promptStudioAutoSuggestDelayMs = 400
+  globalThis.__promptStudioTest.autoSuggestDelayMs = 400
   try {
     await openStudio()
     await pasteStep('')
@@ -1725,12 +1722,12 @@ test('SP-2: in Auto, clicking through steps fast sends one /suggest, for the ste
     await click('[data-studio-ai-suggest]')
     assert.equal(suggestFields().length, before + 1, 'manual request sent at once')
   } finally {
-    globalThis.__promptStudioAutoSuggestDelayMs = 0
+    globalThis.__promptStudioTest.autoSuggestDelayMs = 0
   }
 })
 
 test('SDK: timers go through ctx.setTimeout; the debounce fires once, is cancelled on leave, and request deadlines are cleared or reject', { skip }, async () => {
-  globalThis.__promptStudioAutoSuggestDelayMs = 60
+  globalThis.__promptStudioTest.autoSuggestDelayMs = 60
   try {
     await openStudio()
     await pasteStep('')
@@ -1753,14 +1750,14 @@ test('SDK: timers go through ctx.setTimeout; the debounce fires once, is cancell
     assert.equal(deadline.cleared, true, 'deadline cleared when the request settled')
     assert.equal(deadline.fired, false)
   } finally {
-    globalThis.__promptStudioAutoSuggestDelayMs = 0
+    globalThis.__promptStudioTest.autoSuggestDelayMs = 0
   }
   // A hung request still rejects after the deadline, through a ctx timer.
   await freshSettings('sess-1')
   await openStudio(INTENT, 'auto')
   await click('[data-studio-cancel]')
   backend.context = () => new Promise(() => {})
-  globalThis.__promptStudioContextTimeoutMs = 25
+  globalThis.__promptStudioTest.contextTimeoutMs = 25
   try {
     $('[data-slot="composer-rich-input"]').textContent = INTENT
     await click('[data-studio-open]')
@@ -1768,7 +1765,7 @@ test('SDK: timers go through ctx.setTimeout; the debounce fires once, is cancell
     const hung = ui.timers.filter(t => t.ms === 25).at(-1)
     assert.ok(hung && hung.fired === true, 'the deadline fired through ctx.setTimeout')
   } finally {
-    delete globalThis.__promptStudioContextTimeoutMs
+    delete globalThis.__promptStudioTest.contextTimeoutMs
   }
   const source = await import('node:fs').then(fs => fs.readFileSync(join(repo, 'desktop', 'plugin.js'), 'utf8'))
   const uiPart = source.slice(source.indexOf('// @studio-end'))
@@ -1777,7 +1774,7 @@ test('SDK: timers go through ctx.setTimeout; the debounce fires once, is cancell
 })
 
 test('SDK: a timer still pending when the host disposes the plugin never fires', { skip }, async () => {
-  globalThis.__promptStudioAutoSuggestDelayMs = 60
+  globalThis.__promptStudioTest.autoSuggestDelayMs = 60
   try {
     await openStudio()
     await pasteStep('')
@@ -1790,7 +1787,7 @@ test('SDK: a timer still pending when the host disposes the plugin never fires',
     assert.ok(pending.fired === false, 'the disposed timer did not fire')
     assert.equal(suggestFields().length, before, 'no request after dispose')
   } finally {
-    globalThis.__promptStudioAutoSuggestDelayMs = 0
+    globalThis.__promptStudioTest.autoSuggestDelayMs = 0
     await click('[data-studio-cancel]')
   }
 })
@@ -1973,7 +1970,7 @@ test('CX-1: F4 on a stored session with AI on reads the context once; fresh draf
 test('CX-1: a model catalog that fails to load leaves the Studio working and the pickers on the default', { skip }, async () => {
   await freshSettings(null)
   await openStudio(INTENT, 'off')
-  globalThis.__promptStudioBreakCatalog = true
+  globalThis.__promptStudioTest.breakCatalog = true
   const quiet = console.error
   console.error = () => {}
   try {
@@ -1982,7 +1979,7 @@ test('CX-1: a model catalog that fails to load leaves the Studio working and the
     await closeSettings()
     assert.ok($('[data-studio-strip]'), 'studio still on screen')
   } finally {
-    delete globalThis.__promptStudioBreakCatalog
+    delete globalThis.__promptStudioTest.breakCatalog
     console.error = quiet
   }
 })
@@ -2022,7 +2019,7 @@ test('CX-1: a failed or timed-out context read shows a short note and the sugges
   await openStudio(INTENT, 'auto')
   await click('[data-studio-cancel]')
   backend.context = () => new Promise(() => {})
-  globalThis.__promptStudioContextTimeoutMs = 20
+  globalThis.__promptStudioTest.contextTimeoutMs = 20
   try {
     backend.calls.length = 0
     $('[data-slot="composer-rich-input"]').textContent = INTENT
@@ -2035,7 +2032,7 @@ test('CX-1: a failed or timed-out context read shows a short note and the sugges
     assert.equal(suggestCalls().length, 1, 'suggestion went on')
     assert.equal('session_context' in suggestCalls()[0].body, false)
   } finally {
-    delete globalThis.__promptStudioContextTimeoutMs
+    delete globalThis.__promptStudioTest.contextTimeoutMs
   }
   // A chosen model the provider does not know says so.
   await freshSettings('sess-1')
@@ -2316,7 +2313,7 @@ test('KEYS-MAC-CAPS: on a Mac every key cap, tooltip and F1 row reads ⌥E / ⇧
     assert.ok(!/Mac|Option/.test($('[data-studio-shortcuts-list]').textContent), 'no Mac note on Linux')
     await press(map.close)
   })
-  globalThis.__sdkModifierCalls = 0
+  globalThis.__promptStudioTest.sdkModifierCalls = 0
   await withPlatform('MacIntel', async () => {
     // The platform is read at render time: a studio open and closed again redraws the F4 button.
     await openStudio(INTENT, 'manual')
@@ -2378,8 +2375,7 @@ test('KEYS-MAC-CAPS: on a Mac every key cap, tooltip and F1 row reads ⌥E / ⇧
     assert.ok($('[data-studio-answer-input]'), 'Option+C opened the paste field')
     await press(map.close)
   })
-  if (ui.sdkHasRows) assert.ok(globalThis.__sdkModifierCalls > 0, 'the SDK formatModifierToken drew the modifiers')
-  else assert.equal(globalThis.__sdkModifierCalls, 0, 'no SDK formatModifierToken on this SDK: the local glyphs were used')
+  assert.ok(globalThis.__promptStudioTest.sdkModifierCalls > 0, 'the SDK formatModifierToken drew the modifiers')
 })
 
 test('README-KEYS: the README keyboard table shows, per platform, the keys the F1 list shows, in the same order', { skip }, async () => {
@@ -2509,7 +2505,7 @@ test('LOAD-1: a context read that times out releases the options with a short no
   await openStudio(INTENT, 'auto')
   await click('[data-studio-cancel]')
   backend.context = () => new Promise(() => {})
-  globalThis.__promptStudioContextTimeoutMs = 20
+  globalThis.__promptStudioTest.contextTimeoutMs = 20
   try {
     $('[data-slot="composer-rich-input"]').textContent = INTENT
     await click('[data-studio-open]')
@@ -2517,7 +2513,7 @@ test('LOAD-1: a context read that times out releases the options with a short no
     await waitFor(() => $('[data-studio-options]'))
     assert.ok($('[data-studio-context-status]').textContent.includes(ui.i18n.bundles.en.errors.timeout))
   } finally {
-    delete globalThis.__promptStudioContextTimeoutMs
+    delete globalThis.__promptStudioTest.contextTimeoutMs
   }
 })
 
@@ -2603,28 +2599,76 @@ test('SET-1: read-context switch off: no /context and no loading state, persiste
   assert.equal(contextCalls().length, 1, 'on: it reads')
 })
 
-test('SDK-1: the Settings rows use the SDK ListRow/ToggleRow when present and the built-in fallbacks otherwise', { skip }, async () => {
+test('SDK-1: the Settings rows are the SDK ListRow/ToggleRow', { skip }, async () => {
   await freshSettings(null)
   await openStudio(INTENT, 'auto')
   await openSettings()
   const sw = $('[data-studio-read-context] [role="switch"]')
   assert.ok(sw, 'a switch is shown')
-  if (LEGACY_SDK) {
-    assert.ok($('[data-sdk-list-row]') === null && $('[data-sdk-toggle]') === null, 'no SDK rows on a legacy SDK')
-    assert.ok($('[data-studio-settings-dialog] [data-studio-list-row]'), 'fallback ListRow rendered')
-    assert.equal(sw.tagName, 'BUTTON', 'fallback switch is a real button (Space/Enter, focusable)')
-    assert.equal(sw.getAttribute('aria-checked'), 'true')
-    assert.ok(sw.getAttribute('aria-label') || sw.getAttribute('aria-labelledby'), 'switch is labelled')
-  } else {
-    assert.ok($('[data-sdk-list-row]') && $('[data-sdk-toggle]'), 'SDK rows used when the SDK has them')
-    assert.ok($('[data-studio-list-row]') === null, 'no fallback when the SDK has ListRow')
-  }
+  assert.ok($('[data-sdk-list-row]') && $('[data-sdk-toggle]'), 'SDK rows used')
   await click('[data-studio-read-context] [role="switch"]')
   assert.equal(ui.storage.get('readContext'), false)
   assert.equal($('[data-studio-read-context] [role="switch"]').getAttribute('aria-checked'), 'false')
   await click('[data-studio-read-context] [role="switch"]')
   assert.equal(ui.storage.get('readContext'), true)
   await closeSettings()
+})
+
+test('SDK-2: on a Desktop SDK that has no ListRow/ToggleRow the plugin still links, registers and draws its entry button', { skip }, async () => {
+  // Hermes Desktop older than the supported minimum lacks the two settings rows. A named import of a missing export
+  // is a link error that kills the whole plugin (the 0.21.4 bug); read from the namespace, it loads and the user
+  // can still be told to update.
+  const esbuild = createRequire(join(nodeModules, 'noop.js'))('esbuild')
+  writeFileSync(join(tmp, 'sdk-no-rows.js'), readFileSync(join(tmp, 'sdk.js'), 'utf8').replace(/^export const (ListRow|ToggleRow) = .*\n/gm, ''))
+  writeFileSync(join(tmp, 'entry-no-rows.js'), `
+export { default as plugin } from ${JSON.stringify(process.env.PROMPT_STUDIO_PLUGIN || join(repo, 'desktop', 'plugin.js'))}
+export { i18n, translate } from './sdk-no-rows.js'
+export { createRoot } from 'react-dom/client'
+export { act } from 'react'
+export { jsx } from 'react/jsx-runtime'
+`)
+  await esbuild.build({
+    entryPoints: [join(tmp, 'entry-no-rows.js')],
+    bundle: true,
+    format: 'esm',
+    platform: 'browser',
+    outfile: join(tmp, 'bundle-no-rows.mjs'),
+    nodePaths: [nodeModules],
+    alias: { '@hermes/plugin-sdk': join(tmp, 'sdk-no-rows.js') },
+    define: { 'process.env.NODE_ENV': '"development"' },
+    logLevel: 'error'
+  })
+  const legacy = await import(pathToFileURL(join(tmp, 'bundle-no-rows.mjs')).href)
+  const slots = {}
+  const disposers = []
+  const ctx = {
+    i18n: { register(bundles) { Object.assign(legacy.i18n.bundles, bundles); return () => {} }, t: legacy.translate, onLocaleChange: () => () => {} },
+    storage: { get: (_key, fallback) => fallback, set() {}, remove() {} },
+    addEventListener(target, type, listener, options) {
+      target.addEventListener(type, listener, options)
+      const off = () => target.removeEventListener(type, listener, options)
+      disposers.push(off)
+      return off
+    },
+    setTimeout(fn, ms) { const id = setTimeout(fn, ms); const clear = () => clearTimeout(id); disposers.push(clear); return clear },
+    onDispose(fn) { disposers.push(fn) },
+    registerMany(items) { for (const item of items) slots[item.area] = item },
+    async rest() { throw new Error('no backend in this test') }
+  }
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  const root = legacy.createRoot(container)
+  try {
+    legacy.plugin.register(ctx)
+    await legacy.act(async () => { root.render(legacy.jsx(() => slots.actions.render(), {})) })
+    const button = container.querySelector('[data-studio-open]')
+    assert.ok(button, 'the F4 entry button is drawn')
+    assert.ok(button.textContent.trim() !== '' || button.getAttribute('aria-label'), 'and it is labelled')
+  } finally {
+    await legacy.act(async () => { root.unmount() })
+    for (const dispose of disposers.splice(0).reverse()) dispose()
+    container.remove()
+  }
 })
 
 test('SDK composer: the draft is read and written only through host.composer, addressed to its conversation', { skip }, async () => {
@@ -2654,14 +2698,14 @@ test('SDK composer: a host without host.composer tells the user to update Hermes
 
 test('SDK composer: when setDraft is refused the preview stays open with an error and nothing is lost', { skip }, async () => {
   await toPreview()
-  globalThis.__promptStudioSetDraftFails = true
+  globalThis.__promptStudioTest.setDraftFails = true
   try {
     ui.notifications.length = 0
     await click('[data-studio-use-prompt]')
     assert.ok($('[data-studio-preview]'), 'preview still open')
     assert.ok(ui.notifications.some(n => n.kind === 'error' && n.message === ui.i18n.bundles.en.notify.placeFailed), 'error shown')
   } finally {
-    globalThis.__promptStudioSetDraftFails = false
+    globalThis.__promptStudioTest.setDraftFails = false
     await click('[data-studio-cancel]')
   }
 })
@@ -2676,7 +2720,7 @@ test('Attachments: the preview warns in the destructive color that Send now does
 })
 
 test('SDK composer: no active composer (getDraft null) says so instead of "empty", and does not open', { skip }, async () => {
-  globalThis.__promptStudioNoActiveComposer = true
+  globalThis.__promptStudioTest.noActiveComposer = true
   try {
     $('[data-slot="composer-rich-input"]').textContent = INTENT
     ui.notifications.length = 0
@@ -2685,15 +2729,15 @@ test('SDK composer: no active composer (getDraft null) says so instead of "empty
     assert.ok(ui.notifications.some(n => n.kind === 'error' && n.message === ui.i18n.bundles.en.notify.readFailed), 'read-failed note')
     assert.ok(!ui.notifications.some(n => n.message === ui.i18n.bundles.en.notify.empty), 'not reported as empty')
   } finally {
-    globalThis.__promptStudioNoActiveComposer = false
+    globalThis.__promptStudioTest.noActiveComposer = false
   }
 })
 
 // Holds every host.composer call until release() runs.
 function holdComposer() {
   let release
-  globalThis.__promptStudioComposerGate = new Promise(resolve => { release = resolve })
-  return async () => { globalThis.__promptStudioComposerGate = undefined; release(); await settle() }
+  globalThis.__promptStudioTest.composerGate = new Promise(resolve => { release = resolve })
+  return async () => { globalThis.__promptStudioTest.composerGate = undefined; release(); await settle() }
 }
 
 test('SDK composer: F4 pressed again while the draft is being read opens the studio once', { skip }, async () => {
@@ -2743,7 +2787,7 @@ async function openWhileSwitching() {
   resetComposer()
   backend.calls.length = 0
   ui.notifications.length = 0
-  globalThis.__promptStudioFocusSettleMs = 40
+  globalThis.__promptStudioTest.focusSettleMs = 40
   try {
     $('[data-slot="composer-rich-input"]').textContent = INTENT
     await press(K().open)
@@ -2751,7 +2795,7 @@ async function openWhileSwitching() {
     await ui.act(async () => { await new Promise(resolve => setTimeout(resolve, 120)) })
     await settle()
   } finally {
-    globalThis.__promptStudioFocusSettleMs = 0
+    globalThis.__promptStudioTest.focusSettleMs = 0
   }
 }
 
@@ -2768,7 +2812,7 @@ test('SDK composer: switching conversations while the Studio opens returns the d
 })
 
 test('SDK composer: when the original conversation is not on screen any more the draft is copied to the clipboard', { skip }, async () => {
-  globalThis.__promptStudioSessionUnmounted = true
+  globalThis.__promptStudioTest.sessionUnmounted = true
   const clipboard = ui.pluginContext.os.clipboard
   clipboard.length = 0
   try {
@@ -2777,18 +2821,18 @@ test('SDK composer: when the original conversation is not on screen any more the
     assert.deepEqual(clipboard, [INTENT])
     assert.ok(ui.notifications.some(n => n.message === ui.i18n.bundles.en.notify.sessionChangedCopied))
   } finally {
-    globalThis.__promptStudioSessionUnmounted = false
+    globalThis.__promptStudioTest.sessionUnmounted = false
     ui.host.state.focusedSessionId.set('sess-live')
   }
 })
 
 test('SDK composer: original conversation gone and clipboard refused: the draft is added below the other conversation draft', { skip }, async () => {
-  globalThis.__promptStudioSessionUnmounted = true
-  globalThis.__promptStudioClipboardFails = true
+  globalThis.__promptStudioTest.sessionUnmounted = true
+  globalThis.__promptStudioTest.clipboardFails = true
   try {
     resetComposer()
     ui.notifications.length = 0
-    globalThis.__promptStudioFocusSettleMs = 40
+    globalThis.__promptStudioTest.focusSettleMs = 40
     $('[data-slot="composer-rich-input"]').textContent = INTENT
     await press(K().open)
     // The user lands on conversation B, which has its own unsent draft.
@@ -2802,34 +2846,34 @@ test('SDK composer: original conversation gone and clipboard refused: the draft 
     assert.equal(composer().submits.length, 0, 'not sent')
     assert.ok(ui.notifications.some(n => n.message === ui.i18n.bundles.en.notify.sessionChangedHere))
   } finally {
-    globalThis.__promptStudioFocusSettleMs = 0
-    globalThis.__promptStudioSessionUnmounted = false
-    globalThis.__promptStudioClipboardFails = false
+    globalThis.__promptStudioTest.focusSettleMs = 0
+    globalThis.__promptStudioTest.sessionUnmounted = false
+    globalThis.__promptStudioTest.clipboardFails = false
     ui.host.state.focusedSessionId.set('sess-live')
   }
 })
 
 test('SDK composer: when every place refuses the draft, the error notice carries the draft text', { skip }, async () => {
-  globalThis.__promptStudioSessionUnmounted = true
-  globalThis.__promptStudioClipboardFails = true
+  globalThis.__promptStudioTest.sessionUnmounted = true
+  globalThis.__promptStudioTest.clipboardFails = true
   try {
     resetComposer()
     ui.notifications.length = 0
-    globalThis.__promptStudioFocusSettleMs = 40
+    globalThis.__promptStudioTest.focusSettleMs = 40
     $('[data-slot="composer-rich-input"]').textContent = INTENT
     await press(K().open)
     ui.host.state.focusedSessionId.set('sess-other')
-    globalThis.__promptStudioSetDraftFails = true
+    globalThis.__promptStudioTest.setDraftFails = true
     await ui.act(async () => { await new Promise(resolve => setTimeout(resolve, 120)) })
     await settle()
     assert.ok($('[data-studio-strip]') === null, 'studio not opened')
     const lost = ui.notifications.find(n => n.kind === 'error')
     assert.ok(lost && lost.message.includes(INTENT), 'the draft text is in the notice')
   } finally {
-    globalThis.__promptStudioFocusSettleMs = 0
-    globalThis.__promptStudioSetDraftFails = false
-    globalThis.__promptStudioSessionUnmounted = false
-    globalThis.__promptStudioClipboardFails = false
+    globalThis.__promptStudioTest.focusSettleMs = 0
+    globalThis.__promptStudioTest.setDraftFails = false
+    globalThis.__promptStudioTest.sessionUnmounted = false
+    globalThis.__promptStudioTest.clipboardFails = false
     ui.host.state.focusedSessionId.set('sess-live')
   }
 })
@@ -2869,7 +2913,7 @@ async function hostReload() {
 
 test('SDK composer: a dispose while the Studio is opening gives the draft back to the composer', { skip }, async () => {
   resetComposer()
-  globalThis.__promptStudioFocusSettleMs = 40
+  globalThis.__promptStudioTest.focusSettleMs = 40
   try {
     $('[data-slot="composer-rich-input"]').textContent = INTENT
     await press(K().open)
@@ -2880,7 +2924,7 @@ test('SDK composer: a dispose while the Studio is opening gives the draft back t
     assert.ok($('[data-studio-strip]') === null, 'the cut-short opening never continues')
     assert.deepEqual(composer().writes.at(-1), { sessionId: 'sess-live', text: INTENT }, 'draft back in its composer')
   } finally {
-    globalThis.__promptStudioFocusSettleMs = 0
+    globalThis.__promptStudioTest.focusSettleMs = 0
   }
   await openStudio()
   assert.ok($('[data-studio-strip]'), 'the reloaded plugin opens normally')
@@ -2918,7 +2962,7 @@ test('SDK composer: a dispose with the original conversation gone copies the dra
   resetComposer()
   await openStudio()
   ui.host.state.focusedSessionId.set('sess-other')
-  globalThis.__promptStudioSessionUnmounted = true
+  globalThis.__promptStudioTest.sessionUnmounted = true
   try {
     ui.notifications.length = 0
     await hostReload()
@@ -2926,7 +2970,7 @@ test('SDK composer: a dispose with the original conversation gone copies the dra
     assert.deepEqual(clipboard, [INTENT], 'draft on the clipboard, not lost')
     assert.ok(ui.notifications.some(n => n.message === ui.i18n.bundles.en.notify.draftBackCopied))
   } finally {
-    globalThis.__promptStudioSessionUnmounted = false
+    globalThis.__promptStudioTest.sessionUnmounted = false
     ui.host.state.focusedSessionId.set('sess-live')
   }
 })
@@ -2965,7 +3009,7 @@ test('SDK composer: a saved conversation with no runtime id yet is addressed by 
 test('SDK composer: with two panes, F4 reads and clears the focused conversation, never the other pane typed in last', { skip }, async () => {
   resetComposer()
   composer().offscreen.set('sess-a', 'rascunho do painel A')
-  globalThis.__promptStudioActiveComposer = 'sess-a'
+  globalThis.__promptStudioTest.activeComposer = 'sess-a'
   try {
     await openStudio('rascunho da conversa B em foco')
     assert.match($('[data-studio-intent-row]').textContent, /rascunho da conversa B em foco/, 'the focused conversation draft')
@@ -2974,7 +3018,7 @@ test('SDK composer: with two panes, F4 reads and clears the focused conversation
     await waitFor(() => draft() === 'rascunho da conversa B em foco')
     assert.equal(composer().offscreen.get('sess-a'), 'rascunho do painel A', 'pane A still untouched after Close')
   } finally {
-    globalThis.__promptStudioActiveComposer = undefined
+    globalThis.__promptStudioTest.activeComposer = undefined
   }
 })
 
@@ -3000,7 +3044,7 @@ test('SDK composer: a dispose while a placement that fails is pending brings the
   let refused = 0
   const setDraft = composer().setDraft
   composer().setDraft = async function (sessionId, text) {
-    if (text !== INTENT && refused === 0) { refused += 1; await globalThis.__promptStudioComposerGate; return false }
+    if (text !== INTENT && refused === 0) { refused += 1; await globalThis.__promptStudioTest.composerGate; return false }
     return setDraft.call(this, sessionId, text)
   }
   try {
@@ -3029,14 +3073,14 @@ test('SDK composer: disabled while a refused placement is pending, the request s
   await press(K().editPrompt)
   // The conversation leaves the screen: the placement and the restore to it are both refused.
   ui.host.state.focusedSessionId.set('sess-other')
-  globalThis.__promptStudioSessionUnmounted = true
+  globalThis.__promptStudioTest.sessionUnmounted = true
   try {
     await hostDisable()
     await release()
     await settle()
     assert.deepEqual(clipboard, [INTENT], 'the clipboard API taken at dispose time was used')
   } finally {
-    globalThis.__promptStudioSessionUnmounted = false
+    globalThis.__promptStudioTest.sessionUnmounted = false
     ui.host.state.focusedSessionId.set('sess-live')
     await ui.act(async () => { ui.plugin.register(ui.pluginContext) })
     await ui.act(async () => {
@@ -3437,4 +3481,17 @@ test('CLOSE-1: a dispose with Settings open closes both, and the reloaded plugin
   assert.ok($('[data-studio-settings-dialog]') === null, 'Settings closed with it')
   assert.deepEqual(composer().writes.at(-1), { sessionId: 'sess-live', text: INTENT }, 'the draft is back in its composer')
   await reopenAndExpectNoSettings('the reloaded plugin starts without Settings')
+})
+
+// Last on purpose: it reads what every test above made the UI ask the SDK to translate (a screen that renders a key
+// missing from a locale shows the raw key to the user).
+test('i18n: every key the UI asked ctx.i18n.t for in this file exists in en and pt', { skip }, () => {
+  const has = (locale, key) => {
+    let value = ui.i18n.bundles[locale]
+    for (const part of key.split('.')) value = value?.[part]
+    return typeof value === 'string' || typeof value === 'function'
+  }
+  const asked = [...globalThis.__promptStudioTest.translated]
+  assert.ok(asked.length > 0, 'the UI translated nothing')
+  assert.deepEqual(asked.flatMap(key => ['en', 'pt'].filter(locale => !has(locale, key)).map(locale => `${locale}: ${key}`)), [])
 })

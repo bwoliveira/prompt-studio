@@ -10,6 +10,12 @@ below: undeclared fields are dropped.
 model returns (`reason` for /suggest, `notes` for /compose): English for `en`, Brazilian Portuguese for `pt`; any other
 value is treated as `en`. It never changes the prompt itself, which follows the language of the user's draft.
 
+Field types. `model_choice.effort` is the only literal type (a value outside its list is a 422). `target`, `mode`,
+`locale`, `field.kind` and `answers[].kind` are plain strings of at most 200 characters: the values listed in the blocks
+below are the ones with a meaning, and any other value is read as the default, never refused: `target` as the generic
+"target model" wording (and, for /compose, the Opus rules), `mode` as `suggest`, `locale` as `en`, `kind` as `text` (a
+/suggest field is a choice only when `kind` is `enum`).
+
 `model_choice` (/suggest, /compose, /context, optional): `{ "provider": "anthropic", "model": "claude-haiku-5",
 "effort": "low" }` (provider ≤ 80 chars, model ≤ 200, effort ≤ 16). Empty or missing `model`: exactly the config route
 (`auxiliary.prompt_studio`: provider, model, reasoning_effort, timeout, extra_body). With a `model`, the call goes to that
@@ -70,7 +76,7 @@ waits 50 s and then uses `baseline`.
 
 ## POST /context
 ```json
-{ "session_id": "stored session id (1..128 chars, [A-Za-z0-9_.:-])", "profile": "default (≤ 64, [A-Za-z0-9_-])",
+{ "session_id": "stored session id (required, 1..128 chars, [A-Za-z0-9_.:-])", "profile": "default (≤ 64, [A-Za-z0-9_-])",
   "locale": "en|pt", "model_choice": { "provider": "…", "model": "…", "effort": "…" } }
 ```
 Opens the profile's session store read-only (`hermes_cli.web_server_sessions._open_session_db_for_profile(profile,
@@ -89,7 +95,7 @@ Response (HTTP 200): `{ "ok": true, "summary": "…", "model": "provider/model",
 
 | `code` | When | `error` |
 |---|---|---|
-| `bad_request` | invalid `session_id`/`profile` reaching the reader | `invalid session_id or profile` |
+| `bad_request` | invalid `session_id`/`profile` reaching the reader. Not reachable over REST: the route validates both first and answers 422; only a direct call of `context()` returns it | `invalid session_id or profile` |
 | `no_session` | the id is not in the store | `session not found` |
 | `empty_session` | no user/assistant text and no compaction summary | fixed sentence |
 | `timeout` | no reply within 15 s (also carries `model`) | `no summary within 15 s` |
@@ -136,7 +142,15 @@ limit); otherwise the key is absent. The desktop engines already cap their own f
 pasted text at 12 000), so the flag is for other clients and for oversized drafts. The configured `auxiliary.prompt_studio.timeout` can lower the /suggest
 provider timeout; /compose always gets its full 45 s.
 
-Errors on every route: `ok: false` with `error`; nothing is ever replaced by a made-up answer.
+Nothing is ever replaced by a made-up answer. What the routes answer when the request or the engine fails, by status:
+
+| Status | Route | Body |
+|---|---|---|
+| 400 | /suggest | `{ \"ok\": false, \"error\": \"intent and field.question are required\" }` (blank draft or field question; no `code`) |
+| 400 | /compose | `{ \"ok\": false, \"error\": \"intent is required\" }` (blank draft; no `code`) |
+| 422 | all three | FastAPI's own `{ \"detail\": [ … ] }`, with no `ok`: a field over its size limit, a bad `effort`, a `session_id` or `profile` with other characters |
+| 500 | /suggest, /compose | `{ \"ok\": false, \"error\": \"suggest engine unavailable\" }` / `\"compose engine unavailable\"` (the engine could not load or crashed; no `code`) |
+| 200 | /context | `{ \"ok\": false, \"code\": \"unavailable\", \"error\": \"context reader unavailable\" }` when the reader cannot load or crashes |
 
 Engine failures (`ok: false` from /suggest and /compose, HTTP 200) also carry a stable machine `code`; `error` is a short
 English technical detail for logs and tests, never provider text (provider exceptions are logged server-side and only
@@ -145,7 +159,7 @@ back to `error` when the code is unknown or absent.
 
 | `code` | Route | When | `error` |
 |---|---|---|---|
-| `bad_request` | both | draft (or /suggest field question) missing | `intent and field.question are required` / `intent is required` |
+| `bad_request` | both | draft (or /suggest field question) missing. Not reachable over REST: the routes answer a blank draft or field question with their own 400 first (below), which has no `code`; only a direct call of `suggest()` or `compose()` returns it | `intent and field.question are required` / `intent is required` |
 | `nothing_to_improve` | /suggest | `improve` on a choice field or with no `answer` | fixed sentence |
 | `too_long` | /suggest | `improve` with an `answer` over 1 200 characters (also `limit`); the model is not called | `answer is longer than 1200 characters` |
 | `invalid_suggestion` | /suggest | reply is not JSON with `value` | fixed sentence |
@@ -167,9 +181,8 @@ One classifier (`PROVIDER_ERRORS` in `llm_adapter.py`) turns a failed provider c
 /context. First match wins: `host_incompatible`, `model_not_found`, `auth_failed`, `provider_refused`, `provider_payment`,
 `provider_bad_request`, `rate_limited`, `provider_timeout`, else `unavailable`.
 
-`timeout`, `unavailable`, `model_not_found`, `auth_failed`, `provider_refused`, `provider_payment`, `provider_bad_request`, `rate_limited`, `provider_timeout`, `host_incompatible` and `empty_reply` also carry `model`. The route-level errors (400 for a blank draft, 500
-`{ "ok": false, "error": "suggest engine unavailable" }` / `"compose engine unavailable"` when the engine cannot load
-or crashes, 422 over the size limits) have no `code`.
+`timeout`, `unavailable`, `model_not_found`, `auth_failed`, `provider_refused`, `provider_payment`, `provider_bad_request`, `rate_limited`, `provider_timeout`, `host_incompatible` and `empty_reply` also carry `model`. The route-level
+errors of the status table above (400, 422, 500) have no `code`.
 
 In /compose, any third-party framing the model writes itself (a `THIRD-PARTY MATERIAL` header line, `<pasted_content …>`
 or `<document>` spans) is removed; the final prompt carries only the Studio's own restored block, if any. A kind the

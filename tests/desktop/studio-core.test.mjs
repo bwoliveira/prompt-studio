@@ -282,6 +282,26 @@ test('core i18n: en and pt have identical keys; core and UI bundles never clobbe
   }
 })
 
+test('UI i18n: en and pt have identical keys', () => {
+  assert.deepEqual(keys(UI_MESSAGES.pt), keys(UI_MESSAGES.en))
+})
+
+// docs/CONTRACT.md lists every `code` a client can receive; the tables mark the ones no REST client ever sees.
+// The same table is checked against the real routes in tests/test_contract.py.
+test('UI i18n: errors.<code> has a text, in en and pt, for every code CONTRACT.md says a client can receive, and for no other', async () => {
+  const doc = await readFile(new URL('../../docs/CONTRACT.md', import.meta.url), 'utf8')
+  const reachable = new Set()
+  for (const header of ['| `code` | When | `error` |', '| `code` | Route | When | `error` |']) {
+    const table = doc.split(header)[1].split('\n\n')[0]
+    for (const line of table.split('\n')) {
+      const code = line.match(/^\| `(\w+)` \|/)?.[1]
+      if (code && !line.includes('Not reachable over REST')) reachable.add(code)
+    }
+  }
+  assert.ok(reachable.size > 10, `codes read from the doc: ${[...reachable]}`)
+  for (const locale of Object.keys(UI_MESSAGES)) assert.deepEqual(Object.keys(UI_MESSAGES[locale].errors).sort(), [...reachable].sort(), locale)
+})
+
 test('studio-core.js imports only the engines and its i18n bundle', async () => {
   const src = await readFile(new URL('../../desktop/src/studio-core.js', import.meta.url), 'utf8')
   assert.deepEqual([...src.matchAll(/from '([^']+)'/g)].map(m => m[1]).sort(), ['./engine-astra.js', './engine-opus.js', './engine-sonnet.js', './i18n-core.js'])

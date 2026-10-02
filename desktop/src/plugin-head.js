@@ -27,9 +27,10 @@ import {
   usePluginI18n,
   useValue
 } from '@hermes/plugin-sdk'
-// Names added to the SDK after the oldest supported Hermes (ListRow/ToggleRow: 0.21.5) are read from
-// the namespace, never imported by name: on an older Desktop a named import of a missing export
-// fails to link and the whole plugin fails to load. See tests/desktop/sdk-compat.test.mjs.
+// Names that only the oldest supported Hermes (0.21.5, plugin.yaml requires_hermes) exports (ListRow/ToggleRow) are
+// read from the namespace, never imported by name: on an older Desktop a named import of a missing export
+// fails to link and the whole plugin fails to load, so it could not even ask the user to update.
+// See tests/desktop/sdk-compat.test.mjs and the SDK-2 test of studio-flow.test.mjs (loads the plugin without them).
 import * as hermesSdk from '@hermes/plugin-sdk'
 import { jsx, jsxs } from 'react/jsx-runtime'
 import { Component, Fragment, useEffect, useState } from 'react'

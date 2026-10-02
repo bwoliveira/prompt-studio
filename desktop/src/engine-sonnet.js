@@ -13,7 +13,7 @@
 //   top of your prompt, above your query, instructions, and examples.")
 //   TASK, CONTEXT, THIRD-PARTY MATERIAL (short paste), REQUIREMENTS, AUTONOMY, SUBAGENTS, EXAMPLE(S),
 //   OUTPUT, DONE WHEN.
-// Deliberately absent: tool lists and effort ([review] C12: effort is a Hermes session setting), personas,
+// Deliberately absent: tool lists and effort ([review] section 5, "Not emitted": effort is a Hermes session setting), personas,
 // "show your reasoning" ([sonnet55] "If your prompts ask the model to include its reasoning in the response, remove
 // those instructions, because they invite `reasoning_extraction` declines"), <pasted_content> tags (an Opus 5.5 feature,
 // not in the Sonnet docs), the Opus "time matters" sentence and the Opus unattended paragraph.
@@ -27,7 +27,7 @@ const LENGTHS = ['concise', 'balanced', 'detailed']
 const SUBAGENT_MODES = ['team', 'auto', 'direct']
 
 const PASTE_CAP = 12000
-// [review] C4: "limite de 2.000 caracteres: escolha nossa".
+// [review] S1: the 2,000-character threshold is our own choice (local).
 const LONG_PASTE = 2000
 const MAX_FIELD = 200000
 
@@ -51,7 +51,7 @@ const SCOPE_LINE = "When the work the user asked for is done and checked, stop a
 const PLAN_LINE = "When the user asks for ideas, options or a plan, give them that and stop. Don't start building or changing anything until they say to go ahead."
 
 // [sonnet55] "Tool use in chat and knowledge work" snippet. Adapted: opens with "If a search tool is available" because
-// Hermes owns the tool list ([review] C12); the rest is verbatim. Not emitted next to a paste (the paste is the source).
+// Hermes owns the tool list ([review] S11); the rest is verbatim. Not emitted next to a paste (the paste is the source).
 const SEARCH_LINE = 'If a search tool is available, use it to check specifics that may have changed since your training, such as what is allowed, required or charged, even when you feel confident. For researched work such as a report or a comparison, gather current sources rather than writing from your training knowledge.'
 const SEARCH_DELIVERABLES = ['analysis', 'answer']
 
@@ -97,7 +97,7 @@ const AUTONOMY_LINES = {
   unattended: "Nobody is available to answer while you work. Keep working until everything the user asked for is done: do not pause to confirm a plan, ask a question you could answer yourself, or stop after one part of a multipart task to ask whether to continue. Stop only when you can't go on without the user or before a risky step, and say what you need.",
 }
 
-// SUBAGENTS ([review] section 3; Sonnet 5.5 has no delegation section, so these lines are vendor fallback plus the
+// SUBAGENTS ([review] section 3 and S17-S22; Sonnet 5.5 has no delegation section, so these lines are vendor fallback plus the
 // user's own wording).
 // [pe] "Use subagents when tasks can run in parallel, require isolated context, or involve independent
 // workstreams that don't need to share state."
@@ -110,7 +110,7 @@ const SUBAGENT_SIZE = 'Work directly on simple tasks, sequential steps and singl
 // subagent context sees only the diff and the criteria you give it, not the reasoning that produced the change"; "Tell
 // the reviewer to flag only gaps that affect correctness or the stated requirements, and treat the rest as optional."
 const SUBAGENT_REVIEWER = 'The user asks for an independent review of the result: name one subagent as the reviewer. The reviewer did not write any of the work and starts from a fresh context: give it only the integrated result, the requirements and the definition of done, not the reasoning behind the work. It checks the result once and reports only gaps that affect correctness or the stated requirements, each with its evidence; style preferences are not findings. Writers do not review their own work; the lead agent fixes or sends back what the reviewer finds and treats the rest as optional.'
-// [review] D6 (report only delegation that happened).
+// [review] S20 (report only delegation that happened).
 const SUBAGENT_REAL = 'Only report delegation that actually happened through subagent tools; if they are not available, do the parts yourself in the same order and say so.'
 const SUBAGENT_DIRECT = 'Do not use subagents; perform the work directly.'
 // [pe] the sample prompt for subagent usage, verbatim (first two sentences), then the [sonnet55] "Thoroughness" snippet
@@ -158,7 +158,7 @@ const DELIVERABLE_LINES = {
   answer: 'Deliverable: a direct answer to the question; do not build or change anything.'
 }
 
-// DONE WHEN lines. [review] E1. Plan, text and answer get no line.
+// DONE WHEN lines. [review] S30-S32. Plan, text and answer get no line.
 const DONE_LINES = {
   // [sonnet55] "Verification on coding tasks": the doc's paragraph, verbatim ("If you see changes reported as complete
   // without test or build output in the transcript, add this paragraph"; at low effort the model "sometimes reports a

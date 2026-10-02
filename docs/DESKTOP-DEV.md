@@ -43,11 +43,30 @@ template literals. Why the build is a concatenation with isolated engine scopes:
 are described in `CONTRIBUTING.md`. The doc snapshots behind `scripts/docs_sources.py` live outside the plugin; see
 `docs/sources/README.md`.
 
+## Test seams
+
+The plugin has no test mode. The three timing values the UI tests shorten are read from one global,
+`globalThis.__promptStudioTest`, and fall back to the real constant when it is absent (it never exists in Hermes Desktop).
+Tests create it as `{}` before loading `plugin.js` and set a field for the length of one test (`tests/desktop/studio-flow.test.mjs`
+also keeps its SDK stub flags on it). No other global is read by `desktop/src/*`; a new seam is a new field here, with a
+row in this table.
+
+| Field | Replaces | Default |
+|---|---|---|
+| `autoSuggestDelayMs` | the pause before Auto asks the AI for a step suggestion (`AUTO_SUGGEST_DELAY_MS`, `ui-suggestions.js`) | the constant |
+| `contextTimeoutMs` | how long the Studio waits for `/context` (`CONTEXT_CLIENT_TIMEOUT_MS`, `ui-composer.js`) | the constant |
+| `focusSettleMs` | how long the composer focus is retried after a write (`FOCUS_SETTLE_MS`, `ui-composer.js`) | the constant |
+
 ## i18n
 
 The UI is English-first through the Desktop plugin i18n API: `ctx.i18n.register(bundles)` in `register()`,
 `usePluginI18n(id)` in React, `ctx.i18n.t` outside React. Rule: the `en` and `pt` bundles must have exactly the same
-keys (the tests check it). Add a key to both in the same change. Generated prompts are not translated: section
+keys, and every key the UI asks for exists in both (the tests check both: `studio-core.test.mjs` compares the two
+bundles; the last test of `studio-flow.test.mjs` checks each key the UI asked `ctx.i18n.t` for while the flow tests ran).
+Add a key to both in the same change and delete it from both when its last use goes (no test finds a key nothing reads).
+`errors.<code>` is the backend's code table: `studio-core.test.mjs` requires one text per code a client can receive
+(`docs/CONTRACT.md`) and none for a code the REST routes cannot return; `tests/test_contract.py` checks that table against
+what the routes answer. Generated prompts are not translated: section
 headers and rule lines stay English, and the user's text is copied as written.
 
 ## Draft recognition languages

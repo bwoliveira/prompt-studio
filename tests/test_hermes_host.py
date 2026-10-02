@@ -28,13 +28,8 @@ def _call_llm(*, task=None, provider=None, model=None, messages, max_tokens=None
     return {"choices": []}
 
 
-def _fake_hermes(monkeypatch, **overrides):
-    """Install fake agent.auxiliary_client / agent.redact / hermes_constants / hermes_cli / hermes_state.
-
-    ``overrides`` replaces any attribute by ``"<module>.<name>"`` (``None`` removes it).
-    """
-    store_calls = {"opened": [], "closed": 0}
-
+def _fake_store(store_calls):
+    """(open_helper, SessionDB): fake session stores that record how they were opened and closed in ``store_calls``."""
     class Store:
         def resolve_session_id(self, session_id):
             return session_id
@@ -57,6 +52,26 @@ def _fake_hermes(monkeypatch, **overrides):
         def __init__(self, db_path=None, read_only=False):
             store_calls["opened"].append(("SessionDB", read_only))
 
+    return open_helper, SessionDB
+
+
+def _install_modules(monkeypatch, attrs):
+    for name in ("agent", "hermes_cli"):
+        monkeypatch.setitem(sys.modules, name, types.ModuleType(name))
+    for name, members in attrs.items():
+        module = types.ModuleType(name)
+        for member, value in members.items():
+            setattr(module, member, value)
+        monkeypatch.setitem(sys.modules, name, module)
+
+
+def _fake_hermes(monkeypatch, **overrides):
+    """Install fake agent.auxiliary_client / agent.redact / hermes_constants / hermes_cli / hermes_state.
+
+    ``overrides`` replaces any attribute by ``"<module>.<name>"`` (``None`` removes it).
+    """
+    store_calls = {"opened": [], "closed": 0}
+    open_helper, session_db = _fake_store(store_calls)
     attrs = {
         "agent.auxiliary_client": {
             "call_llm": _call_llm,
@@ -69,7 +84,7 @@ def _fake_hermes(monkeypatch, **overrides):
         "agent.redact": {"redact_sensitive_text": lambda text, *, force=False, code_file=False: "<" + text + ">"},
         "hermes_constants": {"parse_reasoning_effort": lambda effort: {"enabled": True, "effort": effort}},
         "hermes_cli.web_server_sessions": {"_open_session_db_for_profile": open_helper},
-        "hermes_state": {"SessionDB": SessionDB},
+        "hermes_state": {"SessionDB": session_db},
     }
     for key, value in overrides.items():
         module_name, name = key.rsplit(".", 1)
@@ -77,13 +92,7 @@ def _fake_hermes(monkeypatch, **overrides):
             attrs[module_name].pop(name, None)
         else:
             attrs[module_name][name] = value
-    for name in ("agent", "hermes_cli"):
-        monkeypatch.setitem(sys.modules, name, types.ModuleType(name))
-    for name, members in attrs.items():
-        module = types.ModuleType(name)
-        for member, value in members.items():
-            setattr(module, member, value)
-        monkeypatch.setitem(sys.modules, name, module)
+    _install_modules(monkeypatch, attrs)
     return store_calls
 
 

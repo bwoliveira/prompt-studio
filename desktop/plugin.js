@@ -28,9 +28,10 @@ import {
   usePluginI18n,
   useValue
 } from '@hermes/plugin-sdk'
-// Names added to the SDK after the oldest supported Hermes (ListRow/ToggleRow: 0.21.5) are read from
-// the namespace, never imported by name: on an older Desktop a named import of a missing export
-// fails to link and the whole plugin fails to load. See tests/desktop/sdk-compat.test.mjs.
+// Names that only the oldest supported Hermes (0.21.5, plugin.yaml requires_hermes) exports (ListRow/ToggleRow) are
+// read from the namespace, never imported by name: on an older Desktop a named import of a missing export
+// fails to link and the whole plugin fails to load, so it could not even ask the user to update.
+// See tests/desktop/sdk-compat.test.mjs and the SDK-2 test of studio-flow.test.mjs (loads the plugin without them).
 import * as hermesSdk from '@hermes/plugin-sdk'
 import { jsx, jsxs } from 'react/jsx-runtime'
 import { Component, Fragment, useEffect, useState } from 'react'
@@ -452,7 +453,7 @@ const OPUS_ENGINE = (() => {
 //   top of your prompt, above your query, instructions, and examples.")
 //   TASK, CONTEXT, THIRD-PARTY MATERIAL (short paste), REQUIREMENTS, AUTONOMY, SUBAGENTS, EXAMPLE(S),
 //   OUTPUT, DONE WHEN.
-// Deliberately absent: tool lists and effort ([review] C12: effort is a Hermes session setting), personas,
+// Deliberately absent: tool lists and effort ([review] section 1, "Not emitted": effort is a Hermes session setting), personas,
 // "show your reasoning" ([opus55] "If your prompt asked the model to write out its reasoning in the response
 // as a substitute for thinking, remove that instruction"), re-check lines ([opus5] "Claude Opus 5 verifies
 // its own work without being told to. ... remove them").
@@ -465,7 +466,7 @@ const LENGTHS = ['concise', 'balanced', 'detailed']
 const SUBAGENT_MODES = ['team', 'auto', 'direct']
 
 const PASTE_CAP = 12000
-// [review] C4: "limite de 2.000 caracteres: escolha nossa".
+// [review] O1: the 2,000-character threshold is our own choice (local).
 const LONG_PASTE = 2000
 const MAX_FIELD = 200000
 
@@ -520,7 +521,7 @@ const AUTONOMY_LINES = {
   unattended: "A standing instruction from the user, the person you are working for. It is about how your turns end. A message with no tool call in it ends your turn, and the work stops there until you are asked to continue. The user has seen you end turns in four ways while work they asked for was still owed, and does not want any of them. One: a long summary of what was done that closes by announcing the next step and has no tool call, so the next thing never starts. Two: an offer to carry on with something unless the user would prefer otherwise, which stops to wait for an answer the user was not going to give. Three: a list of decisions for the user when, by your own account, none of them blocks the rest of the work. Four: deciding that this is a good place to report, because the turn has been long or a milestone is done. Status notes are welcome, and so are your recommendations on open decisions, but put them in the same message as your next tool call and carry on with whatever does not depend on the user's answer. If you notice yourself inviting the user to redirect you or offering to wait, delete it and do the next thing. The stops the user does want are the ones where nothing can move without them, or where the thing blocking you is deliberately protected from you. This does not override the need for confirmation on risky or destructive actions.",
 }
 
-// SUBAGENTS ([review] section 5 and E3/E4; user's own wording built on the quotes below).
+// SUBAGENTS ([review] section 3 and O16-O21a; user's own wording built on the quotes below).
 // [pe] "Use subagents when tasks can run in parallel, require isolated context, or involve independent
 // workstreams that don't need to share state."; [opus5] "Delegation pays off on genuinely independent, sizeable tracks of work".
 const SUBAGENT_SPLIT = 'Use subagents. Split the task into parts that can run in parallel without sharing state (separate modules, files, sources or questions) and give each part to its own subagent, with its goal, the context it needs and the result to hand back. Launch independent parts together rather than one at a time. Keep dependent steps, integration and the final answer with the lead agent.'
@@ -530,7 +531,7 @@ const SUBAGENT_SIZE = 'Work directly on steps you can finish in a handful of too
 // diff and the criteria you give it, not the reasoning that produced the change"; "Tell the reviewer to flag only
 // gaps that affect correctness or the stated requirements, and treat the rest as optional."
 const SUBAGENT_REVIEWER = 'Name one subagent as the reviewer. The reviewer did not write any of the work and starts from a fresh context: give it only the integrated result, the requirements and the definition of done, not the reasoning behind the work. It checks the result once and reports only gaps that affect correctness or the stated requirements, each with its evidence; style preferences are not findings. Writers do not review their own work; the lead agent fixes or sends back what the reviewer finds and treats the rest as optional.'
-// [review] D6 (report only delegation that happened).
+// [review] O19 (report only delegation that happened).
 const SUBAGENT_REAL = 'Only report delegation that actually happened through subagent tools; if they are not available, do the parts yourself in the same order and say so.'
 // [opus55] "Time signals for multiagent harnesses" (verbatim sentence).
 const TIME_LINE = 'Time matters here: do not spend time that can be avoided, and the earlier a correct result is obtained, the better.'
@@ -560,7 +561,7 @@ const LENGTH_LINES = {
   detailed: 'Give a complete, detailed response: cover every part of the task with the specifics needed to act on it.'
 }
 
-// DONE WHEN evidence lines. [review] E1: [opus5] "Claude Opus 5 verifies its own work without being told to";
+// DONE WHEN evidence lines. [review] O28: [opus5] "Claude Opus 5 verifies its own work without being told to";
 // [pe] "remove these instructions rather than rewriting them"; [cc] "Have Claude show evidence rather than
 // asserting success". Plan, text and answer get no line. Data and workflow name what to get right.
 // Implementation is two sentences: the generic "behavior works" one, and the evidence one. After a user
@@ -803,7 +804,7 @@ const ASTRA_ENGINE = (() => {
 //   place and state each rule once." and "Use ALWAYS, NEVER, must, and only for true invariants".
 // - No tool list, no reasoning-effort or chain-of-thought lines. reasoning-best-practices.md:
 //   "prompting them to "think step by step" or "explain your reasoning" is unnecessary." Hermes owns
-//   tools and effort; no doc asks to confirm tool availability (PROMPT-DOCS-REVIEW E9).
+//   tools and effort; no doc asks to confirm tool availability (PROMPT-DOCS-REVIEW section 2, "Not emitted").
 // - No extra testing/verification lines. gpt6-rethinking-prompts.md: "GPT-6 Astra does that on its
 //   own, so the same instructions can lead to unnecessary testing."
 
@@ -821,7 +822,7 @@ const PASTE_CAP = 12000
 const LANGUAGE_LINE = 'Write the answer in the language of the task above; switch only if the requirements name another language.'
 
 // gpt6-using.md: "The user's instructions take precedence over guidelines provided in a skill." and
-// "Make the priority of user instructions and skills explicit." (widened to AGENTS.md, PROMPT-DOCS-REVIEW E8)
+// "Make the priority of user instructions and skills explicit." (widened to AGENTS.md, PROMPT-DOCS-REVIEW A5)
 const PRIORITY_LINE = 'The instructions in this request take precedence over guidelines in a skill or an instruction file such as AGENTS.md; if they conflict, follow this request.'
 // gpt6-using.md: "If a skill causes you to ask for permission or confirmation, pause, leave requested
 // work unfinished, or diverge from the user's intent, name and link to the exact SKILL.md file you
@@ -843,7 +844,7 @@ const CONFIRM_LINE = 'Require confirmation for external writes, destructive acti
 // inspect the relevant materials and report the result. Do not implement changes unless the request
 // also asks for them."
 const READ_ONLY_LINE = 'For requests to answer, explain, review, diagnose, or plan, inspect the relevant materials and report the result. Do not implement changes unless the request also asks for them.'
-// gpt6-using.md, adapted from system prompt to this request (PROMPT-DOCS-REVIEW E7): "treat these as
+// gpt6-using.md, adapted from system prompt to this request (PROMPT-DOCS-REVIEW A7): "treat these as
 // instructions to do the work and take action. Do not stop at acknowledging capability (e.g. "Yes…"),
 // proposing a plan, or offering to continue. Do not settle for a partial or "helpful enough" solution
 // that does not fully satisfy the user's task to save time, effort or tokens. If a task requires sustained
@@ -913,7 +914,7 @@ const DONE_LINES = {
 // gpt6-using.md, writing style (verbatim): "Use plain, simple language: familiar words, concrete
 // examples, and precise verbs. Prefer active voice and direct statements."
 const PLAIN_LINE = 'Use plain, simple language: familiar words, concrete examples, and precise verbs. Prefer active voice and direct statements.'
-// gpt6-using.md, anti-slop prompt (two sentences, examples trimmed; PROMPT-DOCS-REVIEW E10).
+// gpt6-using.md, anti-slop prompt (two sentences, examples trimmed; PROMPT-DOCS-REVIEW A21).
 const STYLE_LINE = 'Do not use concluding summary statements such as "In short:". Do not use contrastive framing such as "X, not Y" that introduces an unprompted alternative that the user didn\'t ask about.'
 // Format lines, only when the user chose one. gpt6-using.md: "Specify the writing style and structure
 // your application needs." prose = verbatim from gpt6-using.md.
@@ -936,12 +937,12 @@ const LENGTH_LINES = {
 const EXAMPLE_NOTE_ONE = 'Follow the pattern of this example; do not copy its content.'
 const EXAMPLE_NOTE_MANY = 'Follow the pattern of these examples; do not copy their content.'
 
-// Subagents (user's wording + gpt6-using.md verbatim lines; PROMPT-DOCS-REVIEW section 5).
+// Subagents (user's wording + gpt6-using.md verbatim lines; PROMPT-DOCS-REVIEW section 3 and A27-A31).
 // gpt6-using.md (verbatim).
 const DELEGATE_LINE = 'If at any point you can parallelize work by delegating tasks to another agent (no matter if you are the root or subagent), you should do so using collaboration tools if it could save time or improve quality.'
 // gpt6-using.md: "Specify when and how much it should use subagents for parallel work."
 const SPLIT_LINE = 'Use subagents. Split the task into parts that can run in parallel without sharing state (separate modules, files, sources or questions) and give each part to its own subagent, with its goal, the context it needs and the result to hand back. Launch independent parts together rather than one at a time. Keep dependent steps, integration and the final answer with the lead agent.'
-// PROMPT-DOCS-REVIEW E3 (reviewer from a fresh context, gaps only; extrapolated to Astra).
+// PROMPT-DOCS-REVIEW A29 (reviewer from a fresh context, gaps only; extrapolated to Astra).
 const REVIEWER_LINE = 'Name one subagent as the reviewer. The reviewer did not write any of the work and starts from a fresh context: give it only the integrated result, the requirements and the definition of done, not the reasoning behind the work. It checks the result once and reports only gaps that affect correctness or the stated requirements, each with its evidence; style preferences are not findings. Writers do not review their own work; the lead agent fixes or sends back what the reviewer finds and treats the rest as optional.'
 // gpt6-using.md (verbatim).
 const LEGIBLE_LINE = 'Messages that you send to other agents and your final answer may be read by a human, so ensure they are legible. Always put proper spaces between words and/or numbers.'
@@ -1216,7 +1217,7 @@ const SONNET_ENGINE = (() => {
 //   top of your prompt, above your query, instructions, and examples.")
 //   TASK, CONTEXT, THIRD-PARTY MATERIAL (short paste), REQUIREMENTS, AUTONOMY, SUBAGENTS, EXAMPLE(S),
 //   OUTPUT, DONE WHEN.
-// Deliberately absent: tool lists and effort ([review] C12: effort is a Hermes session setting), personas,
+// Deliberately absent: tool lists and effort ([review] section 5, "Not emitted": effort is a Hermes session setting), personas,
 // "show your reasoning" ([sonnet55] "If your prompts ask the model to include its reasoning in the response, remove
 // those instructions, because they invite `reasoning_extraction` declines"), <pasted_content> tags (an Opus 5.5 feature,
 // not in the Sonnet docs), the Opus "time matters" sentence and the Opus unattended paragraph.
@@ -1229,7 +1230,7 @@ const LENGTHS = ['concise', 'balanced', 'detailed']
 const SUBAGENT_MODES = ['team', 'auto', 'direct']
 
 const PASTE_CAP = 12000
-// [review] C4: "limite de 2.000 caracteres: escolha nossa".
+// [review] S1: the 2,000-character threshold is our own choice (local).
 const LONG_PASTE = 2000
 const MAX_FIELD = 200000
 
@@ -1253,7 +1254,7 @@ const SCOPE_LINE = "When the work the user asked for is done and checked, stop a
 const PLAN_LINE = "When the user asks for ideas, options or a plan, give them that and stop. Don't start building or changing anything until they say to go ahead."
 
 // [sonnet55] "Tool use in chat and knowledge work" snippet. Adapted: opens with "If a search tool is available" because
-// Hermes owns the tool list ([review] C12); the rest is verbatim. Not emitted next to a paste (the paste is the source).
+// Hermes owns the tool list ([review] S11); the rest is verbatim. Not emitted next to a paste (the paste is the source).
 const SEARCH_LINE = 'If a search tool is available, use it to check specifics that may have changed since your training, such as what is allowed, required or charged, even when you feel confident. For researched work such as a report or a comparison, gather current sources rather than writing from your training knowledge.'
 const SEARCH_DELIVERABLES = ['analysis', 'answer']
 
@@ -1299,7 +1300,7 @@ const AUTONOMY_LINES = {
   unattended: "Nobody is available to answer while you work. Keep working until everything the user asked for is done: do not pause to confirm a plan, ask a question you could answer yourself, or stop after one part of a multipart task to ask whether to continue. Stop only when you can't go on without the user or before a risky step, and say what you need.",
 }
 
-// SUBAGENTS ([review] section 3; Sonnet 5.5 has no delegation section, so these lines are vendor fallback plus the
+// SUBAGENTS ([review] section 3 and S17-S22; Sonnet 5.5 has no delegation section, so these lines are vendor fallback plus the
 // user's own wording).
 // [pe] "Use subagents when tasks can run in parallel, require isolated context, or involve independent
 // workstreams that don't need to share state."
@@ -1312,7 +1313,7 @@ const SUBAGENT_SIZE = 'Work directly on simple tasks, sequential steps and singl
 // subagent context sees only the diff and the criteria you give it, not the reasoning that produced the change"; "Tell
 // the reviewer to flag only gaps that affect correctness or the stated requirements, and treat the rest as optional."
 const SUBAGENT_REVIEWER = 'The user asks for an independent review of the result: name one subagent as the reviewer. The reviewer did not write any of the work and starts from a fresh context: give it only the integrated result, the requirements and the definition of done, not the reasoning behind the work. It checks the result once and reports only gaps that affect correctness or the stated requirements, each with its evidence; style preferences are not findings. Writers do not review their own work; the lead agent fixes or sends back what the reviewer finds and treats the rest as optional.'
-// [review] D6 (report only delegation that happened).
+// [review] S20 (report only delegation that happened).
 const SUBAGENT_REAL = 'Only report delegation that actually happened through subagent tools; if they are not available, do the parts yourself in the same order and say so.'
 const SUBAGENT_DIRECT = 'Do not use subagents; perform the work directly.'
 // [pe] the sample prompt for subagent usage, verbatim (first two sentences), then the [sonnet55] "Thoroughness" snippet
@@ -1360,7 +1361,7 @@ const DELIVERABLE_LINES = {
   answer: 'Deliverable: a direct answer to the question; do not build or change anything.'
 }
 
-// DONE WHEN lines. [review] E1. Plan, text and answer get no line.
+// DONE WHEN lines. [review] S30-S32. Plan, text and answer get no line.
 const DONE_LINES = {
   // [sonnet55] "Verification on coding tasks": the doc's paragraph, verbatim ("If you see changes reported as complete
   // without test or build output in the transcript, add this paragraph"; at low effort the model "sometimes reports a
@@ -2117,7 +2118,6 @@ const UI_MESSAGES = {
       analyzing: 'The AI is looking at this question…',
       improving: 'Improving your text…',
       stop: 'Stop',
-      unavailable: 'AI unavailable.',
       missing: 'The Prompt Studio AI is not active. Restart Hermes Desktop.',
       failed: 'Could not reach the AI right now.',
       tooSlow: 'The AI took too long.',
@@ -2132,7 +2132,6 @@ const UI_MESSAGES = {
       suggestion: '✨ AI suggestion:',
       why: reason => `Why: ${reason}`,
       useDefault: 'Use the recommended',
-      useSuggestion: 'Use the suggestion',
       useVersion: 'Use this version',
       putInField: 'Put in the field',
       discard: 'Discard',
@@ -2196,7 +2195,6 @@ const UI_MESSAGES = {
       unavailable: 'The model could not be reached (details in the Hermes log).',
       host_incompatible: 'Hermes changed in a way this Prompt Studio version does not support; update the plugin (details in the Hermes log).',
       empty_reply: 'The model returned an empty reply; a provider filter may have blocked it.',
-      bad_request: 'The request was incomplete.',
       nothing_to_improve: 'There is no text of yours to improve here.',
       too_long: 'Your text is longer than the AI can improve at once (1,200 characters). Shorten it and try again.',
       invalid_prompt: 'The model reply was not a usable prompt.',
@@ -2339,7 +2337,6 @@ const UI_MESSAGES = {
       analyzing: 'A IA está analisando esta pergunta…',
       improving: 'Melhorando o seu texto…',
       stop: 'Parar',
-      unavailable: 'IA indisponível.',
       missing: 'A IA do Prompt Studio não está ativa. Reinicie o Hermes Desktop.',
       failed: 'Não foi possível usar a IA agora.',
       tooSlow: 'A IA demorou demais.',
@@ -2354,7 +2351,6 @@ const UI_MESSAGES = {
       suggestion: '✨ Sugestão da IA:',
       why: reason => `Por quê: ${reason}`,
       useDefault: 'Usar o recomendado',
-      useSuggestion: 'Usar a sugestão',
       useVersion: 'Usar esta versão',
       putInField: 'Colocar no campo',
       discard: 'Descartar',
@@ -2418,7 +2414,6 @@ const UI_MESSAGES = {
       unavailable: 'Não foi possível falar com o modelo (detalhes no log do Hermes).',
       host_incompatible: 'O Hermes mudou de um jeito que esta versão do Prompt Studio não suporta; atualize o plugin (detalhes no log do Hermes).',
       empty_reply: 'O modelo devolveu uma resposta vazia; um filtro do provedor pode tê-la barrado.',
-      bad_request: 'O pedido estava incompleto.',
       nothing_to_improve: 'Não há texto seu para melhorar aqui.',
       too_long: 'Seu texto é maior do que a IA consegue melhorar de uma vez (1.200 caracteres). Encurte-o e tente de novo.',
       invalid_prompt: 'A resposta do modelo não era um prompt utilizável.',
@@ -3304,46 +3299,9 @@ function ModelPicker({ which, inherit }) {
 }
 
 
-// Built-in stand-ins for the SDK settings rows, used when the Desktop SDK lacks them (Hermes < 0.21.5).
-// Same props the Settings dialog passes to the SDK originals (apps/desktop/src/app/settings/primitives.tsx):
-// label + description with the control beside it; the toggle is a real <button role="switch">, so it
-// is focusable and Space/Enter toggle it natively, and aria-label names it like the SDK Switch.
-function LocalListRow({ title, description, action }) {
-  return jsxs('div', {
-    'data-studio-list-row': true,
-    style: { alignItems: 'center', columnGap: '12px', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', padding: '12px 0' },
-    children: [
-      jsxs('div', {
-        style: { minWidth: 0 },
-        children: [
-          jsx('div', { style: { color: 'var(--ui-text-primary, inherit)', fontSize: 'var(--conversation-text-font-size, 13px)', fontWeight: 500 }, children: title }),
-          description ? jsx('div', { style: { color: 'var(--ui-text-tertiary, inherit)', fontSize: 'var(--conversation-caption-font-size, 12px)', marginTop: '4px' }, children: description }) : null
-        ]
-      }),
-      action ? jsx('div', { style: { alignItems: 'center', display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'flex-end', minWidth: 0 }, children: action }) : null
-    ]
-  })
-}
-function LocalToggleRow({ checked, description, disabled, label, onChange }) {
-  const on = Boolean(checked)
-  return jsx(ListRow, {
-    title: label,
-    description,
-    action: jsx('button', {
-      'aria-checked': on,
-      'aria-label': label,
-      'data-state': on ? 'checked' : 'unchecked',
-      disabled,
-      onClick: () => onChange(!on),
-      role: 'switch',
-      type: 'button',
-      style: { background: on ? 'var(--dt-primary)' : 'var(--ui-stroke-secondary)', border: '1px solid var(--ui-stroke-secondary)', borderRadius: '999px', cursor: disabled ? 'default' : 'pointer', flexShrink: 0, height: '18px', padding: '2px', position: 'relative', width: '32px' },
-      children: jsx('span', { 'aria-hidden': true, style: { background: 'var(--dt-primary-foreground)', borderRadius: '999px', display: 'block', height: '14px', transform: on ? 'translateX(14px)' : 'none', transition: 'transform 120ms', width: '14px' } })
-    })
-  })
-}
-const ListRow = hermesSdk.ListRow ?? LocalListRow
-const ToggleRow = hermesSdk.ToggleRow ?? LocalToggleRow
+// The SDK settings rows (Hermes Desktop 0.21.5+, the minimum in plugin.yaml). Read from the namespace, not imported
+// by name: on an older Desktop a named import fails to link and the plugin could not tell the user to update.
+const { ListRow, ToggleRow } = hermesSdk
 
 function SettingsDialog() {
   const t = useT()
@@ -3422,7 +3380,7 @@ function cancelAutoSuggestion() {
 function scheduleAutoSuggestion() {
   cancelAutoSuggestion()
   const key = questionKey($studio.get())
-  const delay = globalThis.__promptStudioAutoSuggestDelayMs ?? AUTO_SUGGEST_DELAY_MS
+  const delay = globalThis.__promptStudioTest?.autoSuggestDelayMs ?? AUTO_SUGGEST_DELAY_MS
   const serial = lifecycle.suggestSerial
   lifecycle.autoSuggestTimer = later(async () => {
     lifecycle.autoSuggestTimer = null
@@ -3508,7 +3466,7 @@ function SuggestionRow({ state }) {
       children.push(jsx(Button, { variant: 'accent', data: { 'data-studio-ai-use': true }, onClick: () => commitAnswer(''), keyHint: SHORTCUTS.useAi, children: t('ai.useDefault') }))
     } else if (!empty) {
       const label = improving ? t('ai.useVersion') : t('ai.putInField')
-      children.push(jsx(Button, { variant: 'accent', data: { 'data-studio-ai-use': true }, onClick: useSuggestion, keyHint: SHORTCUTS.useAi, children: label }))
+      children.push(jsx(Button, { variant: 'accent', data: { 'data-studio-ai-use': true }, onClick: applySuggestion, keyHint: SHORTCUTS.useAi, children: label }))
     }
     children.push(jsx(Button, { data: { 'data-studio-ai-discard': true }, onClick: discardSuggestion, keyHint: SHORTCUTS.discard, children: t('ai.discard') }))
     if (!improving) {
@@ -3578,7 +3536,7 @@ async function requestSuggestion(mode = 'suggest') {
   $suggestion.set(next)
 }
 
-function useSuggestion() {
+function applySuggestion() {
   const suggestion = $suggestion.get()
   const state = $studio.get()
   if (!suggestion || suggestion.status !== 'ready' || suggestion.key !== questionKey(state)) return
@@ -4033,7 +3991,7 @@ function PreviewPanel({ state }) {
         style: { display: 'flex', flexWrap: 'wrap', gap: '6px' },
         children: [
           jsx(Button, { variant: 'primary', data: { 'data-studio-send-prompt': true }, onClick: sendPreview, disabled: placing, title: t('preview.sendTitle'), keyHint: SHORTCUTS.generate, children: t('preview.send') }),
-          jsx(Button, { data: { 'data-studio-use-prompt': true }, onClick: usePreview, disabled: placing, title: t('preview.editTitle'), keyHint: SHORTCUTS.editPrompt, children: t('preview.edit') }),
+          jsx(Button, { data: { 'data-studio-use-prompt': true }, onClick: placePreview, disabled: placing, title: t('preview.editTitle'), keyHint: SHORTCUTS.editPrompt, children: t('preview.edit') }),
           ai && engine
             ? jsx(Button, {
                 data: { 'data-studio-switch-version': true },
@@ -4198,7 +4156,7 @@ function StudioLadder() {
 const FOCUS_SETTLE_MS = 50
 function hostFocusSettled() {
   return new Promise(resolve => {
-    const done = () => later(resolve, globalThis.__promptStudioFocusSettleMs ?? FOCUS_SETTLE_MS)
+    const done = () => later(resolve, globalThis.__promptStudioTest?.focusSettleMs ?? FOCUS_SETTLE_MS)
     if (typeof requestAnimationFrame !== 'function') return done()
     requestAnimationFrame(() => requestAnimationFrame(done))
   })
@@ -4396,7 +4354,7 @@ function startContextRead() {
     const text = tr(key, displayCombo(SHORTCUTS.settings))
     return { status: 'error', reason: text && text !== key ? text : tr('errors.unavailable') }
   }
-  lifecycle.contextPromise = withTimeout(lifecycle.pluginContext.rest('/context', { method: 'POST', body }), globalThis.__promptStudioContextTimeoutMs ?? CONTEXT_CLIENT_TIMEOUT_MS)
+  lifecycle.contextPromise = withTimeout(lifecycle.pluginContext.rest('/context', { method: 'POST', body }), globalThis.__promptStudioTest?.contextTimeoutMs ?? CONTEXT_CLIENT_TIMEOUT_MS)
     .then(
       response => (response?.ok && typeof response.summary === 'string' && response.summary.trim()
         ? { status: 'ready', summary: response.summary, model: response.model || '', ms: Number(response.ms) || 0 }
@@ -4488,7 +4446,7 @@ function placePrompt(text) {
   return run
 }
 
-async function usePreview() {
+async function placePreview() {
   const state = $studio.get()
   if (state.status !== 'preview' || !state.preview || $placing.get()) return
   $placing.set(true)
@@ -4536,16 +4494,15 @@ async function sendPreview() {
   closeStudio({ restoreDraft: false })
 }
 
-// Session context indicator: reading / used (model, seconds) / not available (short reason).
+// Session context indicator: used (model, seconds) / not available (short reason). While it is still reading,
+// the strip shows its own loading row (StudioLadder), so nothing is drawn here.
 function ContextStatus() {
   const t = useT()
   const context = useValue($context)
   if (!context || context.status === 'reading') return null
-  const text = context.status === 'reading'
-    ? t('context.reading')
-    : context.status === 'ready'
-      ? t('context.used', context.model || '-', (context.ms / 1000).toFixed(1))
-      : t('context.failed', context.reason)
+  const text = context.status === 'ready'
+    ? t('context.used', context.model || '-', (context.ms / 1000).toFixed(1))
+    : t('context.failed', context.reason)
   return jsx('span', { 'aria-live': 'polite', 'data-studio-context-status': context.status, role: 'status', style: { ...typeStyle, display: 'block', fontSize: '11px', lineHeight: '16px', marginTop: '4px' }, children: text })
 }
 

@@ -9,7 +9,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
-import { spawnSync } from 'node:child_process'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -44,17 +43,3 @@ for (const file of fixtures) {
     assert.deepEqual(imported.filter(name => !exported.has(name)), [])
   })
 }
-
-test('the Settings dialog and the Mac key caps work on an SDK without ListRow/ToggleRow/formatModifierToken (UI tests SDK-1, SET-1, KEYS-MAC-CAPS on a legacy stub)', () => {
-  const env = { ...process.env, PROMPT_STUDIO_LEGACY_SDK: '1' }
-  delete env.NODE_TEST_CONTEXT // else the child node --test thinks it is nested and runs nothing
-  const run = spawnSync(process.execPath, ['--test', '--test-reporter=tap', '--test-name-pattern=^(SDK-1|SET-1|KEYS-MAC-CAPS)', join(here, 'studio-flow.test.mjs')], {
-    env,
-    encoding: 'utf8',
-    timeout: 120_000
-  })
-  const out = `${run.stdout}\n${run.stderr}`
-  if (/SKIPPING UI tests/.test(out) && !/# pass [1-9]/.test(out)) return // same skip rule as studio-flow
-  assert.equal(run.status, 0, out.slice(-4000))
-  assert.match(out, /# pass 4\b/, out.slice(-2000))
-})
