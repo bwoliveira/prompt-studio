@@ -56,6 +56,27 @@ else
 fi
 [[ "$PR" =~ ^[0-9]+$ ]] || { echo "Could not find or open the pull request (got '$PR')." >&2; exit 1; }
 gh pr view "$PR" --json url -q .url
+# Wait for the PR checks (.github/workflows/ci.yml) and merge only when all of them passed. Polls `gh pr checks` (exit 0
+# passed, 8 pending, 1 failed or none reported yet) instead of --watch so the waits are bounded here and portable (no
+# `timeout` binary needed): CHECKS_TIMEOUT_SECONDS (default 1200) for pending checks, CHECKS_REGISTER_SECONDS (default
+# 180) for the checks to appear after the push, CHECKS_POLL_SECONDS (default 10) between reads. A timeout blocks.
+CHECKS_POLL="${CHECKS_POLL_SECONDS:-10}"
+CHECKS_DEADLINE=$(( SECONDS + ${CHECKS_TIMEOUT_SECONDS:-1200} ))
+REGISTER_DEADLINE=$(( SECONDS + ${CHECKS_REGISTER_SECONDS:-180} ))
+echo "Waiting for the checks of PR #$PR ..." >&2
+while :; do
+  set +e; CHECKS_OUT="$(gh pr checks "$PR" 2>&1)"; CHECKS_RC=$?; set -e
+  if (( CHECKS_RC == 0 )); then break; fi
+  if (( CHECKS_RC == 8 )); then
+    (( SECONDS < CHECKS_DEADLINE )) || { echo "PR #$PR was not merged: checks still pending after ${CHECKS_TIMEOUT_SECONDS:-1200}s." >&2; echo "$CHECKS_OUT" >&2; exit 1; }
+  elif [[ "$CHECKS_OUT" == *"no checks reported"* ]]; then
+    (( SECONDS < REGISTER_DEADLINE )) || { echo "PR #$PR was not merged: no checks reported after ${CHECKS_REGISTER_SECONDS:-180}s (is .github/workflows/ci.yml on the branch?)." >&2; exit 1; }
+  else
+    echo "PR #$PR was not merged: checks failed." >&2; echo "$CHECKS_OUT" >&2; exit 1
+  fi
+  sleep "$CHECKS_POLL"
+done
+echo "Checks of PR #$PR passed." >&2
 # Merge only the reviewed commit; the remote branch goes away, the local one stays until you delete it.
 gh pr merge "$PR" --squash --match-head-commit "$REVIEWED"
 # `gh pr merge` also exits 0 when it only queued the PR or enabled auto-merge: delete the branch only once

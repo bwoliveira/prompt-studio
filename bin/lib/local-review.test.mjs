@@ -489,6 +489,17 @@ case "$1 $2" in
   "pr edit")
     while [ $# -gt 0 ]; do [ "$1" = "--body-file" ] && cp "$2" "${bin}/edited"; shift; done ;;
   "pr view") case "$*" in *body*) printf '%s\\n' "$FAKE_PR_BODY" ;; *state*) echo "\${FAKE_STATE:-MERGED}" ;; *) echo "https://github.com/o/r/pull/1" ;; esac ;;
+  "pr checks")
+    # FAKE_CHECKS: one answer per call, the last one repeats. p = all passed (0), w = pending (8),
+    # f = a check failed (1), n = no checks reported yet (1), as gh 2.x does.
+    n=$(cat "${bin}/checks.n" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "${bin}/checks.n"
+    answer=$(echo "\${FAKE_CHECKS:-p}" | awk -v n="$n" '{print $(n > NF ? NF : n)}')
+    case "$answer" in
+      p) echo "build pass 1m https://x"; exit 0 ;;
+      w) echo "build pending 0 https://x"; exit 8 ;;
+      f) echo "build fail 1m https://x"; exit 1 ;;
+      n) echo "no checks reported on the 'fix/x' branch" >&2; exit 1 ;;
+    esac ;;
 esac
 exit 0
 `);
@@ -651,4 +662,53 @@ test('bin/pr does not merge when the body of an existing pull request cannot be 
   assert.notEqual(r.status, 0);
   assert.doesNotMatch(readFileSync(join(gh, 'log'), 'utf8'), /^pr merge/m);
   for (const d of [dir, origin, gh]) rmSync(d, { recursive: true, force: true });
+});
+
+// ---- bin/pr waits for the PR checks before merging ----
+
+const CHECKS_FAST = { CHECKS_POLL_SECONDS: '1', CHECKS_TIMEOUT_SECONDS: '4', CHECKS_REGISTER_SECONDS: '2' };
+
+test('bin/pr checks the pull request after the push and merges only when every check passed', () => {
+  const r = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'p', ...CHECKS_FAST });
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.match(r.log, /^pr checks 7$/m, r.log);
+  assert.ok(r.log.indexOf('pr checks') < r.log.indexOf('pr merge'), 'the checks are read before the merge');
+});
+
+test('bin/pr does not merge while a check fails, and says so', () => {
+  const r = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'f', ...CHECKS_FAST });
+  assert.notEqual(r.status, 0, r.stdout);
+  assert.match(r.stderr, /checks failed/i, r.stderr);
+  assert.doesNotMatch(r.log, /^pr merge/m, 'no merge');
+  assert.doesNotMatch(r.log, /git\/refs\/heads/, 'the branch stays');
+});
+
+test('bin/pr waits while checks are pending and merges once they pass', () => {
+  const r = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'w w p', ...CHECKS_FAST });
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.equal(r.log.match(/^pr checks 7$/gm).length, 3, r.log);
+  assert.match(r.log, /^pr merge 7 /m);
+});
+
+test('bin/pr does not merge while checks are still pending when the timeout runs out', () => {
+  const r = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'w', ...CHECKS_FAST });
+  assert.notEqual(r.status, 0, r.stdout);
+  assert.match(r.stderr, /still pending/i, r.stderr);
+  assert.doesNotMatch(r.log, /^pr merge/m, 'no merge');
+});
+
+test('bin/pr waits for the checks to be registered right after the push, and blocks when none ever appear', () => {
+  const late = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'n n p', ...CHECKS_FAST });
+  assert.equal(late.status, 0, late.stderr + late.stdout);
+  assert.match(late.log, /^pr merge 7 /m);
+  const never = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'n', ...CHECKS_FAST });
+  assert.notEqual(never.status, 0, never.stdout);
+  assert.match(never.stderr, /no checks/i, never.stderr);
+  assert.doesNotMatch(never.log, /^pr merge/m, 'no merge');
+});
+
+test('bin/pr: a check that fails after being pending blocks the merge too', () => {
+  const r = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'w f', ...CHECKS_FAST });
+  assert.notEqual(r.status, 0, r.stdout);
+  assert.doesNotMatch(r.log, /^pr merge/m);
 });
