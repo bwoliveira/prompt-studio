@@ -477,6 +477,7 @@ def test_a_changed_not_found_classifier_keeps_host_incompatible_after_a_provider
     field = {"id": "a", "kind": "enum", "question": "Q?", "options": ["Yes", "No"]}
     out = se.suggest({"target": "opus", "intent": "Build a thing", "field": field})
     assert out["ok"] is False and out["code"] == "host_incompatible"
+    assert out["error"] == adapter.HOST_INCOMPATIBLE_ERROR  # the fixed update-the-plugin sentence, not "host incompatible: RuntimeError"
     assert adapter.provider_error_code(RuntimeError("provider down")) == "host_incompatible"
 
 

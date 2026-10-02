@@ -258,7 +258,7 @@ def _run_with_deadline(
         logger.warning("Prompt Studio model call failed: %s", type(exc).__name__, exc_info=exc)
         code = _llm.provider_error_code(exc)
         prefix = "model unavailable" if code == "unavailable" else code.replace("_", " ")
-        error = _llm.HOST_INCOMPATIBLE_ERROR if _llm.is_host_incompatible(exc) else f"{prefix}: {type(exc).__name__}"
+        error = _llm.HOST_INCOMPATIBLE_ERROR if code == _llm.host.CODE else f"{prefix}: {type(exc).__name__}"
         return {"ok": False, "code": code, "error": error, "model": _llm.get_model_label(model_choice)}
 
 
