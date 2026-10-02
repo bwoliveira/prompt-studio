@@ -504,6 +504,18 @@ def test_json_before_an_unclosed_think_block_is_still_the_answer(monkeypatch):
     assert adapter._invoke(None, [], max_tokens=10, timeout=1, is_json=True)[0] == answer
 
 
+def test_a_literal_thinking_tag_inside_the_answer_json_is_preserved(monkeypatch):
+    # Codex P2: an unpaired tag mentioned inside a JSON string is answer data, not an unclosed thinking block.
+    for tag in ("think", "thinking", "reasoning"):
+        answer = json.dumps({"prompt": f"Explain the literal <{tag}> tag.", "notes": ""})
+        _fake_with_host_fallback(monkeypatch, _content_response(answer))
+        assert adapter._invoke(None, [], max_tokens=10, timeout=1, is_json=True)[0] == answer
+    # A closed block around the mention is still stripped; the answer survives.
+    answer = '{"value": "No"}'
+    _fake_with_host_fallback(monkeypatch, _content_response(f'<think>mention of <think> here</think>\n{answer}'))
+    assert adapter._invoke(None, [], max_tokens=10, timeout=1, is_json=True)[0].strip() == answer
+
+
 def test_list_content_keeps_only_the_text_parts(monkeypatch):
     answer = '{"value": "No", "reason": "ok"}'
     parts = [

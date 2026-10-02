@@ -75,8 +75,15 @@ def _answer_content(response: Any) -> Any:
     return _answer_text(content)
 
 
-# A thinking block, closed or cut off by the token limit (then it runs to the end of the content).
-_THINKING_BLOCK = re.compile(r"<(think|thinking|reasoning)>.*?(?:</\1>|\Z)", re.DOTALL | re.IGNORECASE)
+# A closed thinking block anywhere in the content.
+_CLOSED_THINKING = re.compile(r"<(think|thinking|reasoning)>.*?</\1>", re.DOTALL | re.IGNORECASE)
+# A thinking block cut off by the token limit: it runs to the end of the content, but only counts when the tag
+# opens the content or a line. A tag mentioned mid-line (inside a JSON string, say) is answer data, not a block.
+_UNCLOSED_THINKING = re.compile(r"(?:^|\n)[ \t]*<(think|thinking|reasoning)>.*\Z", re.DOTALL | re.IGNORECASE)
+
+
+def _without_thinking_blocks(text: str) -> str:
+    return _UNCLOSED_THINKING.sub("", _CLOSED_THINKING.sub("", text))
 
 
 def _answer_text(content: Any) -> Any:
@@ -92,7 +99,7 @@ def _answer_text(content: Any) -> Any:
             if kind == "text" and isinstance(text, str):
                 texts.append(text)
         content = "".join(texts)
-    return _THINKING_BLOCK.sub("", content) if isinstance(content, str) else content
+    return _without_thinking_blocks(content) if isinstance(content, str) else content
 
 
 def _loads_dict(text: str) -> dict[str, Any] | None:
