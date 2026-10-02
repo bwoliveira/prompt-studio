@@ -73,6 +73,7 @@ checkout (on the backend host or anywhere with `ssh` access to the app machine),
 ```bash
 scripts/push-desktop.sh me@my-laptop                       # user@machine or an ~/.ssh/config alias
 scripts/push-desktop.sh me@my-laptop --dir /path/to/desktop-plugins   # when HERMES_HOME is set on that machine
+scripts/push-desktop.sh me@my-laptop --replace-managed     # the folder is managed for a local install: see below
 scripts/push-desktop.sh me@my-laptop --dry-run             # print the plan, open no connection
 ```
 
@@ -80,6 +81,14 @@ It copies `desktop/plugin.js` to `<desktop-plugins>/prompt-studio/plugin.js` on 
 call (no `scp`), through a temporary file, so Desktop never reads a half-written file. Desktop rescans that folder
 every few seconds; if *Prompt Studio* does not appear, close and reopen it. Repeat after each update of the
 plugin. The script needs a POSIX login shell on the app machine (Linux, macOS).
+
+If that machine also has Prompt Studio installed locally (`hermes plugins install` there), Desktop manages the
+`desktop-plugins/prompt-studio` folder for that install and marks it with `.hermes-package.json`. On its next rescan
+Desktop would overwrite a pushed file with the local install's older copy, or delete it once that install is gone, so
+the script refuses such a folder and copies nothing. Either remove the local install on the app machine
+(`hermes plugins remove prompt-studio`; Desktop then drops its managed copy) and push again, or add
+`--replace-managed`, which removes the marker so the folder becomes a standalone plugin that Desktop never
+overwrites. Other files in the folder are left alone.
 
 The `desktop-plugins` folder is `<Hermes home>/desktop-plugins`, where the Hermes home on the app machine is
 `$HERMES_HOME` when set, else `~/.hermes` on Linux and macOS and `%LOCALAPPDATA%\hermes` on Windows (an existing

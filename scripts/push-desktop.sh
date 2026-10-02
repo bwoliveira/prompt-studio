@@ -11,6 +11,11 @@
 # The target is a plain `<dir>/prompt-studio/plugin.js`, which Desktop loads as a standalone desktop plugin; it
 # rescans that folder every few seconds. The remote login shell must be POSIX (Linux, macOS); for a Windows app
 # machine copy the file by hand (path in the README).
+#
+# A folder that holds `.hermes-package.json` is one Desktop manages for a local Hermes plugin install (the marker is
+# its PACKAGE_MARKER, written by desktop-plugins-root.ts): the next rescan overwrites the copy with that package, or
+# deletes it when the package is gone. Pushing there would be undone, so the script refuses unless told to
+# --replace-managed, which drops the marker and leaves a standalone plugin Desktop never overwrites.
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -20,10 +25,12 @@ DEFAULT_DIR='~/.hermes/desktop-plugins'
 DIR="$DEFAULT_DIR"
 HOST=""
 DRY_RUN=0
+REPLACE_MANAGED=0
+MARKER=".hermes-package.json"
 
 usage() {
   cat <<'USAGE'
-Usage: push-desktop.sh [--dir DIR] [--source FILE] [--dry-run] HOST
+Usage: push-desktop.sh [--dir DIR] [--source FILE] [--replace-managed] [--dry-run] HOST
 
 Copy desktop/plugin.js to HOST (anything `ssh` accepts: user@machine or a ~/.ssh/config alias), the machine that
 runs Hermes Desktop, into DIR/prompt-studio/plugin.js.
@@ -31,6 +38,10 @@ runs Hermes Desktop, into DIR/prompt-studio/plugin.js.
   --dir DIR      desktop-plugins folder on HOST: absolute, or starting with ~/ (default: ~/.hermes/desktop-plugins;
                  use <HERMES_HOME>/desktop-plugins when HERMES_HOME is set there)
   --source FILE  file to copy (default: desktop/plugin.js of this checkout)
+  --replace-managed
+                 when DIR/prompt-studio holds .hermes-package.json (Desktop manages that folder for a plugin
+                 installed locally on HOST, and overwrites or deletes the pushed file on its next rescan), the push
+                 is refused by default; this flag removes the marker so the folder becomes a standalone plugin
   --dry-run      print what would happen; open no connection
   -h, --help     show this help
 USAGE
@@ -46,6 +57,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --dir) [[ $# -ge 2 ]] || usage_die "--dir requires a directory"; DIR="$2"; shift 2 ;;
     --source) [[ $# -ge 2 ]] || usage_die "--source requires a file"; SOURCE="$2"; shift 2 ;;
+    --replace-managed) REPLACE_MANAGED=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     -h|--help) usage; exit 0 ;;
     -*) usage_die "Unknown argument: $1" ;;
@@ -74,8 +86,15 @@ if [[ "$DIR" == "~" || "$DIR" == "~/"* ]]; then
 else
   REMOTE_DIR="$(shq "$DIR/prompt-studio")"
 fi
-# Stage beside the target, then mv: Desktop never reads a half-written plugin.js.
-REMOTE_SCRIPT="set -e; d=$REMOTE_DIR; mkdir -p \"\$d\"; t=\"\$d/.plugin.js.\$\$\"; trap 'rm -f \"\$t\"' EXIT; cat > \"\$t\"; mv -f \"\$t\" \"\$d/plugin.js\""
+# Stage beside the target, then mv: Desktop never reads a half-written plugin.js. Exit 3 = the folder is managed for
+# a local package (marker present) and the user did not ask to replace that.
+REMOTE_SCRIPT="set -e; d=$REMOTE_DIR; mkdir -p \"\$d\"; m=\"\$d/$MARKER\""
+if [[ "$REPLACE_MANAGED" == 1 ]]; then
+  REMOTE_SCRIPT+='; rm_marker=1'
+else
+  REMOTE_SCRIPT+='; rm_marker=0; if [ -e "$m" ] || [ -L "$m" ]; then exit 3; fi'
+fi
+REMOTE_SCRIPT+="; t=\"\$d/.plugin.js.\$\$\"; trap 'rm -f \"\$t\"' EXIT; cat > \"\$t\"; if [ \"\$rm_marker\" = 1 ]; then rm -f \"\$m\"; fi; mv -f \"\$t\" \"\$d/plugin.js\""
 REMOTE_COMMAND="sh -c $(shq "$REMOTE_SCRIPT")"
 
 if [[ "$DRY_RUN" == 1 ]]; then
@@ -85,7 +104,11 @@ if [[ "$DRY_RUN" == 1 ]]; then
   exit 0
 fi
 
-if ! ssh -- "$HOST" "$REMOTE_COMMAND" < "$SOURCE"; then
+rc=0
+ssh -- "$HOST" "$REMOTE_COMMAND" < "$SOURCE" || rc=$?
+if [[ "$rc" == 3 ]]; then
+  die 1 "$HOST:$DIR/prompt-studio holds $MARKER: Hermes Desktop manages that folder for a plugin installed locally on $HOST and, on its next rescan, would overwrite the file just pushed with that older copy or delete it. Nothing was copied. Either remove the local install on $HOST (hermes plugins remove prompt-studio; Desktop then drops its managed copy on the next rescan) and rerun, or rerun with --replace-managed to remove the marker and make the folder a standalone plugin."
+elif [[ "$rc" != 0 ]]; then
   die 1 "ssh to $HOST failed; nothing was copied (check that 'ssh $HOST' works and its login shell is POSIX)"
 fi
 

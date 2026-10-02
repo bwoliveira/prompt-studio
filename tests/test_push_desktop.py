@@ -6,8 +6,10 @@ test asks for it, runs the remote command locally with HOME pointed at a tempora
 """
 from __future__ import annotations
 
+import json
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -16,6 +18,11 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 SCRIPT = REPO / "scripts" / "push-desktop.sh"
 NOT_ON_WINDOWS = unittest.skipIf(os.name == "nt", "push-desktop.sh is a bash script")
+
+# Hermes Desktop (apps/desktop/electron/desktop-plugins-root.ts): a folder holding PACKAGE_MARKER is a copy managed
+# for a local unified package; the next rescan overwrites it with that package or deletes it when the package is gone.
+MARKER = ".hermes-package.json"
+DESKTOP_ROOT_TS = Path("/usr/local/lib/hermes-agent/apps/desktop/electron/desktop-plugins-root.ts")
 
 # The one statement README.md and install.sh both make about the desktop half.
 STATEMENT = (
@@ -150,7 +157,7 @@ class PushDesktopTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         remote = self.calls()[0][-1]
         self.assertIn("/srv/hermes/desktop-plugins/prompt-studio", remote)
-        self.assertNotIn(".hermes", remote)
+        self.assertNotIn(".hermes/", remote)
 
     def test_options_may_come_before_or_after_the_host(self) -> None:
         a = self.run_script("--dir", "/d", "me@laptop")
@@ -212,6 +219,88 @@ class PushDesktopTests(unittest.TestCase):
         result = self.run_script("me@laptop", "--dry-run", source=False)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn(str(REPO / "desktop" / "plugin.js"), result.stdout)
+
+    # --- a folder Desktop manages for a local package (review R7) ------------------------------------------
+
+    def managed_target(self, package_alive: bool = True) -> tuple[Path, Path, Path]:
+        """A desktop-plugins folder whose prompt-studio copy carries Desktop's marker for a local package.
+
+        Returns (app root = <home>/desktop-plugins, target folder, local package desktop half)."""
+        app = self.fakehome / "desktop-plugins"
+        target = app / "prompt-studio"
+        target.mkdir(parents=True)
+        package = self.fakehome / "plugins" / "prompt-studio" / "desktop"
+        if package_alive:
+            package.mkdir(parents=True)
+            (package / "plugin.js").write_text("OLD_VERSION\n", encoding="utf-8")
+        (target / "plugin.js").write_text("OLD_VERSION\n", encoding="utf-8")
+        (target / MARKER).write_text(
+            json.dumps({"package": "prompt-studio", "source": str(package), "sourceMtimeMs": 0}), encoding="utf-8"
+        )
+        (target / "notes.txt").write_text("keep me\n", encoding="utf-8")
+        return app, target, package
+
+    def test_a_folder_managed_for_a_local_package_is_refused_with_migration_steps(self) -> None:
+        app, target, _ = self.managed_target()
+        result = self.run_script("me@laptop", "--dir", str(app), mode="run")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertNotIn("[OK]", result.stdout)
+        self.assertIn("[ERROR]", result.stderr)
+        for needle in (MARKER, "--replace-managed", "hermes plugins"):
+            self.assertIn(needle, result.stderr)
+        self.assertEqual((target / "plugin.js").read_text(encoding="utf-8"), "OLD_VERSION\n")
+        self.assertTrue((target / MARKER).exists(), "the marker stays unless the user asked to replace it")
+        self.assertEqual([p.name for p in target.iterdir() if p.name.startswith(".plugin.js")], [], "no staging file left")
+
+    def test_replace_managed_makes_the_folder_a_standalone_plugin(self) -> None:
+        app, target, _ = self.managed_target()
+        result = self.run_script("me@laptop", "--dir", str(app), "--replace-managed", mode="run")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual((target / "plugin.js").read_bytes(), self.source.read_bytes())
+        self.assertFalse((target / MARKER).exists())
+        self.assertEqual((target / "notes.txt").read_text(encoding="utf-8"), "keep me\n", "other files are left alone")
+        self.assertIn("[OK]", result.stdout)
+
+    def test_replace_managed_on_an_unmarked_folder_is_a_plain_push(self) -> None:
+        result = self.run_script("me@laptop", "--replace-managed", mode="run")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        landed = self.fakehome / ".hermes" / "desktop-plugins" / "prompt-studio" / "plugin.js"
+        self.assertEqual(landed.read_bytes(), self.source.read_bytes())
+
+    def test_help_documents_replace_managed(self) -> None:
+        result = self.run_script("--help")
+        self.assertIn("--replace-managed", result.stdout)
+        self.assertIn(MARKER, result.stdout)
+
+    def test_dry_run_with_replace_managed_runs_no_ssh(self) -> None:
+        result = self.run_script("me@laptop", "--dry-run", "--replace-managed")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.calls(), [])
+
+    @unittest.skipUnless(DESKTOP_ROOT_TS.is_file() and shutil.which("node"), "needs node and the installed Hermes Desktop sources")
+    def test_the_pushed_file_survives_the_next_desktop_rescan(self) -> None:
+        """Runs Desktop's own reconcileUnifiedDesktopHalves against fixture homes (it writes only under them)."""
+
+        def rescan(home: Path, app: Path) -> None:
+            js = (
+                f"import {{reconcileUnifiedDesktopHalves as r}} from {json.dumps(DESKTOP_ROOT_TS.as_uri())};"
+                "await r(process.argv[1], process.argv[2]);"
+            )
+            done = subprocess.run(
+                ["node", "--input-type=module", "-e", js, str(home), str(app)], text=True, capture_output=True, check=False
+            )
+            self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+
+        for alive in (True, False):
+            with self.subTest(local_package_still_installed=alive):
+                shutil.rmtree(self.fakehome)
+                self.fakehome.mkdir()
+                app, target, _ = self.managed_target(package_alive=alive)
+                self.assertEqual(self.run_script("me@laptop", "--dir", str(app), mode="run").returncode, 1)
+                result = self.run_script("me@laptop", "--dir", str(app), "--replace-managed", mode="run")
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                rescan(self.fakehome, app)
+                self.assertEqual((target / "plugin.js").read_bytes(), self.source.read_bytes())
 
 
 class RemoteStatementTests(unittest.TestCase):

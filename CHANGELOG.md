@@ -24,7 +24,10 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
   DESKTOP-DEV say so.
 - New: `scripts/push-desktop.sh user@app-machine` copies `desktop/plugin.js` to the app machine's
   `desktop-plugins/prompt-studio/plugin.js` over one `ssh` call, for a Hermes backend that runs on another machine
-  (`--dir` for another desktop-plugins folder, `--dry-run` to see the plan). README and `install.sh` now say the same,
+  (`--dir` for another desktop-plugins folder, `--dry-run` to see the plan). A target folder that Hermes Desktop
+  manages for a local plugin install (it holds `.hermes-package.json`; Desktop would overwrite the pushed file with
+  the local copy, or delete it, on its next rescan) is refused with the way out; `--replace-managed` removes the
+  marker and makes it a standalone plugin. README and `install.sh` now say the same,
   checked against Hermes Desktop's sources: Desktop copies the desktop half only from the plugins folder of the
   Hermes home on the machine where the app runs and never fetches it from a remote backend. The old wording
   ("Desktop copies the desktop half out") held only when app and backend share a machine; the installer's final
