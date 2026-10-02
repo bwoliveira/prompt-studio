@@ -54,12 +54,17 @@ function replaceInCode(source, pattern, replacement) {
 // every other character with the ([{ nesting depth before it and the previous significant character; returning true
 // stops the walk. onSkip(start, end), when given, sees every skipped span (string, template, comment, regex). Returns
 // the index where it stopped.
-// A slash after one of these words opens a regex literal (`return /'/.test(s)`), not a division.
-const REGEX_AFTER_WORD = /(?:^|[^\w$.])(?:return|typeof|instanceof|in|of|new|delete|void|throw|case|do|else|yield|await)\s*$/
+// A slash after one of these words opens a regex literal (`return /'/.test(s)`), not a division. The word is the
+// previous significant token, so a comment between them (`return /* note */ /'/`) changes nothing; after a dot it is
+// a property name (`a.in / 2`), not the keyword.
+const REGEX_KEYWORDS = new Set(['return', 'typeof', 'instanceof', 'in', 'of', 'new', 'delete', 'void', 'throw', 'case', 'do', 'else', 'yield', 'await'])
 function walk(source, visit, from = 0, onSkip = () => {}) {
   const quoted = new Set(['"', "'", '`'])
   let depth = 0
   let prev = ''
+  let word = ''
+  let wordEnd = -1
+  let wordAfterDot = false
   let i = from
   const skipString = (start) => {
     const quote = source[start]
@@ -85,8 +90,8 @@ function walk(source, visit, from = 0, onSkip = () => {}) {
     const ch = source[i]
     if (ch === '/' && source[i + 1] === '/') { const start = i; while (i < source.length && source[i] !== '\n') i++; onSkip(start, i); continue }
     if (ch === '/' && source[i + 1] === '*') { const start = i; const close = source.indexOf('*/', i + 2); i = close < 0 ? source.length : close + 2; onSkip(start, i); continue }
-    if (quoted.has(ch)) { const start = i; i = skipString(i); onSkip(start, i); prev = 'x'; continue }
-    if (ch === '/' && (prev === '' || '=(,:[!&|?{};+-*%<>~^'.includes(prev) || REGEX_AFTER_WORD.test(source.slice(Math.max(0, i - 16), i)))) {
+    if (quoted.has(ch)) { const start = i; i = skipString(i); onSkip(start, i); prev = 'x'; word = ''; continue }
+    if (ch === '/' && (prev === '' || '=(,:[!&|?{};+-*%<>~^'.includes(prev) || (!wordAfterDot && REGEX_KEYWORDS.has(word)))) {
       let j = i + 1
       let inClass = false
       while (j < source.length && source[j] !== '\n' && (inClass || source[j] !== '/')) {
@@ -98,11 +103,17 @@ function walk(source, visit, from = 0, onSkip = () => {}) {
       onSkip(i, j + 1)
       i = j + 1
       prev = 'x'
+      word = ''
       continue
     }
     if (visit(i, ch, depth, prev)) return i
     if ('([{'.includes(ch)) depth++
     else if (')]}'.includes(ch)) depth--
+    if (/[\w$]/.test(ch)) {
+      if (wordEnd !== i - 1) { wordAfterDot = prev === '.'; word = '' }
+      word += ch
+      wordEnd = i
+    } else if (!/\s/.test(ch)) word = ''
     if (!/\s/.test(ch)) prev = ch
     i++
   }

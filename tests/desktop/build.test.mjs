@@ -113,6 +113,21 @@ test('walk: a regex literal after return, typeof and the like is not a string (C
   assert.ok(stripExports('const half = total / 2\nexport const r = half / 3 / 4\n').includes('const r = half / 3 / 4'))
 })
 
+test('walk: a comment between the keyword and the regex literal does not turn it into a division (Codex P2)', () => {
+  for (const source of [
+    "export function matches(text) { return /* note */ /'/.test(text) }\nexport const ENGINE = { matches }\n",
+    "export function matches(text) { return // note\n /'/.test(text) }\nexport const ENGINE = { matches }\n",
+  ]) {
+    const out = stripExports(source)
+    assert.ok(!/^export\b/m.test(out), out)
+    assert.ok(/^const ENGINE = \{ matches \}$/m.test(out), out)
+  }
+  // Near misses: division after a comment, and a property named like a keyword, stay divisions.
+  assert.ok(stripExports("const half = total /* n */ / 2\nexport const r = half / 3 / 4\n").includes('const r = half / 3 / 4'))
+  assert.ok(stripExports("const q = obj.in / 2 / 3\nexport const r = q / 4\n").includes('const r = q / 4'))
+  assert.ok(stripExports("const q = obj.in / 2 + '/'\nexport const r = 1\n").includes('const r = 1'))
+})
+
 test('topLevelNames: astral characters (emoji) in a comment do not shift the masks after them (Codex P2)', () => {
   const source = `// ${'😀'.repeat(15)}\nconst real = \`\nconst fake = 1\n\`\n`
   assert.deepEqual([...topLevelNames(source)], ['real'])
