@@ -1,0 +1,23 @@
+{
+  "name": "prompt-studio-dev",
+  "private": true,
+  "description": "Development dependencies of Prompt Studio (the plugin itself ships no npm packages). Run: npm ci && npm test",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check": "node scripts/build.mjs --check",
+    "test": "PROMPT_STUDIO_REQUIRE_DEPS=1 NODE_OPTIONS=--max-old-space-size=1400 node --test tests/desktop/*.test.mjs",
+    "test:bin": "node --test bin/lib/local-review.test.mjs"
+  },
+  "devDependencies": {
+    "@nanostores/react": "1.1.0",
+    "esbuild": "0.28.1",
+    "jsdom": "29.1.1",
+    "nanostores": "1.4.2",
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  }
+}
