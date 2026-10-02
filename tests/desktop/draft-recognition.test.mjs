@@ -322,6 +322,19 @@ const TABLE = [
   ['CSV is attached. Write an email to the client.', 'text', 'csv is attached'],
   ['Plano está pronto. Construa um dashboard', 'implementation', 'pt plano esta pronto'],
   ['Plan the steps, then build it', 'plan', 'near miss: no copula, plan opens the order'],
+  // help to act is a request, help to understand is a question (Codex P1)
+  ['Can you help me fix the login bug in this repository?', 'implementation', 'help me fix'],
+  ['Você pode me ajudar a corrigir o bug de login?', 'implementation', 'pt me ajudar a corrigir'],
+  ['Could you help us configure nginx?', 'workflow', 'help us configure'],
+  ['Can you help me understand how cron works?', 'answer', 'near miss: help me understand'],
+  ['Você pode me ajudar a entender como o cron funciona?', 'answer', 'near miss: pt me ajudar a entender'],
+  // a prose script is writing (Codex P2)
+  ['Write a video script for my blog', 'text', 'video script'],
+  ['Write a podcast script about the API', 'text', 'podcast script'],
+  ['Write a script for my blog', 'text', 'script for my blog'],
+  ['Escreva um roteiro de vídeo para o blog', 'text', 'pt roteiro'],
+  ['Write a bash script for the deploy', 'implementation', 'near miss: a bash script is code'],
+  ['Write a script that parses the CSV', 'implementation', 'near miss: a script that does something is code'],
 ]
 
 for (const [draft, expected, why] of TABLE) {

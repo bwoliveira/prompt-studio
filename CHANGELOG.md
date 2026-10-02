@@ -72,7 +72,8 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   a question is not an order. A blank line ends a question ("How do I configure nginx\n\nBe brief."), "Write an API
   documentation generator script" is code, and "What I need: build a React dashboard" is the order it states. "The
   API is not ready, review the code" is a review, "Can you please tell me how to configure nginx?" is a question,
-  and "Plan is ready. Build a React dashboard." is the build.
+  and "Plan is ready. Build a React dashboard." is the build. "Can you help me fix the login bug?" is the fix,
+  "help me understand" is a question, and a video or podcast script is writing.
 - Fix: *Gere um e-mail*, *Monte uma mensagem* and the like stay text, reports and summaries are text even when they
   mention tests ("Write a summary of the test results", "Escreva um relatório dos testes"), and a question such as
   "Como instalar o Docker?" or "Como resumir um livro?" stays an answer on Opus, Sonnet and Astra.
