@@ -797,6 +797,12 @@ const TABLE = [
   ['Can you show me a script that extracts data, and do you know if it is safe?', 'answer', 'Codex R4 F2: and do you know if'],
   ['Você pode me mostrar um script que extrai dados? Você sabe como funciona?', 'answer', 'Codex R4 F2: pt voce sabe'],
   ['Você pode me mostrar um script que extrai dados? Você pode me explicar como funciona?', 'answer', 'Codex R4 F2: pt voce pode me explicar'],
+  ['Can you show me the function in the source file?', 'answer', 'Codex R5 F1: a modifier before the source noun'],
+  ['Can you show me a function in the current file?', 'answer', 'Codex R5 F1: current file'],
+  ['Could you show me the class in our main repository', 'answer', 'Codex R5 F1: our main repository, no mark'],
+  ['Você pode me mostrar a função no arquivo principal?', 'answer', 'Codex R5 F1: pt arquivo principal'],
+  ['Can you show me a function in a file that parses dates?', 'answer', 'Codex R5 F1: a file, then what the function does'],
+  ['Can you show me a script in Python for files?', 'implementation', 'Codex R5 F1 near miss: a language, then a purpose'],
   // #49 review F2: an explanation asked for in a later clause or sentence makes the draft a question
   ['Can you show me a script? Why does it fail?', 'answer', 'F2 a later question'],
   ['Can you show me a script that extracts data and tell me how it works?', 'answer', 'F2 tell me how, same sentence'],
