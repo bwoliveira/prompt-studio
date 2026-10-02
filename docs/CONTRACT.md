@@ -48,7 +48,9 @@ For `enum`, `value` is always one of `field.options`. For text fields `value` ma
 default, the desktop offers "use the default"). `improve` rewrites `answer` without adding facts. Hard 20 s
 deadline. Pasted third-party text in the ladder is marked as untrusted data. `session_context` goes into the prompt as a
 tag-delimited, escaped `<session_context>` block marked as untrusted reference data (never instructions); it does not
-change the response shape and is never used by /compose.
+change the response shape and is never used by /compose. Ladder questions and answers and the field's question, guide,
+default and hint sit on single lines of the prompt: whitespace runs (newlines, tabs) are collapsed to one space, so they
+cannot pose as a new section.
 
 ## POST /compose
 ```json
@@ -78,7 +80,8 @@ non-compacted user/assistant turns (role tool/system, tool calls and reasoning f
 summary (`_compressed_summary`) when present; redacts secrets (`agent.redact.redact_sensitive_text(force=True)` plus a local
 set for keys, tokens, Bearer headers and `password=` pairs); caps the text at 8000 characters keeping the most recent end;
 then asks the context model (`model_choice`) for JSON `{"summary"}` of at most 1200 characters in the locale language. The
-system prompt says the transcript is data, never instructions. Hard 15 s deadline, `max_tokens` 500.
+system prompt says the transcript is data, never instructions. The summary the model returns passes through the same
+redactor before it is returned. Hard 15 s deadline, `max_tokens` 500.
 
 Response (HTTP 200): `{ "ok": true, "summary": "…", "model": "provider/model", "turns": 8, "ms": 1432 }` or
 `{ "ok": false, "code": "…", "error": "…" }`. A malformed request (bad `session_id`/`profile` characters or lengths, bad
