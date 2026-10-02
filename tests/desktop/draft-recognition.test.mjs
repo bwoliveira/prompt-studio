@@ -711,6 +711,14 @@ const TABLE = [
   ['Can you explain a script that extracts data?', 'answer', 'near miss: explain is the verb'],
   ['Do you have a script that extracts data?', 'answer', 'near miss: do you have'],
   ['Can you show me a script that extracts data and explain how it works?', 'answer', 'near miss: an explanation is asked for too'],
+  // #49: "me diga/me dizer um plano" is a plan, as "tell me a plan" is
+  ['Me diga um plano para configurar o nginx', 'plan', '#49 pt me diga um plano'],
+  ['Diga-me um plano para configurar o nginx', 'plan', '#49 pt diga-me um plano'],
+  ['Você pode me dizer um plano para configurar o nginx?', 'plan', '#49 pt pode me dizer um plano'],
+  ['Me diga como configurar o nginx', 'answer', 'near miss: me diga como'],
+  ['Me diga os passos para configurar o nginx', 'answer', 'near miss: me diga os passos'],
+  ['Me diga a diferença entre o nginx e o apache', 'answer', 'near miss: me diga a diferenca'],
+  ['Me diga se o plano está pronto', 'answer', 'near miss: me diga se'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
