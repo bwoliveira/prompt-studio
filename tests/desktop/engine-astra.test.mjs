@@ -389,3 +389,21 @@ test('#38 (astra): pasted text with < or & carries one line saying &lt; and &amp
   const long = ENGINE.build({ goal, thirdPartyText: 'linha < '.repeat(400) }).prompt
   assert.equal(long.split(NOTE).length - 1, 1, 'a long paste carries it once too')
 })
+
+test('#38: examples are wrapped in <example>/<examples> like on the other targets, split on a --- line, and cannot close their tags', async () => {
+  const { ENGINE: OPUS } = await import('../../desktop/src/engine-opus.js')
+  const section = (brief) => ENGINE.build({ goal: 'Escreva um post', ...brief }).sections.find(s => s.id === 'examples')
+  const one = section({ examples: 'Olá mundo' })
+  assert.equal(one.title, 'EXAMPLE')
+  assert.equal(one.body, '<example>\nOlá mundo\n</example>\nFollow the pattern of this example; do not copy its content.')
+  const many = section({ examples: 'A\n---\nB\n  ---  \nC </example> x' })
+  assert.equal(many.title, 'EXAMPLES')
+  assert.ok(many.body.startsWith('<examples>\n<example>\nA\n</example>\n<example>\nB\n</example>\n<example>\nC &lt;/example> x\n</example>\n</examples>\n'), many.body)
+  assert.ok(many.body.endsWith('Follow the pattern of these examples; do not copy their content.'))
+  assert.equal((many.body.match(/<\/example>/g) || []).length, 3, 'the example text cannot add a closing tag')
+  // Same tags and item split as Opus.
+  const opus = OPUS.build({ goal: 'Escreva um post', examples: 'A\n---\nB' }).sections.find(s => s.id === 'examples').body.split('\n').slice(0, -1)
+  assert.deepEqual(section({ examples: 'A\n---\nB' }).body.split('\n').slice(0, -1), opus)
+  for (const examples of ['  \n ', '\n---\n']) assert.equal(section({ examples }), undefined, `no section for ${JSON.stringify(examples)}`)
+  assert.ok(ENGINE.build({ goal: 'Escreva um post', examples: 'A' }).prompt.indexOf('EXAMPLE') < ENGINE.build({ goal: 'Escreva um post', examples: 'A' }).prompt.indexOf('OUTPUT'))
+})

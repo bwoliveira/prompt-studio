@@ -145,7 +145,9 @@ const LENGTH_LINES = {
   detailed: 'Make sure to state the main point clearly and early, then develop it with the explanation and detail the reader needs. Develop the points that matter and provide enough support to be useful.'
 }
 // prompt-engineering.md, few-shot: "The model implicitly "picks up" the pattern from those examples".
-const EXAMPLES_LINE = 'Follow the pattern of these examples; do not copy their content.'
+// Wrapped like the Opus and Sonnet targets: <example> per item, <examples> around several (items split on a --- line).
+const EXAMPLE_NOTE_ONE = 'Follow the pattern of this example; do not copy its content.'
+const EXAMPLE_NOTE_MANY = 'Follow the pattern of these examples; do not copy their content.'
 
 // Subagents (user's wording + gpt6-using.md verbatim lines; PROMPT-DOCS-REVIEW section 5).
 // gpt6-using.md (verbatim).
@@ -323,7 +325,12 @@ function buildSafe(brief) {
     ? [FEATURE_COMPLETE_LINE, RENDER_LINE]
     : !making && ui && UI_EDIT.test(goalText) ? [FRONTEND_CHANGE_LINES] : []
   add('requirements', 'REQUIREMENTS', [b.requirements, ...frontend])
-  if (b.examples.trim()) add('examples', 'EXAMPLES', [b.examples, EXAMPLES_LINE])
+  if (b.examples.trim()) {
+    const safe = b.examples.replace(/<\/?example/gi, m => m.replace('<', '&lt;'))
+    const items = safe.split(/\n[ \t]*---[ \t]*(?:\n|$)/).map(item => item.trim()).filter(Boolean)
+    if (items.length > 1) add('examples', 'EXAMPLES', ['<examples>', ...items.map(item => `<example>\n${item}\n</example>`), '</examples>', EXAMPLE_NOTE_MANY])
+    else if (items.length === 1) add('examples', 'EXAMPLE', ['<example>', items[0], '</example>', EXAMPLE_NOTE_ONE])
+  }
   // Answers and texts: no skill/approval process lines (gpt56-prompt-guidance.md: remove process
   // instructions for behavior the model already performs reliably; repeated ask-first rules).
   const light = ['text', 'answer'].includes(deliverable)

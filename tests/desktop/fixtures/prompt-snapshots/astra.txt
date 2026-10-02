@@ -10,9 +10,14 @@ Build feature-complete controls, states, and views that a target user would natu
 Render and inspect the result before finalizing.
 
 EXAMPLES
+<examples>
+<example>
 Total do mês: R$ 12.345,67
----
+</example>
+<example>
 Melhor dia: 14, com R$ 1.020,00
+</example>
+</examples>
 Follow the pattern of these examples; do not copy their content.
 
 PRECEDENCE
