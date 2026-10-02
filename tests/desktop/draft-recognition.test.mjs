@@ -564,6 +564,16 @@ const TABLE = [
   ['Como especialista em segurança, revise autenticação da API antes de configurar o nginx', 'review', 'pt como especialista, revise'],
   ['As a security expert, plan deployment before we configure nginx', 'plan', 'as a security expert, plan'],
   ['As an aside, the plan failed. Configure nginx', 'workflow', 'near miss: the prefix is not the order'],
+  // a participial clause after the review noun (Codex P2)
+  ['Write a review highlighting security flaws in the API.', 'review', 'review highlighting'],
+  ['Write a review comparing the two APIs', 'review', 'review comparing'],
+  ['Escreva uma revisão destacando falhas de segurança na API', 'review', 'pt revisao destacando'],
+  ['Write a review generator for the API', 'implementation', 'near miss: a compound noun after review'],
+  // the folded Portuguese "e" is a conjunction, not a copula (Codex P2)
+  ['Plano e cronograma para configurar nginx', 'plan', 'plano e cronograma'],
+  ['Revisão e auditoria da API antes de configurar nginx', 'review', 'revisao e auditoria'],
+  ['A revisão e o relatório estão prontos. Configure o nginx.', 'review', 'a revisao e o relatorio estao prontos'],
+  ['O plano está pronto. Configure o nginx.', 'workflow', 'near miss: esta before a state is context'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
