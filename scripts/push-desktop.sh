@@ -86,15 +86,19 @@ if [[ "$DIR" == "~" || "$DIR" == "~/"* ]]; then
 else
   REMOTE_DIR="$(shq "$DIR/prompt-studio")"
 fi
-# Stage beside the target, then mv: Desktop never reads a half-written plugin.js. Exit 3 = the folder is managed for
-# a local package (marker present) and the user did not ask to replace that.
-REMOTE_SCRIPT="set -e; d=$REMOTE_DIR; mkdir -p \"\$d\"; m=\"\$d/$MARKER\""
+# Checksum of what is sent (POSIX cksum: "<crc> <bytes>"), compared on the remote side with the staged file before
+# it replaces the old one, and with the installed plugin.js after the mv.
+EXPECTED="$(cksum < "$SOURCE")"
+# Stage beside the target, then mv: Desktop never reads a half-written plugin.js. Remote exit codes: 3 = the folder
+# is managed for a local package (marker present) and the user did not ask to replace that; 4 = plugin.js is a
+# directory; 5 = the staged or installed file does not match the checksum.
+REMOTE_SCRIPT="set -e; d=$REMOTE_DIR; mkdir -p \"\$d\"; m=\"\$d/$MARKER\"; sum=$(shq "$EXPECTED"); if [ -d \"\$d/plugin.js\" ]; then exit 4; fi"
 if [[ "$REPLACE_MANAGED" == 1 ]]; then
   REMOTE_SCRIPT+='; rm_marker=1'
 else
   REMOTE_SCRIPT+='; rm_marker=0; if [ -e "$m" ] || [ -L "$m" ]; then exit 3; fi'
 fi
-REMOTE_SCRIPT+="; t=\"\$d/.plugin.js.\$\$\"; trap 'rm -f \"\$t\"' EXIT; cat > \"\$t\"; if [ \"\$rm_marker\" = 1 ]; then rm -f \"\$m\"; fi; mv -f \"\$t\" \"\$d/plugin.js\""
+REMOTE_SCRIPT+="; t=\"\$d/.plugin.js.\$\$\"; trap 'rm -f \"\$t\"' EXIT; cat > \"\$t\"; [ \"\$(cksum < \"\$t\")\" = \"\$sum\" ] || exit 5; if [ \"\$rm_marker\" = 1 ]; then rm -f \"\$m\"; fi; mv -f \"\$t\" \"\$d/plugin.js\"; [ -f \"\$d/plugin.js\" ] && [ \"\$(cksum < \"\$d/plugin.js\")\" = \"\$sum\" ] || exit 5"
 REMOTE_COMMAND="sh -c $(shq "$REMOTE_SCRIPT")"
 
 if [[ "$DRY_RUN" == 1 ]]; then
@@ -108,9 +112,13 @@ rc=0
 ssh -- "$HOST" "$REMOTE_COMMAND" < "$SOURCE" || rc=$?
 if [[ "$rc" == 3 ]]; then
   die 1 "$HOST:$DIR/prompt-studio holds $MARKER: Hermes Desktop manages that folder for a plugin installed locally on $HOST and, on its next rescan, would overwrite the file just pushed with that older copy or delete it. Nothing was copied. Either remove the local install on $HOST (hermes plugins remove prompt-studio; Desktop then drops its managed copy on the next rescan) and rerun, or rerun with --replace-managed to remove the marker and make the folder a standalone plugin."
+elif [[ "$rc" == 4 ]]; then
+  die 1 "$HOST:$TARGET is a directory, not a file; nothing was copied (remove or rename that directory, then rerun)"
+elif [[ "$rc" == 5 ]]; then
+  die 1 "the plugin.js received by $HOST does not match $SOURCE (checksum $EXPECTED); do not trust $HOST:$TARGET, rerun the script"
 elif [[ "$rc" != 0 ]]; then
   die 1 "ssh to $HOST failed; nothing was copied (check that 'ssh $HOST' works and its login shell is POSIX)"
 fi
 
-echo "[OK] copied $SOURCE to $HOST:$TARGET"
+echo "[OK] copied $SOURCE to $HOST:$TARGET (checksum verified on $HOST)"
 echo "Hermes Desktop on $HOST rescans its desktop-plugins folder every few seconds; if Prompt Studio does not appear, close and reopen Desktop."

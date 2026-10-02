@@ -78,7 +78,9 @@ scripts/push-desktop.sh me@my-laptop --dry-run             # print the plan, ope
 ```
 
 It copies `desktop/plugin.js` to `<desktop-plugins>/prompt-studio/plugin.js` on the app machine with one `ssh`
-call (no `scp`), through a temporary file, so Desktop never reads a half-written file. Desktop rescans that folder
+call (no `scp`), through a temporary file, so Desktop never reads a half-written file. The app machine compares
+a checksum of the temporary file and of the installed `plugin.js` with the source before the script says `[OK]`;
+a directory named `plugin.js` is refused. Desktop rescans that folder
 every few seconds; if *Prompt Studio* does not appear, close and reopen it. Repeat after each update of the
 plugin. The script needs a POSIX login shell on the app machine (Linux, macOS).
 

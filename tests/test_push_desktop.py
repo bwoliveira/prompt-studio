@@ -220,6 +220,41 @@ class PushDesktopTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn(str(REPO / "desktop" / "plugin.js"), result.stdout)
 
+    # --- the final file is the one that was sent (review P3) -----------------------------------------------
+
+    def test_a_directory_in_place_of_plugin_js_is_refused_not_filled(self) -> None:
+        target = self.fakehome / ".hermes" / "desktop-plugins" / "prompt-studio"
+        (target / "plugin.js").mkdir(parents=True)
+        result = self.run_script("me@laptop", mode="run")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertNotIn("[OK]", result.stdout)
+        self.assertIn("[ERROR]", result.stderr)
+        self.assertIn("directory", result.stderr)
+        self.assertEqual(list((target / "plugin.js").iterdir()), [], "the staged file must not be moved into the directory")
+        self.assertEqual([p.name for p in target.iterdir()], ["plugin.js"], "no staging file left")
+
+    def test_success_is_claimed_only_when_the_installed_file_matches_the_source(self) -> None:
+        fake_mv = self.bin / "mv"  # moves the file, then loses its tail: a transfer that went wrong after the copy
+        fake_mv.write_text('#!/bin/sh\n/bin/mv "$@" || exit $?\nfor last in "$@"; do :; done\nhead -c 5 "$last" > "$last.cut" && /bin/mv "$last.cut" "$last"\n', encoding="utf-8")
+        fake_mv.chmod(0o755)
+        result = self.run_script("me@laptop", mode="run")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertNotIn("[OK]", result.stdout)
+        self.assertIn("does not match", result.stderr)
+
+    def test_a_sent_file_that_arrives_short_is_refused_before_it_replaces_the_old_one(self) -> None:
+        target = self.fakehome / ".hermes" / "desktop-plugins" / "prompt-studio"
+        target.mkdir(parents=True)
+        (target / "plugin.js").write_text("old", encoding="utf-8")
+        fake_cat = self.bin / "cat"  # a stdin that is cut off half way
+        fake_cat.write_text('#!/bin/sh\n/bin/cat | head -c 5\n', encoding="utf-8")
+        fake_cat.chmod(0o755)
+        result = self.run_script("me@laptop", mode="run")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertNotIn("[OK]", result.stdout)
+        self.assertEqual((target / "plugin.js").read_text(encoding="utf-8"), "old")
+        self.assertEqual([p.name for p in target.iterdir()], ["plugin.js"], "no staging file left")
+
     # --- a folder Desktop manages for a local package (review R7) ------------------------------------------
 
     def managed_target(self, package_alive: bool = True) -> tuple[Path, Path, Path]:

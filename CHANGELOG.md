@@ -27,7 +27,8 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
   (`--dir` for another desktop-plugins folder, `--dry-run` to see the plan). A target folder that Hermes Desktop
   manages for a local plugin install (it holds `.hermes-package.json`; Desktop would overwrite the pushed file with
   the local copy, or delete it, on its next rescan) is refused with the way out; `--replace-managed` removes the
-  marker and makes it a standalone plugin. README and `install.sh` now say the same,
+  marker and makes it a standalone plugin. The script says `[OK]` only after the app machine's `cksum` of the installed `plugin.js` equals the
+  source's, and refuses a target where `plugin.js` is a directory. README and `install.sh` now say the same,
   checked against Hermes Desktop's sources: Desktop copies the desktop half only from the plugins folder of the
   Hermes home on the machine where the app runs and never fetches it from a remote backend. The old wording
   ("Desktop copies the desktop half out") held only when app and backend share a machine; the installer's final
