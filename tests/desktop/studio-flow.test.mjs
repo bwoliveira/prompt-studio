@@ -2245,9 +2245,11 @@ test('KEYS-MAC-CAPS: on a Mac every key cap, tooltip and F1 row reads ⌥E / ⇧
     let titled = 0
     for (const el of $('[data-studio-strip]').querySelectorAll('[data-studio-shortcut]')) {
       const combo = el.getAttribute('data-studio-shortcut')
-      assert.ok(el.getAttribute('aria-keyshortcuts') === null || el.getAttribute('aria-keyshortcuts') === combo, 'aria-keyshortcuts canonical')
+      const twin = el.getAttribute('data-studio-shortcut-alt')
+      const shown = twin ? `${combo} / ${twin}` : combo
+      assert.ok(el.getAttribute('aria-keyshortcuts') === null || el.getAttribute('aria-keyshortcuts') === (twin ? `${combo} ${twin}` : combo), 'aria-keyshortcuts canonical')
       const title = el.getAttribute('title') || ''
-      if (title.includes('Shortcut: ')) { titled += 1; assert.ok(title.endsWith(`Shortcut: ${macCap(combo)}`), `tooltip of ${combo} shows the Mac form: ${title}`) }
+      if (title.includes('Shortcut: ')) { titled += 1; assert.ok(title.endsWith(`Shortcut: ${macCap(shown)}`), `tooltip of ${shown} shows the Mac form: ${title}`) }
     }
     assert.ok(titled > 5, 'tooltips checked')
     assert.ok($('[data-studio-skip]').getAttribute('title').includes('Shortcut: fn F6'), $('[data-studio-skip]').getAttribute('title'))
@@ -2256,7 +2258,7 @@ test('KEYS-MAC-CAPS: on a Mac every key cap, tooltip and F1 row reads ⌥E / ⇧
     await press(map.help)
     const list = $('[data-studio-shortcuts-list]')
     const rows = [...list.querySelectorAll('[data-studio-shortcut-row]')]
-    assert.equal(rows.length, Object.keys(map).length)
+    assert.equal(rows.length, Object.keys(map).length - 1, 'one row per entry; the alt twins share their F-key row')
     for (const row of rows) {
       const combo = row.getAttribute('data-studio-shortcut-row')
       assert.equal(row.textContent, macCap(combo), `F1 row ${combo}`)
@@ -3085,6 +3087,31 @@ test('ALT-4: the listener never handles Enter, Alt+Enter, Ctrl+Enter, Tab, Esc o
   assert.equal(rungCount(), rungs, 'no step answered')
   assert.equal(currentText(), text, 'still on the same step')
   await press(K().close)
+})
+
+test('ALT-5: on a Mac the Alt+letter twins read fn F9 / ⌥G on the control and in F1, and run even when macOS marks the chord keyCode 229 / isComposing', { skip }, async () => {
+  const alt = K().alt
+  await withPlatform('MacIntel', async () => {
+    await openStudio(INTENT, 'manual')
+    assert.deepEqual(capsOf($('[data-studio-skip]')), [macCap(K().skip), macCap(alt.skip)], 'fn F6, ⌥K')
+    assert.deepEqual(capsOf($('[data-studio-cancel]')), ['fn F10', '⌥X'])
+    assert.ok($('[data-studio-skip]').getAttribute('title').endsWith(`Shortcut: ${macCap(`${K().skip} / ${alt.skip}`)}`), $('[data-studio-skip]').getAttribute('title'))
+    assert.equal($('[data-studio-skip]').getAttribute('aria-keyshortcuts'), `${K().skip} ${alt.skip}`, 'announced with the canonical combos')
+    await press(K().help)
+    assert.ok($(`[data-studio-shortcuts-list] [data-studio-shortcut-row="${K().generate} / ${alt.generate}"]`).textContent === 'fn F9 / ⌥G', 'F1 row')
+    await press(K().help)
+    // The twin runs by its physical key although the event looks like a dead key or a composition.
+    for (const extra of DEAD_KEYS) {
+      const base = rungCount()
+      const event = await press(alt.skip, document.activeElement, extra)
+      assert.ok(event.defaultPrevented === true, `${JSON.stringify(extra)} taken, so no Option symbol is typed`)
+      assert.equal(rungCount(), base + 1, `${alt.skip} ${JSON.stringify(extra)} skipped the step`)
+      await press(alt.back, document.activeElement, extra)
+      assert.equal(rungCount(), base, `${alt.back} ${JSON.stringify(extra)} went back`)
+    }
+    await press(alt.close)
+  })
+  assert.ok($('[data-studio-strip]') === null, 'closed by the twin')
 })
 
 // ---------------------------------------------------------------- open without an F-key: the Desktop keybinds area (#20)
