@@ -8,18 +8,19 @@ auxiliary ``call_llm`` keywords, the 5-tuple of ``_resolve_task_provider_model``
 ``host_incompatible`` in the routes) instead of failing somewhere deep in a request.
 
 Run it against the installed Hermes, un-skipped, with the interpreter Hermes itself runs on (the managed
-environment under ``~/.hermes/installs``, Python 3.14 with fastapi, httpx and pyyaml). pytest is not installed there:
-put one on the path from a scratch directory, nothing is written into the Hermes install or its environment:
+environment Hermes reports with ``hermes --print-runtime-command``, Python 3.14 with fastapi, httpx and pyyaml).
+pytest is not installed there: put one on the path from a scratch directory, nothing is written into the Hermes
+install or its environment:
 
-    V=/root/.hermes/installs/<install id>/environments/<env id>/venv   # `hermes --print-runtime-command` shows the interpreter;
-                                                                       # on this host: 76f6e7e5145b5f39 / fd9e2ae8fd5b4abfbcddd04902458aa6
-    uv pip install --python $V/bin/python --target "$TMPDIR/pytest-site314" pytest
-    PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/usr/local/lib/hermes-agent:$TMPDIR/pytest-site314 \\
-        $V/bin/python -m pytest -p no:cacheprovider tests/test_hermes_host_contract.py
+    PY=<interpreter printed by `hermes --print-runtime-command`>
+    HERMES_SRC=<the Hermes checkout: the directory that holds `agent/` and `hermes_cli/`>
+    uv pip install --python "$PY" --target "$TMPDIR/pytest-site" pytest
+    PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$HERMES_SRC:$TMPDIR/pytest-site" \\
+        "$PY" -m pytest -p no:cacheprovider tests/test_hermes_host_contract.py
 
 ``PYTHONPATH`` must hold the Hermes checkout (the top-level modules sit beside ``agent``) and the pytest directory;
-``PYTHONDONTWRITEBYTECODE`` keeps ``.pyc`` files out of the Hermes tree. Do not run it with the old
-``/usr/local/lib/hermes-agent/venv`` interpreter: importing Hermes there can re-exec the process under the managed
+``PYTHONDONTWRITEBYTECODE`` keeps ``.pyc`` files out of the Hermes tree. Do not run it with the Hermes checkout's own
+``venv`` interpreter: importing Hermes there can re-exec the process under the managed
 runtime with ``-I``, which drops ``PYTHONPATH`` (and pytest with it). For the same reason the test writes no
 messages into its throwaway store: ``SessionDB.append_message`` triggers that re-exec.
 """

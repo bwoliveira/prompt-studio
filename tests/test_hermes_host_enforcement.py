@@ -56,3 +56,14 @@ def test_the_contract_lists_the_code_and_every_keyword_the_adapter_sends():
     assert "## Hermes host" in contract
     for keyword in hermes_host.CALL_LLM_KWARGS:
         assert f"`{keyword}`" in contract, keyword
+
+
+def test_the_host_files_carry_no_machine_paths_or_install_ids():
+    """The host module and its tests name no maintainer machine: placeholders only (Codex round 1)."""
+    import re
+    personal = re.compile(r"/root/|/home/[a-z]|/Users/|/usr/local/lib/hermes|\b[0-9a-f]{32}\b|\b[0-9a-f]{16}\b")
+    files = [DASHBOARD / "hermes_host.py", *sorted((ROOT / "tests").glob("test_hermes_host*.py"))]
+    hits = [f"{f.name}:{n}: {line.strip()[:80]}" for f in files
+            for n, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1)
+            if personal.search(line) and "personal = re.compile" not in line]
+    assert hits == []
