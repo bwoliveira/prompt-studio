@@ -846,6 +846,13 @@ const TABLE = [
   ['Você pode me mostrar minha função?', 'answer', 'bin/pr R1 F1: pt minha'],
   ['Você pode me mostrar o nosso script de backup?', 'answer', 'bin/pr R1 F1: pt o nosso'],
   ['Can you show me your function that parses dates?', 'implementation', 'bin/pr R1 F1 near miss: your asks the assistant to produce one'],
+  ['Can you show me a script that extracts data? Have you tested it?', 'answer', 'bin/pr R1 F2: have you, about the artifact'],
+  ['Can you show me a script that extracts data? Did you test it?', 'answer', 'bin/pr R1 F2: did you, about the artifact'],
+  ['Can you show me a script that extracts data. Was it tested? Have you run it on Windows?', 'answer', 'bin/pr R1 F2: have you after another question'],
+  ['Can you show me a script that extracts data? Are you sure it is safe?', 'answer', 'bin/pr R1 F2: are you, about the artifact'],
+  ['Você pode me mostrar um script que extrai dados? Você testou ele?', 'answer', 'bin/pr R1 F2: pt voce testou'],
+  ['Can you show me a script that extracts data? Can you make it faster?', 'implementation', 'bin/pr R1 F2 near miss: can you is still an order'],
+  ['Can you show me a script that extracts data? Will you add unit tests?', 'implementation', 'bin/pr R1 F2 near miss: will you is an order'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
