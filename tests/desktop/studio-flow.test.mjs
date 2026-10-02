@@ -1651,6 +1651,36 @@ test('CT-01: an error code from the backend shows a localized tooltip; unknown o
   assert.equal($('[data-studio-ai-error]').getAttribute('title'), 'raw detail 1')
 })
 
+test('#32: auth_failed, rate_limited and provider_timeout show their own text in the /suggest and /compose tooltips and the context note, in en and pt', { skip }, async () => {
+  const codes = ['auth_failed', 'rate_limited', 'provider_timeout']
+  for (const locale of ['en', 'pt']) {
+    ui.i18n.locale = locale
+    await ui.act(async () => { ui.$locale.set(locale) })
+    for (const code of codes) {
+      assert.ok(errorText(code, locale) && errorText(code, locale) !== errorText('unavailable', locale), `errors.${code} in ${locale}`)
+      backend.suggest = () => ({ ok: false, code, error: `${code}: APIStatusError` })
+      backend.compose = () => ({ ok: false, code, error: `${code}: APIStatusError` })
+      await openStudio()
+      await pasteStep('')
+      await waitFor(() => $('[data-studio-ai-error]'))
+      assert.ok($('[data-studio-ai-error]').getAttribute('title') === errorText(code, locale), `${locale}/${code}: /suggest tooltip`)
+      await click('[data-studio-generate]')
+      await waitFor(() => $('[data-studio-preview-note]'))
+      assert.ok($('[data-studio-preview-note]').getAttribute('title') === errorText(code, locale), `${locale}/${code}: /compose tooltip`)
+      await click('[data-studio-cancel]')
+      await freshSettings('sess-1')
+      backend.context = () => ({ ok: false, code, error: `${code}: APIStatusError` })
+      await openFresh()
+      await waitFor(() => $('[data-studio-context-status]')?.textContent.includes(errorText(code, locale)))
+      const status = $('[data-studio-context-status]').textContent
+      assert.ok(status.includes(errorText(code, locale)) && !status.includes(errorText('unavailable', locale)), `${locale}/${code}: context note`)
+      await click('[data-studio-cancel]')
+    }
+  }
+  ui.i18n.locale = 'en'
+  await ui.act(async () => { ui.$locale.set('en') })
+})
+
 test('#25: a too_long reply shows its own localized message, not the generic "could not reach the AI"', { skip }, async () => {
   backend.suggest = () => ({ ok: false, code: 'too_long', error: 'answer is longer than 1200 characters', limit: 1200 })
   await openStudio()

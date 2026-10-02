@@ -4,6 +4,12 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
 
 ## Unreleased
 
+- Feature: a provider failure now says what happened. A wrong or expired API key (401) is `auth_failed`, a model or plan
+  the provider refuses (403) stays `provider_refused` (its text no longer mentions the key), a rate limit (429) is
+  `rate_limited` and a provider call that timed out on its own (client timeout, 408, 504) is `provider_timeout`; each has its own
+  English and Portuguese text in the suggestion and prompt tooltips and in the session-context note, instead of "the
+  model could not be reached". One classifier decides the code for /suggest, /compose and /context (the context reader
+  had its own copy); a 429 that names billing is still `provider_payment`. See docs/CONTRACT.md.
 - Feature: Prompt Studio opens without an F-key. It adds a binding to Hermes Desktop's keybinds area, **Ctrl+Shift+E**
   (**⌘⇧E** on a Mac), which you can reassign in Desktop's settings; its default is a chord none of Desktop's own
   actions uses, and it runs the same opening as F4 (an empty or short draft and a missing message field are reported

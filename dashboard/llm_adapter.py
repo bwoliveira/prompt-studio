@@ -311,15 +311,38 @@ def is_model_not_found(exc: BaseException) -> bool:
         return False
 
 
-def is_provider_refused(exc: BaseException) -> bool:
-    """The provider denies this model to the account/key/plan (401/403, e.g. 403 MODEL_NOT_IN_PLAN)."""
+def _status(exc: BaseException) -> Any:
     status = getattr(exc, "status_code", None)
-    if status is None:
-        status = getattr(getattr(exc, "response", None), "status_code", None)
-    if status in (401, 403) or type(exc).__name__ in ("AuthenticationError", "PermissionDeniedError"):
+    return status if status is not None else getattr(getattr(exc, "response", None), "status_code", None)
+
+
+def _is_named(exc: BaseException, *names: str) -> bool:
+    return any(cls.__name__ in names for cls in type(exc).__mro__)
+
+
+def is_auth_failed(exc: BaseException) -> bool:
+    """The provider does not accept the credentials (401, a wrong or expired API key)."""
+    return _status(exc) == 401 or _is_named(exc, "AuthenticationError")
+
+
+def is_provider_refused(exc: BaseException) -> bool:
+    """The provider denies this model to the account/plan (403, e.g. 403 MODEL_NOT_IN_PLAN)."""
+    if _status(exc) == 403 or _is_named(exc, "PermissionDeniedError"):
         return True
     text = str(exc).lower()
     return "model_not_in_plan" in text or "not in plan" in text
+
+
+def is_rate_limited(exc: BaseException) -> bool:
+    """The provider throttles the requests (429)."""
+    return _status(exc) == 429 or _is_named(exc, "RateLimitError")
+
+
+def is_provider_timeout(exc: BaseException) -> bool:
+    """The provider call timed out on its own (a client timeout, 408 or 504); not the Studio's own deadline."""
+    return _status(exc) in (408, 504) or isinstance(exc, TimeoutError) or any(
+        cls.__name__.endswith(("Timeout", "TimeoutError", "TimeoutException")) for cls in type(exc).__mro__
+    )
 
 
 # Unambiguous billing failures only: the bare word "billing" also shows up in rate-limit hints, outages and
@@ -328,11 +351,6 @@ _PAYMENT_TEXT = (
     "insufficient_quota", "insufficient credits", "insufficient_credits", "payment required",
     "billing_hard_limit", "credit balance is too low",
 )
-
-
-def _status(exc: BaseException) -> Any:
-    status = getattr(exc, "status_code", None)
-    return status if status is not None else getattr(getattr(exc, "response", None), "status_code", None)
 
 
 def is_provider_payment(exc: BaseException) -> bool:
@@ -361,23 +379,41 @@ def check_host() -> None:
     host.verify(_AUX_TASK)
 
 
+# One row per provider failure: (code, test, fixed sentence). The first matching row wins, so the order is the
+# precedence: a 429 that names billing is a payment problem (before rate_limited), a 403 stays a refusal even when
+# it names billing (before payment), a 401 is always auth_failed. No row matching means "unavailable".
+PROVIDER_ERRORS: tuple[tuple[str, Callable[[BaseException], bool], str], ...] = (
+    ("model_not_found", is_model_not_found, "model not found"),
+    ("auth_failed", is_auth_failed, "auth failed"),
+    ("provider_refused", is_provider_refused, "provider refused"),
+    ("provider_payment", is_provider_payment, "provider payment"),
+    ("provider_bad_request", is_provider_bad_request, "provider bad request"),
+    ("rate_limited", is_rate_limited, "rate limited"),
+    ("provider_timeout", is_provider_timeout, "provider timeout"),
+)
+UNAVAILABLE_SENTENCE = "model unavailable"
+
+
 def provider_error_code(exc: BaseException) -> str:
-    """Error code for a failed provider call, most specific first; the provider text is never returned."""
+    """Error code for a failed provider call (first matching row of ``PROVIDER_ERRORS``); the provider text is never returned.
+
+    Used by /suggest, /compose and /context alike. ``host_incompatible`` when Hermes changed under the classifier.
+    """
     if is_host_incompatible(exc):
         return host.CODE
     try:
-        if is_model_not_found(exc):
-            return "model_not_found"
+        for code, matches, _ in PROVIDER_ERRORS:
+            if matches(exc):
+                return code
     except host.HostIncompatible:
         logger.warning("Prompt Studio: Hermes changed, cannot tell a missing model from other errors", exc_info=True)
         return host.CODE
-    if is_provider_refused(exc):
-        return "provider_refused"
-    if is_provider_payment(exc):
-        return "provider_payment"
-    if is_provider_bad_request(exc):
-        return "provider_bad_request"
     return "unavailable"
+
+
+def provider_error_sentence(code: str) -> str:
+    """The fixed sentence of a provider error code (no provider text, no class name)."""
+    return next((sentence for row, _, sentence in PROVIDER_ERRORS if row == code), UNAVAILABLE_SENTENCE)
 
 
 def get_model_label(model_choice: Mapping[str, Any] | None = None) -> str:

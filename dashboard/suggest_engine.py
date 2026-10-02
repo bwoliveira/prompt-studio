@@ -257,8 +257,7 @@ def _run_with_deadline(
         # Provider text can carry URLs, request ids or body fragments: log it, return only the class.
         logger.warning("Prompt Studio model call failed: %s", type(exc).__name__, exc_info=exc)
         code = _llm.provider_error_code(exc)
-        prefix = "model unavailable" if code == "unavailable" else code.replace("_", " ")
-        error = _llm.HOST_INCOMPATIBLE_ERROR if code == _llm.host.CODE else f"{prefix}: {type(exc).__name__}"
+        error = _llm.HOST_INCOMPATIBLE_ERROR if code == _llm.host.CODE else f"{_llm.provider_error_sentence(code)}: {type(exc).__name__}"
         return {"ok": False, "code": code, "error": error, "model": _llm.get_model_label(model_choice)}
 
 
