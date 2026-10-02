@@ -22,6 +22,20 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
   through CSS (`display:none`, `visibility:hidden`) does not block the keys. The key listener now reads which dialogs,
   menus and listboxes are open (ARIA roles and visibility; it changes nothing in the app's DOM); README and
   DESKTOP-DEV say so.
+- New: `scripts/push-desktop.sh user@app-machine` copies `desktop/plugin.js` to the app machine's
+  `desktop-plugins/prompt-studio/plugin.js` over one `ssh` call, for a Hermes backend that runs on another machine
+  (`--dir` for another desktop-plugins folder, `--dry-run` to see the plan). A target folder that Hermes Desktop
+  manages for a local plugin install (it holds `.hermes-package.json`; Desktop would overwrite the pushed file with
+  the local copy, or delete it, on its next rescan) is refused with the way out; `--replace-managed` removes the
+  marker and makes it a standalone plugin. A local install whose `desktop/plugin.js` is byte-identical to the pushed file is refused even with
+  `--replace-managed` (Desktop would adopt the folder again and delete it with the install); remove that install first. `--replace-managed` puts the new file in place before it removes the marker, so a Desktop rescan in
+  between cannot stamp the marker back onto the old file. It re-checks one second later and reports (not `[OK]`) a folder Desktop deleted or re-marked meanwhile;
+  README and `--help` say to close Hermes Desktop for the conversion. The script says `[OK]` only after the app machine's `cksum` of the installed `plugin.js` equals the
+  source's, and refuses a target where `plugin.js` is a directory. README and `install.sh` now say the same,
+  checked against Hermes Desktop's sources: Desktop copies the desktop half only from the plugins folder of the
+  Hermes home on the machine where the app runs and never fetches it from a remote backend. The old wording
+  ("Desktop copies the desktop half out") held only when app and backend share a machine; the installer's final
+  message and the README remote section now give the push step and the per-OS `desktop-plugins` folder.
 - Fix: a reply with no answer text and JSON only inside the model's thinking no longer becomes the suggestion; it is
   treated as an empty reply (retried once, unless it ended on the token limit). On choice steps an AI value that is
   not exactly one of the options (for example "Not applicable here" with options Yes/No) is now reported as an

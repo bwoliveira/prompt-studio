@@ -73,6 +73,9 @@ if [[ -n "$PROFILE" ]]; then TARGET_HOME="$BASE_HOME/profiles/$PROFILE"; fi
 # Registration starts only after all compatibility checks pass. The desktop half ships inside the
 # package (plugins/prompt-studio/desktop/plugin.js); Hermes Desktop copies it into desktop-plugins/
 # and writes its own .hermes-package.json marker, so this script never touches desktop-plugins/.
+# That copy happens only on the app's own machine: Hermes Desktop copies the desktop half only from the plugins
+# folder of the Hermes home on the machine where the app runs; it never fetches it from a remote backend.
+# With a remote backend, push the half to the app machine with scripts/push-desktop.sh.
 PLUGIN_DIR="$TARGET_HOME/plugins/prompt-studio"
 LEGACY_DESKTOP_DIR="$TARGET_HOME/desktop-plugins/prompt-studio"
 # A SIGTERM between the two mv of an earlier swap leaves only "$PLUGIN_DIR.old": that is the previous
@@ -142,5 +145,7 @@ cat <<DONE
 [OK] prompt-studio installed
   package: $PLUGIN_DIR (desktop half: $PLUGIN_DIR/desktop/plugin.js)
   config:  $TARGET_HOME/config.yaml (via hermes plugins enable / hermes config set)
-Restart Hermes Desktop (or its backend) to load the plugin; Desktop materializes the desktop half.
+Restart Hermes Desktop (or its backend) to load the plugin.
+Hermes Desktop copies the desktop half only from the plugins folder of the Hermes home on the machine where the app runs; it never fetches it from a remote backend.
+Backend and app on different machines? Run scripts/push-desktop.sh <user@app-machine> from this checkout.
 DONE
