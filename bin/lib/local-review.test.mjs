@@ -99,6 +99,7 @@ const args = process.argv.slice(2);
 appendFileSync(process.env.FAKE_LOG, JSON.stringify(args) + '\\n');
 appendFileSync(process.env.FAKE_LOG + '.cwd', JSON.stringify({
   cwd: process.cwd(), loose: existsSync('loose.txt'), a: readFileSync('a.txt', 'utf8'),
+  deps: existsSync('node_modules/dep-marker.txt') ? readFileSync('node_modules/dep-marker.txt', 'utf8') : null,
 }) + '\\n');
 if (process.env.FAKE_COMMIT) {
   // Simulates another session committing in the original repository while the review runs (fixed command).
@@ -202,6 +203,24 @@ test('entry: Codex reads only the reviewed commit, in an isolated copy (no loose
   assert.equal(r.seen[0].a, 'one\ntwo\n', 'content of the commit, not of the working folder');
   assert.ok(!existsSync(r.seen[0].cwd), 'temporary copy deleted at the end');
   assert.equal(git(repo, 'worktree', 'list').split('\n').length, 1, 'temporary worktree removed');
+});
+
+test('entry: the isolated copy reaches the installed node_modules, so build --check runs there (#52)', () => {
+  const repo = makeRepo();
+  mkdirSync(join(repo, 'node_modules'));
+  writeFileSync(join(repo, 'node_modules', 'dep-marker.txt'), 'installed');
+  const r = run(repo, { FAKE_OUTPUT: JSON.stringify({ findings: [] }) });
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.equal(r.seen[0].deps, 'installed', 'the review copy sees the dependencies of the checkout');
+  assert.ok(existsSync(join(repo, 'node_modules', 'dep-marker.txt')), 'removing the copy keeps the real node_modules');
+  assert.equal(git(repo, 'worktree', 'list').split('\n').length, 1, 'temporary worktree removed');
+});
+
+test('entry: without node_modules in the checkout the review still runs', () => {
+  const repo = makeRepo();
+  const r = run(repo, { FAKE_OUTPUT: JSON.stringify({ findings: [] }) });
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.equal(r.seen[0].deps, null);
 });
 
 test('entry: a new commit during the review fails (exit 2) and does not inherit the approval', () => {
