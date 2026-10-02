@@ -97,7 +97,7 @@ export const UI_MESSAGES = {
       progress: (n, pct) => `Step ${n}, about ${pct}% done`,
       announce: (n, question) => `Step ${n}: ${question}`,
       editingBelow: 'editing below',
-      editAria: (n, question) => `Edit answer ${n}: ${question}`,
+      editAria: (n, question, answer) => `Edit answer ${n}: ${question} (current answer: ${answer})`,
       editTitle: 'Edit this answer (the ones after it stay)'
     },
     answer: {
@@ -180,6 +180,8 @@ export const UI_MESSAGES = {
       close: 'Close'
     },
     preview: {
+      region: 'Prompt preview',
+      text: 'Prompt text',
       ai: '✨ Prompt written by the AI',
       engine: 'Prompt built without AI',
       send: 'Send now',
@@ -316,7 +318,7 @@ export const UI_MESSAGES = {
       progress: (n, pct) => `Etapa ${n}, cerca de ${pct}% concluído`,
       announce: (n, question) => `Etapa ${n}: ${question}`,
       editingBelow: 'editando abaixo',
-      editAria: (n, question) => `Editar a resposta ${n}: ${question}`,
+      editAria: (n, question, answer) => `Editar a resposta ${n}: ${question} (resposta atual: ${answer})`,
       editTitle: 'Editar esta resposta (as seguintes continuam)'
     },
     answer: {
@@ -399,6 +401,8 @@ export const UI_MESSAGES = {
       close: 'Fechar'
     },
     preview: {
+      region: 'Prévia do prompt',
+      text: 'Texto do prompt',
       ai: '✨ Prompt escrito pela IA',
       engine: 'Prompt montado sem IA',
       send: 'Enviar agora',
