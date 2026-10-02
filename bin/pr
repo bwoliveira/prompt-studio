@@ -56,6 +56,58 @@ else
 fi
 [[ "$PR" =~ ^[0-9]+$ ]] || { echo "Could not find or open the pull request (got '$PR')." >&2; exit 1; }
 gh pr view "$PR" --json url -q .url
+# Wait for the CI jobs of the reviewed commit and merge only when each one of them succeeded. `gh pr checks` is not a
+# gate: it exits 0 when the checks that did report are cancelled, skipped or neutral, and when only some of the jobs
+# have registered yet. So the check runs of $REVIEWED are read directly (gh api exits 1 on a failed call, and its
+# JSON/jq output says nothing about the outcome) and every job named in REQUIRED_CHECKS must be completed with the
+# conclusion success: a job that is missing or still running keeps the wait going; a job that ended in anything else
+# (failure, cancelled, skipped, neutral, timed_out, ...) blocks at once. REQUIRED_CHECKS are the job names of
+# .github/workflows/ci.yml (tests/test_ci_config.py keeps them equal). Waits are bounded here and portable (no
+# `timeout` binary needed): CHECKS_TIMEOUT_SECONDS (default 1200) for jobs that are running, CHECKS_REGISTER_SECONDS
+# (default 180) for jobs to appear after the push, CHECKS_POLL_SECONDS (default 10) between reads. A timeout blocks.
+REQUIRED_CHECKS=("Build check and Node tests" "Python tests" "gitleaks")
+CHECKS_POLL="${CHECKS_POLL_SECONDS:-10}"
+CHECKS_DEADLINE=$(( SECONDS + ${CHECKS_TIMEOUT_SECONDS:-1200} ))
+REGISTER_DEADLINE=$(( SECONDS + ${CHECKS_REGISTER_SECONDS:-180} ))
+echo "Waiting for the checks of PR #$PR (commit ${REVIEWED:0:12}) ..." >&2
+while :; do
+  set +e
+  RUNS="$(gh api "repos/{owner}/{repo}/commits/$REVIEWED/check-runs?per_page=100" --paginate \
+    --jq '.check_runs[] | [.name, .status, (.conclusion // "")] | @tsv' 2>&1)"; RUNS_RC=$?
+  set -e
+  READ_ERROR=""
+  if (( RUNS_RC != 0 )); then READ_ERROR="$RUNS"; RUNS=""; fi
+  BAD=""; PENDING=""; MISSING=""
+  for name in "${REQUIRED_CHECKS[@]}"; do
+    seen=0
+    while IFS=$'\t' read -r run_name run_status run_conclusion; do
+      [[ "$run_name" == "$name" ]] || continue
+      seen=1
+      if [[ "$run_status" != "completed" ]]; then PENDING+="$name, "
+      elif [[ "$run_conclusion" != "success" ]]; then BAD+="$name: ${run_conclusion:-no conclusion}; "
+      fi
+    done <<< "$RUNS"
+    (( seen )) || MISSING+="$name, "
+  done
+  if [[ -n "$BAD" ]]; then
+    echo "PR #$PR was not merged: checks failed (a required check must end in success)." >&2; echo "${BAD%; }" >&2; exit 1
+  fi
+  [[ -n "$PENDING$MISSING" ]] || break
+  if [[ -n "$MISSING" ]] && (( SECONDS >= REGISTER_DEADLINE )); then
+    if [[ -z "$RUNS" ]]; then
+      echo "PR #$PR was not merged: no checks reported after ${CHECKS_REGISTER_SECONDS:-180}s (is .github/workflows/ci.yml on the branch?)." >&2
+    else
+      echo "PR #$PR was not merged: required checks not reported after ${CHECKS_REGISTER_SECONDS:-180}s: ${MISSING%, }." >&2
+    fi
+    [[ -z "$READ_ERROR" ]] || echo "Could not read the checks: $READ_ERROR" >&2
+    exit 1
+  fi
+  if [[ -n "$PENDING" ]] && (( SECONDS >= CHECKS_DEADLINE )); then
+    echo "PR #$PR was not merged: checks still pending after ${CHECKS_TIMEOUT_SECONDS:-1200}s: ${PENDING%, }." >&2; exit 1
+  fi
+  sleep "$CHECKS_POLL"
+done
+echo "Checks of PR #$PR passed." >&2
 # Merge only the reviewed commit; the remote branch goes away, the local one stays until you delete it.
 gh pr merge "$PR" --squash --match-head-commit "$REVIEWED"
 # `gh pr merge` also exits 0 when it only queued the PR or enabled auto-merge: delete the branch only once

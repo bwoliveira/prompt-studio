@@ -53,6 +53,14 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
   missing dependency) and a session store whose `close` now needs an argument. No Hermes installed at all keeps its old behavior. A test module checks
   the same signatures against the installed Hermes (skipped only where there is none; an installed Hermes that fails to import fails it), and a scan test keeps every other
   file off Hermes. `docs/CONTRACT.md` lists the code and the contract.
+- Development: the dev dependencies are declared. `package.json` pins react, react-dom, jsdom, nanostores,
+  @nanostores/react and esbuild to the versions the Hermes install provides (`package-lock.json` is committed), so
+  `npm ci && npm test` runs the UI tests without a Hermes install; under `npm test` a missing dependency fails the run
+  instead of skipping the UI tests. The Python test dependencies are in `requirements-dev.txt`. A GitHub Actions
+  workflow (`.github/workflows/ci.yml`) runs the build check, the Node tests, the Python tests and gitleaks (the pinned binary over the explicit commit range of the pull request, merges, their conflict resolutions and side branches included) on every
+  pull request and push to `main`, and `bin/pr` now waits for those checks and merges only when each of the three jobs
+  succeeded on the reviewed commit (not while one is pending past a timeout, missing, failed, cancelled, skipped or
+  neutral). gitleaks scans the commits of the pull request, not the whole history. No change to the plugin itself.
 - Fix: a reply with no answer text and JSON only inside the model's thinking no longer becomes the suggestion; it is
   treated as an empty reply (retried once, unless it ended on the token limit). On choice steps an AI value that is
   not exactly one of the options (for example "Not applicable here" with options Yes/No) is now reported as an

@@ -21,6 +21,8 @@ Guidance for any coding agent working in this repository (Hermes, Claude Code, C
 
 Work on a branch (`<type>/<subject>`), one subject per PR. There is no CI review on GitHub: both reviews run locally.
 
+CI (`.github/workflows/ci.yml`: build check, `npm test`, Python tests, gitleaks) must be green before a merge: `bin/pr` waits for the checks and blocks on pending or failing ones.
+
 The agent runs the whole review cycle itself; Bruno is not asked to type `/review` or `/loop` nor to follow the Codex
 review. Hermes agents follow the skill `pr-review-autopilot`.
 

@@ -30,15 +30,32 @@ node scripts/build.mjs --check  # exit 1 if plugin.js or studio-core.mjs are out
 ## Tests and validation
 
 ```bash
-node --test tests/desktop/*.test.mjs
-uvx --with fastapi --with httpx --with pyyaml pytest -q tests
+npm ci                            # once: the pinned dev dependencies (package.json, package-lock.json)
+npm test                          # tests/desktop/*.test.mjs; fails, never skips, when a dependency is missing
+npm run test:bin                  # bin/lib/local-review.test.mjs (bin/review and bin/pr)
+uvx --with-requirements requirements-dev.txt pytest -q tests
 hermes plugins validate .
 python3 scripts/docs_sources.py check --docs-dir <snapshot dir>   # every doc quote in PROMPT-DOCS-REVIEW.md
 ```
 
-The UI flow tests need react, react-dom, jsdom, nanostores, @nanostores/react and esbuild from
-`PROMPT_STUDIO_NODE_MODULES`, the repo's `node_modules` or the Hermes install (`/usr/local/lib/hermes-agent/node_modules`).
-Without them they are skipped with the reason on stderr; run with `CI=1` to make that a failure.
+The UI flow tests need react, react-dom, jsdom, nanostores, @nanostores/react and esbuild. `package.json` pins them to
+the versions Hermes ships and `npm ci` installs them into `node_modules/`; no Hermes install is needed. `npm test` sets
+`PROMPT_STUDIO_REQUIRE_DEPS=1`, so a missing dependency fails the run instead of skipping the UI tests (`CI=1` does the
+same). A plain `node --test tests/desktop/*.test.mjs` also looks in `PROMPT_STUDIO_NODE_MODULES` and the Hermes install
+(`/usr/local/lib/hermes-agent/node_modules`) and skips, with the reason on stderr, when none has them. To change a
+version: `npm install --save-exact --save-dev <pkg>@<version>` and commit both `package.json` and `package-lock.json`.
+`npm test` caps Node's heap (`--max-old-space-size=1400`); on a shared machine also wrap it with the `systemd-run`
+memory cap from `AGENTS.md`. Python test dependencies are in `requirements-dev.txt` (`pip install -r requirements-dev.txt`).
+
+CI (`.github/workflows/ci.yml`, GitHub-hosted `ubuntu-latest`) runs on every pull request and push to `main`: the build
+check, `npm test`, `npm run test:bin`, `pytest -q tests` and gitleaks over the commits of the pull request (or the pushed commits on `main`): the checkout
+fetches the whole history, but gitleaks (the pinned binary, not gitleaks-action, which would skip commits past the first 30 and merged side branches) scans only that commit range, merges included, so old synthetic test keys in earlier
+commits do not fail it. After the push `bin/pr` reads the check runs of the commit it reviewed (`gh api`, polled
+every `CHECKS_POLL_SECONDS`, default 10) and merges only when `Build check and Node tests`, `Python tests` and
+`gitleaks` all ended in success. It refuses on a failed, cancelled, skipped or neutral one, on a job still running
+past `CHECKS_TIMEOUT_SECONDS` (default 1200) and on a job not reported within `CHECKS_REGISTER_SECONDS` (default
+180); `gh pr checks` is not used because it exits 0 for cancelled or skipped checks and for a partial set of jobs.
+A green run on the PR is the gate; the local Codex review still runs before the push.
 
 The doc snapshots live outside the plugin; see `docs/sources/README.md`.
 

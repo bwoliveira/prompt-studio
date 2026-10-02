@@ -360,8 +360,10 @@ single file Hermes Desktop loads, so the build generates it from those sources. 
 ```bash
 node scripts/build.mjs            # inline desktop/src/* into desktop/plugin.js
 node scripts/build.mjs --check    # fails if plugin.js is out of date
-node --test tests/desktop/*.test.mjs
-uvx --with fastapi --with httpx --with pyyaml pytest -q tests
+npm ci                            # once: the pinned dev dependencies (package.json, package-lock.json)
+npm test                          # UI and engine tests; fails, never skips, when a dependency is missing
+npm run test:bin                  # tests of bin/review and bin/pr
+uvx --with-requirements requirements-dev.txt pytest -q tests
 hermes plugins validate .
 python3 scripts/docs_sources.py check --docs-dir <snapshot dir>   # every doc quote in PROMPT-DOCS-REVIEW.md
 ```
@@ -370,9 +372,21 @@ python3 scripts/docs_sources.py check --docs-dir <snapshot dir>   # every doc qu
   Hermes and is skipped only where Hermes is not installed (an installed Hermes whose module fails to import fails it); its docstring has the command that runs it with Hermes' own
   interpreter. After a Hermes update, run it: a failure there is what `host_incompatible` reports to users.
 - The UI flow tests (`tests/desktop/studio-flow.test.mjs`) need react, react-dom, jsdom, nanostores,
-  @nanostores/react and esbuild. They are taken from `PROMPT_STUDIO_NODE_MODULES`, the repo's `node_modules`
-  or the Hermes install; without them the tests are skipped with the reason printed, and with `CI=1` they
-  fail instead.
+  @nanostores/react and esbuild. `package.json` pins them (the versions Hermes ships) and `npm ci` installs them into
+  `node_modules/`, so no Hermes install is needed. `npm test` sets `PROMPT_STUDIO_REQUIRE_DEPS=1`: a missing
+  dependency fails the run instead of skipping the UI tests (the same as `CI=1`). A plain
+  `node --test tests/desktop/*.test.mjs` still looks in `PROMPT_STUDIO_NODE_MODULES`, the repo's `node_modules` and
+  the Hermes install, and skips with the reason printed when none has them. `npm test` caps Node's heap at 1400 MB;
+  on a shared machine also wrap it, for example
+  `systemd-run --scope -p MemoryMax=1500M -p MemorySwapMax=0 timeout 280 npm test`.
+- The Python test dependencies are in `requirements-dev.txt` (the plugin itself needs none), for the `uvx` command
+  above and for `pip install -r requirements-dev.txt`.
+- CI: `.github/workflows/ci.yml` runs on every pull request and every push to `main`: `node scripts/build.mjs
+  --check`, `npm test`, `npm run test:bin`, the Python tests and gitleaks over the commits of the pull request
+  (or the commits of a push to `main`), not the whole history. `bin/pr` reads the check runs of the commit it
+  reviewed and merges only when all three jobs (`Build check and Node tests`, `Python tests`, `gitleaks`) ended in
+  success: it waits while one is running (up to `CHECKS_TIMEOUT_SECONDS`, default 1200) or missing
+  (`CHECKS_REGISTER_SECONDS`, default 180) and refuses on a failed, cancelled, skipped or neutral one.
 - The official doc snapshots used by `docs_sources.py` live outside the repository; see `docs/sources/README.md`.
 - `.gitattributes` keeps every text file with LF line endings, also on Windows checkouts, so
   `node scripts/build.mjs --check` compares the same bytes on every system.

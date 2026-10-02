@@ -402,9 +402,24 @@ test('entry: with no --base, the base is origin\'s default branch and is fetched
 function singleBranch(dir, only) {
   git(dir, 'config', 'remote.origin.fetch', `+refs/heads/${only}:refs/remotes/origin/${only}`);
   for (const ref of git(dir, 'for-each-ref', '--format=%(refname)', 'refs/remotes/origin/').split('\n').filter(Boolean)) {
-    if (ref !== `refs/remotes/origin/${only}`) git(dir, 'update-ref', '-d', ref);
+    // origin/HEAD stays, as in a real single-branch clone; --no-deref: never delete what a symbolic ref points at.
+    if (ref !== `refs/remotes/origin/${only}` && ref !== 'refs/remotes/origin/HEAD') git(dir, 'update-ref', '--no-deref', '-d', ref);
   }
 }
+
+// Since git 2.48 a plain `git fetch` also creates refs/remotes/origin/HEAD (a symbolic ref to origin/<default>), as a clone
+// does. `git update-ref -d` follows a symbolic ref and deletes its target, so the helper must not do that.
+test('singleBranch keeps origin/<only> when origin/HEAD exists, whatever the git version, and drops the other branches', () => {
+  const repo = makeRepo('main', true);
+  git(repo, 'push', '-q', 'origin', 'main:refs/heads/release');
+  git(repo, 'fetch', '-q', 'origin');
+  git(repo, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main');
+  singleBranch(repo, 'main');
+  const refs = git(repo, 'for-each-ref', '--format=%(refname)', 'refs/remotes/origin/').split('\n');
+  assert.ok(refs.includes('refs/remotes/origin/main'), refs.join(','));
+  assert.ok(!refs.includes('refs/remotes/origin/release'), refs.join(','));
+  assert.equal(git(repo, 'rev-parse', 'origin/main'), git(repo, 'rev-parse', 'main'));
+});
 
 test('entry: the base is fetched into origin/<base>, also in a single-branch clone with BASE_BRANCH', () => {
   const repo = makeRepo('main', true);
@@ -489,6 +504,25 @@ case "$1 $2" in
   "pr edit")
     while [ $# -gt 0 ]; do [ "$1" = "--body-file" ] && cp "$2" "${bin}/edited"; shift; done ;;
   "pr view") case "$*" in *body*) printf '%s\\n' "$FAKE_PR_BODY" ;; *state*) echo "\${FAKE_STATE:-MERGED}" ;; *) echo "https://github.com/o/r/pull/1" ;; esac ;;
+  "api repos/"*check-runs*)
+    # The check runs of one commit, as gh prints them with --jq '.check_runs[] | [.name,.status,.conclusion] | @tsv'.
+    # FAKE_CHECKS: one answer per call, the last one repeats. Presets: p = all three jobs succeeded, w = all three
+    # running, f = Python tests failed, n = nothing registered yet. Otherwise an answer lists the jobs as
+    # node=<state>,python=<state>,gitleaks=<state> (an absent job is not registered); state is a conclusion
+    # (success, failure, cancelled, skipped, neutral, timed_out) or running.
+    n=$(cat "${bin}/checks.n" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "${bin}/checks.n"
+    answer=$(echo "\${FAKE_CHECKS:-p}" | awk -v n="$n" '{print $(n > NF ? NF : n)}')
+    case "$answer" in
+      p) answer="node=success,python=success,gitleaks=success" ;;
+      w) answer="node=running,python=running,gitleaks=running" ;;
+      f) answer="node=success,python=failure,gitleaks=success" ;;
+      n) answer="" ;;
+    esac
+    for pair in $(echo "$answer" | tr ',' ' '); do
+      case "\${pair%%=*}" in node) name="Build check and Node tests" ;; python) name="Python tests" ;; *) name="gitleaks" ;; esac
+      state="\${pair#*=}"
+      if [ "$state" = running ]; then printf '%s\\tin_progress\\t\\n' "$name"; else printf '%s\\tcompleted\\t%s\\n' "$name" "$state"; fi
+    done ;;
 esac
 exit 0
 `);
@@ -651,4 +685,101 @@ test('bin/pr does not merge when the body of an existing pull request cannot be 
   assert.notEqual(r.status, 0);
   assert.doesNotMatch(readFileSync(join(gh, 'log'), 'utf8'), /^pr merge/m);
   for (const d of [dir, origin, gh]) rmSync(d, { recursive: true, force: true });
+});
+
+// ---- bin/pr waits for the PR checks before merging ----
+
+const CHECKS_FAST = { CHECKS_POLL_SECONDS: '1', CHECKS_TIMEOUT_SECONDS: '4', CHECKS_REGISTER_SECONDS: '2' };
+
+test('bin/pr checks the pull request after the push and merges only when every check passed', () => {
+  const repo = prRepo();
+  const head = git(repo.dir, 'rev-parse', 'HEAD');
+  const r = runPr(repo, { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'p', ...CHECKS_FAST });
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.match(r.log, new RegExp(`^api repos/\\{owner\\}/\\{repo\\}/commits/${head}/check-runs`, 'm'), 'the check runs of the reviewed head commit are read:\n' + r.log);
+  assert.ok(r.log.indexOf('check-runs') < r.log.indexOf('pr merge'), 'the checks are read before the merge');
+});
+
+test('bin/pr does not merge while a check fails, and says so', () => {
+  const r = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'f', ...CHECKS_FAST });
+  assert.notEqual(r.status, 0, r.stdout);
+  assert.match(r.stderr, /checks failed/i, r.stderr);
+  assert.doesNotMatch(r.log, /^pr merge/m, 'no merge');
+  assert.doesNotMatch(r.log, /git\/refs\/heads/, 'the branch stays');
+});
+
+test('bin/pr waits while checks are pending and merges once they pass', () => {
+  const r = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'w w p', ...CHECKS_FAST });
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.equal(r.log.match(/check-runs/g).length, 3, r.log);
+  assert.match(r.log, /^pr merge 7 /m);
+});
+
+test('bin/pr does not merge while checks are still pending when the timeout runs out', () => {
+  const r = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'w', ...CHECKS_FAST });
+  assert.notEqual(r.status, 0, r.stdout);
+  assert.match(r.stderr, /still pending/i, r.stderr);
+  assert.doesNotMatch(r.log, /^pr merge/m, 'no merge');
+});
+
+test('bin/pr waits for the checks to be registered right after the push, and blocks when none ever appear', () => {
+  const late = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'n n p', ...CHECKS_FAST });
+  assert.equal(late.status, 0, late.stderr + late.stdout);
+  assert.match(late.log, /^pr merge 7 /m);
+  const never = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'n', ...CHECKS_FAST });
+  assert.notEqual(never.status, 0, never.stdout);
+  assert.match(never.stderr, /no checks/i, never.stderr);
+  assert.doesNotMatch(never.log, /^pr merge/m, 'no merge');
+});
+
+test('bin/pr: a check that fails after being pending blocks the merge too', () => {
+  const r = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'w f', ...CHECKS_FAST });
+  assert.notEqual(r.status, 0, r.stdout);
+  assert.doesNotMatch(r.log, /^pr merge/m);
+});
+
+// gh 2.101 `pr checks` exits 0 for cancelled, skipped and neutral checks and when only some jobs registered, so the
+// gate reads the check runs of the reviewed commit and wants each job of ci.yml to be a success.
+const JOBS_OK = 'node=success,python=success,gitleaks=success';
+
+test('bin/pr merges when all three CI jobs succeeded on the reviewed commit', () => {
+  const r = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: JOBS_OK, ...CHECKS_FAST });
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.match(r.log, /^pr merge 7 /m);
+});
+
+for (const state of ['cancelled', 'skipped', 'neutral', 'timed_out', 'failure']) {
+  test(`bin/pr refuses to merge when a CI job is ${state}, and names it`, () => {
+    for (const checks of [`node=${state},python=success,gitleaks=success`, `node=success,python=success,gitleaks=${state}`, `node=${state}`]) {
+      const r = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: checks, ...CHECKS_FAST });
+      assert.notEqual(r.status, 0, `${checks}: ${r.stdout}`);
+      assert.match(r.stderr, /checks failed/i, r.stderr);
+      assert.match(r.stderr, new RegExp(state), r.stderr);
+      assert.doesNotMatch(r.log, /^pr merge/m, `${checks}: no merge`);
+    }
+  });
+}
+
+test('bin/pr does not merge when only some of the CI jobs registered: it waits, then times out naming the missing ones', () => {
+  const r = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'node=success', ...CHECKS_FAST });
+  assert.notEqual(r.status, 0, r.stdout);
+  assert.ok(r.log.match(/check-runs/g).length > 1, 'it kept waiting for the other jobs:\n' + r.log);
+  assert.match(r.stderr, /Python tests/, r.stderr);
+  assert.match(r.stderr, /gitleaks/, r.stderr);
+  assert.doesNotMatch(r.stderr, /Build check and Node tests/, 'the job that succeeded is not reported missing');
+  assert.doesNotMatch(r.log, /^pr merge/m, 'no merge');
+});
+
+test('bin/pr merges once the jobs that were missing register and succeed', () => {
+  const r = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: `node=success node=success,python=running ${JOBS_OK}`, ...CHECKS_FAST });
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.match(r.log, /^pr merge 7 /m);
+});
+
+test('bin/pr does not merge while a job is still running past the deadline, even when the others succeeded', () => {
+  const r = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'node=success,python=running,gitleaks=success', ...CHECKS_FAST });
+  assert.notEqual(r.status, 0, r.stdout);
+  assert.match(r.stderr, /still pending/i, r.stderr);
+  assert.match(r.stderr, /Python tests/, r.stderr);
+  assert.doesNotMatch(r.log, /^pr merge/m);
 });

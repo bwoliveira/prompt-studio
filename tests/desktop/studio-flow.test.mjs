@@ -3,9 +3,10 @@
 //
 // Needs react, react-dom, jsdom, nanostores, @nanostores/react and esbuild. They are resolved from
 // PROMPT_STUDIO_NODE_MODULES, the repo's node_modules or the Hermes install. If none has them the
-// tests are skipped with the reason printed on stderr, except under CI=1 / CI=true, where the file
-// fails at once naming the missing packages. PROMPT_STUDIO_NODE_MODULES_ONLY=1 restricts the search
-// to PROMPT_STUDIO_NODE_MODULES (used to prove the missing-dependency path without deleting files).
+// tests are skipped with the reason printed on stderr, except under CI=1 / CI=true or
+// PROMPT_STUDIO_REQUIRE_DEPS=1 (set by `npm test`), where the file fails at once naming the missing
+// packages. PROMPT_STUDIO_NODE_MODULES_ONLY=1 restricts the search to
+// PROMPT_STUDIO_NODE_MODULES (used to prove the missing-dependency path without deleting files).
 import { test, before, after, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
@@ -27,7 +28,7 @@ if (!nodeModules) {
   const missing = REQUIRED.filter(pkg => !candidates.some(dir => existsSync(join(dir, pkg))))
   const reason = `UI tests need ${REQUIRED.join(', ')} in one node_modules directory; none found in [${candidates.join(', ')}]` +
     `${missing.length ? ` (missing everywhere: ${missing.join(', ')})` : ''}. Set PROMPT_STUDIO_NODE_MODULES to a node_modules that has them.`
-  if (/^(1|true)$/i.test(process.env.CI || '')) throw new Error(`CI: ${reason}`)
+  if (/^(1|true)$/i.test(process.env.CI || '') || process.env.PROMPT_STUDIO_REQUIRE_DEPS === '1') throw new Error(`UI tests cannot be skipped here (CI / PROMPT_STUDIO_REQUIRE_DEPS): ${reason}`)
   skip = reason
   console.error(`studio-flow: SKIPPING UI tests: ${reason}`)
 }
