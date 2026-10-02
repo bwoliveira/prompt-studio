@@ -262,14 +262,17 @@ const NOUN_SIGNAL = /^(plano|planos|plan|roadmap|cronograma|estrategia|strategy|
 // one-word opener and its comma ("First, plan ..."), a polite prefix ("Please plan ...", "Por favor, planeje") or a
 // request prefix ("Can you plan ...", "I need you to plan ...", "Preciso que voce planeje ...").
 // A noun-signal word there names the request ("Plan the steps ...", "Plano de acao para ..."), not context.
-const SENTENCE_START = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:can|could|would|will) you|(?:i|we) (?:need|want) you to|voce pode|preciso que voce|precisamos que voce|quero que voce|queremos que voce|(?:please\s+)?help (?:me|us)(?: to)?|(?:me|nos) (?:ajude|ajudem|ajuda) a|(?:ajude|ajudem) (?:me|nos) a)\s+(?:please\s+)?)?(?:(?:\w+ly|\w+mente|first|then|now|next|also|just|again|primeiro|depois|agora|entao|tambem|so|ja)\s+)?$/
+const SENTENCE_START = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:can|could|would|will) you|(?:i|we) (?:need|want) you to|voce pode|preciso que voce|precisamos que voce|quero que voce|queremos que voce)\s+(?:please\s+)?)?(?:(?:help (?:me|us)(?: to)?|(?:me|nos) (?:ajude|ajudem|ajuda) a|(?:ajude|ajudem)(?:-| )(?:me|nos) a)\s+(?:please\s+)?)?(?:(?:\w+ly|\w+mente|first|then|now|next|also|just|again|primeiro|depois|agora|entao|tambem|so|ja)\s+)?$/
 // A noun-signal word after an infinitive or modal marker is the verb ("we need to plan before ...", "let's plan").
 const INFINITIVE_MARK = /\b(?:(?:need|needs|needed|want|wants|wanted|have|has|had|going|ought|able|like|try|trying|time|ready|how)\s+to|let'?s|let us|(?:we|you|i|they)\s+(?:should|must|will|can|could|shall|may|might)(?:\s+(?:also|first|then|now|just))?|precisamos|devemos|vamos|queremos|preciso|quero|devo|vou)\s*$/
 // A noun-signal word that heads a requested noun phrase ("A plan to configure nginx", "Preciso de um plano para ...")
 // names the request: a determiner (after an optional request opener or verb) opens its sentence, up to two plain
 // modifiers may sit between them ("a migration plan"), and no copula follows ("The plan is ready. Build ..." is context).
 const REQUESTED_NOUN = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:i|we) (?:need|want|would like)|i'd like|we'd like|give me|send me|preciso de|precisamos de|quero|queremos|gostaria de|gostariamos de|me de|me passe|me envie|me mande|outline|draft|prepare|propose|sketch|produce|provide|esboce|elabore|prepare|proponha|produza|forneca|apresente|what (?:i|we) (?:need|want|would like) is|o que (?:eu|nos) (?:preciso|precisamos|quero|queremos) e)\s+(?:me\s+)?)?(?:a|an|the|um|uma|o|os|as|some|algum|alguma|alguns|algumas)\s+(?:(?!(?:to|for|of|and|or|that|which|para|de|do|da|que|e|ou)\s)[\w-]+\s+){0,2}$/
-const COPULA = /^\s+(?:is|are|was|were|will|would|has|have|had|e|esta|estao|era|eram|foi|foram|sera|serao|ja|fica|ficou|seems|looks|parece|failed|fails|broke|breaks|crashed|crashes|works|worked|ran|runs|stopped|stops|falhou|falha|quebrou|quebra|funciona|funcionou|rodou|roda|parou)\b/
+const COPULA = /^\s+(?:is|are|was|were|will|would|has|have|had|e|esta|estao|era|eram|foi|foram|sera|serao|ja|fica|ficou|seems|looks|parece)\b/
+// "The pipeline failed. Review the logs.": a predicate after a noun-signal word makes it context, unless the word opens
+// its sentence as an order ("Review failed deployments", "Review works in progress").
+const PREDICATE = /^\s+(?:failed|fails|broke|breaks|crashed|crashes|works|worked|ran|runs|stopped|stops|falhou|falha|quebrou|quebra|funciona|funcionou|rodou|roda|parou)\b/
 // A noun-signal word followed by a determiner is the verb wherever it sits ("... so plan the steps", "review our API").
 // Portuguese este/esta are left out: folded, "esta" is also "esta" ("Nosso plano esta pronto").
 const VERB_OBJECT = /^\s+(?:the|a|an|our|my|your|this|these|those|all|each|every|o|os|as|um|uma|uns|umas|nosso|nossa|nossos|nossas|meu|minha|seu|sua|esse|essa|esses|essas|todos|todas|cada)\b/
@@ -387,7 +390,7 @@ function firstSignal(text) {
       const end = m.index + m[0].length
       const after = text.slice(end, end + CONTEXT_WINDOW)
       // A copula after the word makes it context wherever it sits ("Plan is ready. Build ...", "CSV is attached.").
-      const copula = COPULA.test(after)
+      const copula = COPULA.test(after) || (PREDICATE.test(after) && !SENTENCE_START.test(before))
       const requested = REQUESTED_NOUN.test(before) && !copula
       const isNoun = NOUN_SIGNAL.test(word) && (copula || (!SENTENCE_START.test(before) && !INFINITIVE_MARK.test(before) && !VERB_OBJECT.test(after) && !requested))
       if (isNoun) { if (m.index < nounAt) { noun = id; nounAt = m.index }; continue }
@@ -843,14 +846,17 @@ const NOUN_SIGNAL = /^(plano|planos|plan|roadmap|cronograma|estrategia|strategy|
 // one-word opener and its comma ("First, plan ..."), a polite prefix ("Please plan ...", "Por favor, planeje") or a
 // request prefix ("Can you plan ...", "I need you to plan ...", "Preciso que voce planeje ...").
 // A noun-signal word there names the request ("Plan the steps ...", "Plano de acao para ..."), not context.
-const SENTENCE_START = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:can|could|would|will) you|(?:i|we) (?:need|want) you to|voce pode|preciso que voce|precisamos que voce|quero que voce|queremos que voce|(?:please\s+)?help (?:me|us)(?: to)?|(?:me|nos) (?:ajude|ajudem|ajuda) a|(?:ajude|ajudem) (?:me|nos) a)\s+(?:please\s+)?)?(?:(?:\w+ly|\w+mente|first|then|now|next|also|just|again|primeiro|depois|agora|entao|tambem|so|ja)\s+)?$/
+const SENTENCE_START = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:can|could|would|will) you|(?:i|we) (?:need|want) you to|voce pode|preciso que voce|precisamos que voce|quero que voce|queremos que voce)\s+(?:please\s+)?)?(?:(?:help (?:me|us)(?: to)?|(?:me|nos) (?:ajude|ajudem|ajuda) a|(?:ajude|ajudem)(?:-| )(?:me|nos) a)\s+(?:please\s+)?)?(?:(?:\w+ly|\w+mente|first|then|now|next|also|just|again|primeiro|depois|agora|entao|tambem|so|ja)\s+)?$/
 // A noun-signal word after an infinitive or modal marker is the verb ("we need to plan before ...", "let's plan").
 const INFINITIVE_MARK = /\b(?:(?:need|needs|needed|want|wants|wanted|have|has|had|going|ought|able|like|try|trying|time|ready|how)\s+to|let'?s|let us|(?:we|you|i|they)\s+(?:should|must|will|can|could|shall|may|might)(?:\s+(?:also|first|then|now|just))?|precisamos|devemos|vamos|queremos|preciso|quero|devo|vou)\s*$/
 // A noun-signal word that heads a requested noun phrase ("A plan to configure nginx", "Preciso de um plano para ...")
 // names the request: a determiner (after an optional request opener or verb) opens its sentence, up to two plain
 // modifiers may sit between them ("a migration plan"), and no copula follows ("The plan is ready. Build ..." is context).
 const REQUESTED_NOUN = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:i|we) (?:need|want|would like)|i'd like|we'd like|give me|send me|preciso de|precisamos de|quero|queremos|gostaria de|gostariamos de|me de|me passe|me envie|me mande|outline|draft|prepare|propose|sketch|produce|provide|esboce|elabore|prepare|proponha|produza|forneca|apresente|what (?:i|we) (?:need|want|would like) is|o que (?:eu|nos) (?:preciso|precisamos|quero|queremos) e)\s+(?:me\s+)?)?(?:a|an|the|um|uma|o|os|as|some|algum|alguma|alguns|algumas)\s+(?:(?!(?:to|for|of|and|or|that|which|para|de|do|da|que|e|ou)\s)[\w-]+\s+){0,2}$/
-const COPULA = /^\s+(?:is|are|was|were|will|would|has|have|had|e|esta|estao|era|eram|foi|foram|sera|serao|ja|fica|ficou|seems|looks|parece|failed|fails|broke|breaks|crashed|crashes|works|worked|ran|runs|stopped|stops|falhou|falha|quebrou|quebra|funciona|funcionou|rodou|roda|parou)\b/
+const COPULA = /^\s+(?:is|are|was|were|will|would|has|have|had|e|esta|estao|era|eram|foi|foram|sera|serao|ja|fica|ficou|seems|looks|parece)\b/
+// "The pipeline failed. Review the logs.": a predicate after a noun-signal word makes it context, unless the word opens
+// its sentence as an order ("Review failed deployments", "Review works in progress").
+const PREDICATE = /^\s+(?:failed|fails|broke|breaks|crashed|crashes|works|worked|ran|runs|stopped|stops|falhou|falha|quebrou|quebra|funciona|funcionou|rodou|roda|parou)\b/
 // A noun-signal word followed by a determiner is the verb wherever it sits ("... so plan the steps", "review our API").
 // Portuguese este/esta are left out: folded, "esta" is also "esta" ("Nosso plano esta pronto").
 const VERB_OBJECT = /^\s+(?:the|a|an|our|my|your|this|these|those|all|each|every|o|os|as|um|uma|uns|umas|nosso|nossa|nossos|nossas|meu|minha|seu|sua|esse|essa|esses|essas|todos|todas|cada)\b/
@@ -968,7 +974,7 @@ function firstSignal(text) {
       const end = m.index + m[0].length
       const after = text.slice(end, end + CONTEXT_WINDOW)
       // A copula after the word makes it context wherever it sits ("Plan is ready. Build ...", "CSV is attached.").
-      const copula = COPULA.test(after)
+      const copula = COPULA.test(after) || (PREDICATE.test(after) && !SENTENCE_START.test(before))
       const requested = REQUESTED_NOUN.test(before) && !copula
       const isNoun = NOUN_SIGNAL.test(word) && (copula || (!SENTENCE_START.test(before) && !INFINITIVE_MARK.test(before) && !VERB_OBJECT.test(after) && !requested))
       if (isNoun) { if (m.index < nounAt) { noun = id; nounAt = m.index }; continue }
@@ -1488,14 +1494,17 @@ const NOUN_SIGNAL = /^(plano|planos|plan|roadmap|cronograma|estrategia|strategy|
 // one-word opener and its comma ("First, plan ..."), a polite prefix ("Please plan ...", "Por favor, planeje") or a
 // request prefix ("Can you plan ...", "I need you to plan ...", "Preciso que voce planeje ...").
 // A noun-signal word there names the request ("Plan the steps ...", "Plano de acao para ..."), not context.
-const SENTENCE_START = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:can|could|would|will) you|(?:i|we) (?:need|want) you to|voce pode|preciso que voce|precisamos que voce|quero que voce|queremos que voce|(?:please\s+)?help (?:me|us)(?: to)?|(?:me|nos) (?:ajude|ajudem|ajuda) a|(?:ajude|ajudem) (?:me|nos) a)\s+(?:please\s+)?)?(?:(?:\w+ly|\w+mente|first|then|now|next|also|just|again|primeiro|depois|agora|entao|tambem|so|ja)\s+)?$/
+const SENTENCE_START = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:can|could|would|will) you|(?:i|we) (?:need|want) you to|voce pode|preciso que voce|precisamos que voce|quero que voce|queremos que voce)\s+(?:please\s+)?)?(?:(?:help (?:me|us)(?: to)?|(?:me|nos) (?:ajude|ajudem|ajuda) a|(?:ajude|ajudem)(?:-| )(?:me|nos) a)\s+(?:please\s+)?)?(?:(?:\w+ly|\w+mente|first|then|now|next|also|just|again|primeiro|depois|agora|entao|tambem|so|ja)\s+)?$/
 // A noun-signal word after an infinitive or modal marker is the verb ("we need to plan before ...", "let's plan").
 const INFINITIVE_MARK = /\b(?:(?:need|needs|needed|want|wants|wanted|have|has|had|going|ought|able|like|try|trying|time|ready|how)\s+to|let'?s|let us|(?:we|you|i|they)\s+(?:should|must|will|can|could|shall|may|might)(?:\s+(?:also|first|then|now|just))?|precisamos|devemos|vamos|queremos|preciso|quero|devo|vou)\s*$/
 // A noun-signal word that heads a requested noun phrase ("A plan to configure nginx", "Preciso de um plano para ...")
 // names the request: a determiner (after an optional request opener or verb) opens its sentence, up to two plain
 // modifiers may sit between them ("a migration plan"), and no copula follows ("The plan is ready. Build ..." is context).
 const REQUESTED_NOUN = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:i|we) (?:need|want|would like)|i'd like|we'd like|give me|send me|preciso de|precisamos de|quero|queremos|gostaria de|gostariamos de|me de|me passe|me envie|me mande|outline|draft|prepare|propose|sketch|produce|provide|esboce|elabore|prepare|proponha|produza|forneca|apresente|what (?:i|we) (?:need|want|would like) is|o que (?:eu|nos) (?:preciso|precisamos|quero|queremos) e)\s+(?:me\s+)?)?(?:a|an|the|um|uma|o|os|as|some|algum|alguma|alguns|algumas)\s+(?:(?!(?:to|for|of|and|or|that|which|para|de|do|da|que|e|ou)\s)[\w-]+\s+){0,2}$/
-const COPULA = /^\s+(?:is|are|was|were|will|would|has|have|had|e|esta|estao|era|eram|foi|foram|sera|serao|ja|fica|ficou|seems|looks|parece|failed|fails|broke|breaks|crashed|crashes|works|worked|ran|runs|stopped|stops|falhou|falha|quebrou|quebra|funciona|funcionou|rodou|roda|parou)\b/
+const COPULA = /^\s+(?:is|are|was|were|will|would|has|have|had|e|esta|estao|era|eram|foi|foram|sera|serao|ja|fica|ficou|seems|looks|parece)\b/
+// "The pipeline failed. Review the logs.": a predicate after a noun-signal word makes it context, unless the word opens
+// its sentence as an order ("Review failed deployments", "Review works in progress").
+const PREDICATE = /^\s+(?:failed|fails|broke|breaks|crashed|crashes|works|worked|ran|runs|stopped|stops|falhou|falha|quebrou|quebra|funciona|funcionou|rodou|roda|parou)\b/
 // A noun-signal word followed by a determiner is the verb wherever it sits ("... so plan the steps", "review our API").
 // Portuguese este/esta are left out: folded, "esta" is also "esta" ("Nosso plano esta pronto").
 const VERB_OBJECT = /^\s+(?:the|a|an|our|my|your|this|these|those|all|each|every|o|os|as|um|uma|uns|umas|nosso|nossa|nossos|nossas|meu|minha|seu|sua|esse|essa|esses|essas|todos|todas|cada)\b/
@@ -1613,7 +1622,7 @@ function firstSignal(text) {
       const end = m.index + m[0].length
       const after = text.slice(end, end + CONTEXT_WINDOW)
       // A copula after the word makes it context wherever it sits ("Plan is ready. Build ...", "CSV is attached.").
-      const copula = COPULA.test(after)
+      const copula = COPULA.test(after) || (PREDICATE.test(after) && !SENTENCE_START.test(before))
       const requested = REQUESTED_NOUN.test(before) && !copula
       const isNoun = NOUN_SIGNAL.test(word) && (copula || (!SENTENCE_START.test(before) && !INFINITIVE_MARK.test(before) && !VERB_OBJECT.test(after) && !requested))
       if (isNoun) { if (m.index < nounAt) { noun = id; nounAt = m.index }; continue }
