@@ -26,6 +26,8 @@ except ImportError:  # loaded by path (tests / plugin_api fallback)
     _llm = importlib.util.module_from_spec(_spec)
     _spec.loader.exec_module(_llm)
 
+_host = _llm.host  # the only door to Hermes (redactor, session store)
+
 logger = logging.getLogger(__name__)
 
 CONTEXT_DEADLINE = 15.0  # hard cap, provider call included
@@ -47,7 +49,7 @@ Return JSON only: {{"summary": "..."}}
 - "summary": at most 1200 characters, in {language}. Cover: what the session is working on; decisions and constraints already stated; names that matter (files, repos, services); open questions.
 - Use only what the transcript states. Do not copy secrets, keys or credentials."""
 
-# Local fallback when agent.redact is missing: keys, tokens, Bearer headers, password=... pairs.
+# Local fallback when Hermes' redactor is not importable: keys, tokens, Bearer headers, password=... pairs.
 _FALLBACK_PATTERNS = (
     re.compile(r"\b(?:sk|pk|rk|ghp|gho|ghu|ghs|github_pat|xox[abprs]|glpat|AKIA)[-_A-Za-z0-9]{6,}"),
     re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]{8,}"),
@@ -64,15 +66,21 @@ def _fallback_redact(text: str) -> str:
 
 def redact(text: str) -> str:
     try:
-        from agent.redact import redact_sensitive_text
-    except Exception:
+        redacted = _host.redact_sensitive_text(text)
+    except _host.HostUnavailable:
         return _fallback_redact(text)
-    # The local set runs too: it only adds redactions.
-    return _fallback_redact(redact_sensitive_text(text, force=True))
+    # The local set runs too: it only adds redactions. A redactor that changed raises HostIncompatible: the text
+    # is never sent on without Hermes' redaction.
+    return _fallback_redact(redacted)
 
 
 def _error(code: str, error: str, **extra: Any) -> dict[str, Any]:
     return {"ok": False, "code": code, "error": error, **extra}
+
+
+def _host_incompatible(exc: BaseException, **extra: Any) -> dict[str, Any]:
+    logger.warning("Prompt Studio context: Hermes changed: %s", exc, exc_info=exc)
+    return _error(_host.CODE, _llm.HOST_INCOMPATIBLE_ERROR, **extra)
 
 
 def _text(content: Any) -> str:
@@ -84,23 +92,9 @@ def _text(content: Any) -> str:
     return ""
 
 
-def _open_store(profile: str):
-    """Read-only SessionDB for ``profile`` (same helper as the core sessions route)."""
-    try:
-        from hermes_cli.web_server_sessions import _open_session_db_for_profile
-    except Exception:
-        _open_session_db_for_profile = None
-    if _open_session_db_for_profile is not None:
-        return _open_session_db_for_profile(profile or None, read_only=True)
-    if profile and profile != "default":
-        raise RuntimeError("profile store helper unavailable")
-    from hermes_state import SessionDB
-    return SessionDB(read_only=True)
-
-
 def read_session(session_id: str, profile: str = "", opener: Callable[[str], Any] | None = None) -> tuple[list[tuple[str, str]], str] | None:
     """(last user/assistant turns as (role, text), compaction summary) or None when the id is unknown."""
-    db = (opener or _open_store)(profile)
+    db = (opener or _host.open_session_store)(profile)
     try:
         sid = db.resolve_session_id(session_id)
         if not sid:
@@ -153,6 +147,8 @@ def context(payload: Mapping[str, Any], llm: Callable[..., Any] | None = None, d
     try:
         found = read_session(session_id, profile, opener)
     except Exception as exc:
+        if _llm.is_host_incompatible(exc):
+            return _host_incompatible(exc)
         logger.warning("Prompt Studio context: session store unavailable: %s", type(exc).__name__, exc_info=exc)
         return _error("unavailable", "session store unavailable")
     if found is None:
@@ -160,7 +156,12 @@ def context(payload: Mapping[str, Any], llm: Callable[..., Any] | None = None, d
     turns, summary = found
     if not turns and not summary:
         return _error("empty_session", "session has no conversation yet")
-    messages = build_messages(build_transcript(turns, summary), str(payload.get("locale") or "en"))
+    try:
+        messages = build_messages(build_transcript(turns, summary), str(payload.get("locale") or "en"))
+    except Exception as exc:
+        if _llm.is_host_incompatible(exc):
+            return _host_incompatible(exc)
+        raise
     limit = deadline if deadline is not None else CONTEXT_DEADLINE
     label = _llm.get_model_label(choice)
     # copy_context: the worker keeps the request's Hermes profile scope (see suggest_engine._run_with_deadline).
@@ -173,10 +174,15 @@ def context(payload: Mapping[str, Any], llm: Callable[..., Any] | None = None, d
     try:
         text, model = future.result()
     except Exception as exc:
+        if _llm.is_host_incompatible(exc):
+            return _host_incompatible(exc, model=label)
         # Provider text can carry request fragments: log it, return only a fixed sentence.
         logger.warning("Prompt Studio context model call failed: %s", type(exc).__name__, exc_info=exc)
-        if _llm.is_model_not_found(exc):
-            return _error("model_not_found", "model not found", model=label)
+        try:
+            if _llm.is_model_not_found(exc):
+                return _error("model_not_found", "model not found", model=label)
+        except _host.HostIncompatible as changed:
+            return _host_incompatible(changed, model=label)
         if _llm.is_provider_refused(exc):
             return _error("provider_refused", "provider refused", model=label)
         if _llm.is_provider_payment(exc):
@@ -188,5 +194,11 @@ def context(payload: Mapping[str, Any], llm: Callable[..., Any] | None = None, d
     result = data.get("summary") if isinstance(data, dict) else None
     if not isinstance(result, str) or not result.strip():
         return _error("invalid_summary", "model reply is not a valid summary", model=model)
-    return {"ok": True, "summary": redact(result.strip())[:SUMMARY_LIMIT], "model": model, "turns": len(turns),
+    try:
+        clean = redact(result.strip())
+    except Exception as exc:
+        if _llm.is_host_incompatible(exc):
+            return _host_incompatible(exc, model=model)
+        raise
+    return {"ok": True, "summary": clean[:SUMMARY_LIMIT], "model": model, "turns": len(turns),
             "ms": int((time.monotonic() - started) * 1000)}

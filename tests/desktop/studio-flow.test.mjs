@@ -2031,6 +2031,17 @@ test('CX-1: a failed or timed-out context read shows a short note and the sugges
   }
 })
 
+test('CX-1: a context read answered host_incompatible tells the user to update the plugin, not that the model could not be reached', { skip }, async () => {
+  assert.ok(errorText('host_incompatible') && errorText('host_incompatible', 'pt'), 'errors.host_incompatible in en and pt')
+  await freshSettings('sess-1')
+  backend.context = () => ({ ok: false, code: 'host_incompatible', error: 'Hermes changed in a way this Prompt Studio version does not support; update the plugin (details in the Hermes log)' })
+  await openFresh()
+  await waitFor(() => $('[data-studio-context-status]')?.textContent.includes(errorText('host_incompatible')))
+  const status = $('[data-studio-context-status]').textContent
+  assert.ok(status.includes(errorText('host_incompatible')))
+  assert.ok(!status.includes(errorText('unavailable')), 'not the generic "model could not be reached" note')
+})
+
 test('CX-1: language "pt" with Hermes in English shows Portuguese strings and questions and sends locale pt; "auto" follows Hermes', { skip }, async () => {
   await freshSettings('sess-1')
   await openStudio(INTENT, 'auto')

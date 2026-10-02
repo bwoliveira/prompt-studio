@@ -28,6 +28,12 @@ class FakeEngine:
     def get_model_label(self):
         return "fake/model"
 
+    def check_host(self):  # the adapter's Hermes compatibility check (#31): nothing to report
+        return None
+
+    def is_host_incompatible(self, exc):
+        return False
+
 
 def client(monkeypatch):
     fake = FakeSuggest()
@@ -517,6 +523,60 @@ def test_reload_refreshes_the_adapter_the_engine_imports(tmp_path, monkeypatch, 
         write("two", base + 100_000_000)
         assert api._load("suggest_engine", "suggest").suggest({}) == "two"
         assert api._load("llm_adapter", "get_model_label").get_model_label() == "two"
+    finally:
+        for name in [n for n in sys.modules if n.startswith(pkg.name)]:
+            del sys.modules[name]
+
+
+# ---- #31: an edit of the host module the adapter imports is picked up when the engine or the adapter reloads ----
+ADAPTER_WITH_HOST = (
+    "try:\n"
+    "    from . import hermes_host as host\n"
+    "except ImportError:\n"
+    "    import importlib.util\n"
+    "    from pathlib import Path\n"
+    "    _spec = importlib.util.spec_from_file_location('prompt_studio_hermes_host', Path(__file__).with_name('hermes_host.py'))\n"
+    "    host = importlib.util.module_from_spec(_spec)\n"
+    "    _spec.loader.exec_module(host)\n"
+    "\n\ndef get_model_label():\n    return host.LABEL\n"
+)
+
+
+@pytest.mark.parametrize("mode", ["standalone", "package"])
+def test_reload_refreshes_the_host_module_the_adapter_imports(tmp_path, monkeypatch, mode):
+    import os
+    import py_compile
+
+    pkg = tmp_path / f"pshost_{mode}"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    real = Path(__file__).resolve().parents[1] / "dashboard" / "plugin_api.py"
+    (pkg / "plugin_api.py").write_text(real.read_text())
+    (pkg / "suggest_engine.py").write_text(ENGINE_WITH_ADAPTER)
+    (pkg / "llm_adapter.py").write_text(ADAPTER_WITH_HOST + "LABEL = 'adapter'\n")
+    host = pkg / "hermes_host.py"
+
+    def write(label: str, mtime_ns: int) -> None:
+        host.write_text(f'LABEL = "{label}"\n')
+        os.utime(host, ns=(mtime_ns, mtime_ns))
+
+    base = 1_700_000_000_200_000_000  # xxx.2 s
+    write("one", base)
+    if mode == "package":
+        monkeypatch.syspath_prepend(str(tmp_path))
+        api = importlib.import_module(f"{pkg.name}.plugin_api")
+    else:
+        spec = importlib.util.spec_from_file_location(f"{pkg.name}_plugin_api", pkg / "plugin_api.py")
+        api = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(api)
+    try:
+        assert api._load("llm_adapter", "get_model_label").get_model_label() == "one"
+        py_compile.compile(str(host), doraise=True)  # stale .pyc of the OLD host, then a same-size edit in the same second
+        write("two", base + 100_000_000)
+        assert api._load("llm_adapter", "get_model_label").get_model_label() == "two"
+        write("six", base + 200_000_000)
+        assert api._load("suggest_engine", "suggest").suggest({}) == "adapter"  # the engine's own reload still works
+        assert api._load("llm_adapter", "get_model_label").get_model_label() == "six"
     finally:
         for name in [n for n in sys.modules if n.startswith(pkg.name)]:
             del sys.modules[name]

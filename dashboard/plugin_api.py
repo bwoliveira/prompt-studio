@@ -127,7 +127,11 @@ def _drop_stale_bytecode(name: str) -> None:
 # Siblings a module imports. They are refreshed before the module itself, or a reload would keep the old copy:
 # as a package `from . import llm_adapter` returns the module already in sys.modules; loaded by path the fallback
 # re-executes llm_adapter.py but would pick up its stale bytecode.
-_DEPENDENCIES = {"suggest_engine": ("llm_adapter",), "session_context": ("llm_adapter",)}
+_DEPENDENCIES = {
+    "llm_adapter": ("hermes_host",),
+    "suggest_engine": ("hermes_host", "llm_adapter"),
+    "session_context": ("hermes_host", "llm_adapter"),
+}
 
 
 def _refresh_dependencies(name: str) -> None:
@@ -226,8 +230,14 @@ async def context(request: ContextRequest):
 
 @router.get("/health")
 async def health():
+    adapter = None
     try:
-        return {"ok": True, "model": _load("llm_adapter", "get_model_label").get_model_label()}
-    except Exception:
+        adapter = _load("llm_adapter", "get_model_label")
+        adapter.check_host()
+        return {"ok": True, "model": adapter.get_model_label()}
+    except Exception as exc:
+        if adapter is not None and adapter.is_host_incompatible(exc):
+            logger.warning("Prompt Studio health: Hermes changed: %s", exc)
+            return {"ok": False, "code": "host_incompatible", "error": adapter.HOST_INCOMPATIBLE_ERROR}
         logger.exception("Prompt Studio health error:")
         return {"ok": False, "error": "llm adapter unavailable"}
