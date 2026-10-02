@@ -348,3 +348,175 @@ def test_routes_carry_truncated_when_the_engine_cut_the_text(monkeypatch):
     assert api.post("/compose", json=compose).json()["truncated"] is True
     compose["baseline"] = "b" * engine.COMPOSE_LIMIT
     assert "truncated" not in api.post("/compose", json=compose).json()
+# ---- #27: modules and thread pools are created once per process ----
+import os  # noqa: E402
+import shutil  # noqa: E402
+
+DASHBOARD = Path(__file__).resolve().parents[1] / "dashboard"
+
+
+@pytest.fixture(autouse=True)
+def _fresh_module_cache(monkeypatch):
+    monkeypatch.delenv("PROMPT_STUDIO_DEV_RELOAD", raising=False)
+    plugin_api._MODULES.clear()
+    yield
+    plugin_api._MODULES.clear()
+
+
+def _host_load(directory: Path):
+    """Load plugin_api.py by path the way the Hermes dashboard does (no package, empty __package__)."""
+    spec = importlib.util.spec_from_file_location("hermes_dashboard_plugin_prompt-studio", directory / "plugin_api.py")
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod
+    spec.loader.exec_module(mod)
+    assert not mod.__package__
+    return mod
+
+
+def _requests(mod):
+    return {n: mod._load(n, a) for n, a in (("suggest_engine", "suggest"), ("session_context", "context"), ("llm_adapter", "get_model_label"))}
+
+
+def test_by_path_loading_keeps_the_same_modules_and_executors_across_requests():
+    mod = _host_load(DASHBOARD)
+    first, second = _requests(mod), _requests(mod)
+    for name in first:
+        assert first[name] is second[name], name
+    assert first["suggest_engine"]._EXECUTOR is second["suggest_engine"]._EXECUTOR
+    assert first["suggest_engine"]._COMPOSE_EXECUTOR is second["suggest_engine"]._COMPOSE_EXECUTOR
+    assert first["suggest_engine"]._EXECUTOR is not first["suggest_engine"]._COMPOSE_EXECUTOR
+    assert first["session_context"]._EXECUTOR is second["session_context"]._EXECUTOR
+
+
+def test_health_route_reuses_the_loaded_adapter():
+    mod = _host_load(DASHBOARD)
+    app = FastAPI()
+    app.include_router(mod.router)
+    http = TestClient(app)
+    http.get("/health")
+    adapter = mod._MODULES["llm_adapter"][1]
+    http.get("/health")
+    assert mod._MODULES["llm_adapter"][1] is adapter
+
+
+def test_a_changed_file_mtime_reloads_the_modules(tmp_path):
+    copy = tmp_path / "dashboard"
+    shutil.copytree(DASHBOARD, copy, ignore=shutil.ignore_patterns("__pycache__"))
+    mod = _host_load(copy)
+    before = mod._load("suggest_engine", "suggest")
+    engine_file = copy / "suggest_engine.py"
+    stat = engine_file.stat()
+    os.utime(engine_file, ns=(stat.st_atime_ns, stat.st_mtime_ns + 5_000_000_000))
+    after = mod._load("suggest_engine", "suggest")
+    assert after is not before
+    assert mod._load("suggest_engine", "suggest") is after
+
+
+def test_dev_switch_reloads_on_every_request(monkeypatch):
+    mod = _host_load(DASHBOARD)
+    monkeypatch.setenv("PROMPT_STUDIO_DEV_RELOAD", "1")
+    first = mod._load("suggest_engine", "suggest")
+    assert mod._load("suggest_engine", "suggest") is not first
+    monkeypatch.setenv("PROMPT_STUDIO_DEV_RELOAD", "0")
+    stable = mod._load("suggest_engine", "suggest")
+    assert mod._load("suggest_engine", "suggest") is stable
+
+
+def test_package_path_reloads_only_when_the_files_changed(monkeypatch):
+    module = types.SimpleNamespace(suggest=lambda p: p)
+    reloads = []
+    monkeypatch.setattr(plugin_api, "__package__", "fakepkg")
+    monkeypatch.setattr(plugin_api.importlib, "import_module", lambda *a, **k: module)
+    monkeypatch.setattr(plugin_api.importlib, "reload", lambda m: reloads.append(m) or m)
+    plugin_api._load("suggest_engine", "suggest")
+    plugin_api._load("suggest_engine", "suggest")
+    assert len(reloads) == 1
+
+
+# ---- #27: a same-size edit within the same second must not run stale bytecode ----
+@pytest.mark.parametrize("mode", ["standalone", "package"])
+def test_reload_runs_the_new_source_when_a_stale_pyc_matches_second_and_size(tmp_path, monkeypatch, mode):
+    import os
+    import py_compile
+
+    pkg = tmp_path / f"psbytecode_{mode}"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    real = Path(__file__).resolve().parents[1] / "dashboard" / "plugin_api.py"
+    (pkg / "plugin_api.py").write_text(real.read_text())
+    engine = pkg / "suggest_engine.py"
+
+    def write(effort: str, mtime_ns: int) -> None:
+        engine.write_text(f'DEFAULT_EFFORT = "{effort}"\n\n\ndef suggest(payload):\n    return DEFAULT_EFFORT\n')
+        os.utime(engine, ns=(mtime_ns, mtime_ns))
+
+    base = 1_700_000_000_200_000_000  # xxx.2 s
+    write("one", base)
+    if mode == "package":
+        monkeypatch.syspath_prepend(str(tmp_path))
+        api = importlib.import_module(f"{pkg.name}.plugin_api")
+    else:
+        spec = importlib.util.spec_from_file_location(f"{pkg.name}_plugin_api", pkg / "plugin_api.py")
+        api = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(api)
+    try:
+        assert api._load("suggest_engine", "suggest").suggest({}) == "one"
+        # Leave a .pyc for the OLD source on disk, as a previous process or run would have.
+        py_compile.compile(str(engine), doraise=True)
+        write("two", base + 100_000_000)  # same byte length, same integer second, mtime +100 ms
+        assert api._load("suggest_engine", "suggest").suggest({}) == "two"
+    finally:
+        for name in [n for n in sys.modules if n.startswith(pkg.name)]:
+            del sys.modules[name]
+
+
+# ---- #27 (Codex P2): an edit of the adapter the engine imports is picked up when the engine reloads ----
+ENGINE_WITH_ADAPTER = (
+    "try:\n"
+    "    from . import llm_adapter as _llm\n"
+    "except ImportError:\n"
+    "    import importlib.util\n"
+    "    from pathlib import Path\n"
+    "    _spec = importlib.util.spec_from_file_location('prompt_studio_llm_adapter', Path(__file__).with_name('llm_adapter.py'))\n"
+    "    _llm = importlib.util.module_from_spec(_spec)\n"
+    "    _spec.loader.exec_module(_llm)\n"
+    "\n\ndef suggest(payload):\n    return _llm.LABEL\n"
+)
+
+
+@pytest.mark.parametrize("mode", ["standalone", "package"])
+def test_reload_refreshes_the_adapter_the_engine_imports(tmp_path, monkeypatch, mode):
+    import os
+    import py_compile
+
+    pkg = tmp_path / f"psadapter_{mode}"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    real = Path(__file__).resolve().parents[1] / "dashboard" / "plugin_api.py"
+    (pkg / "plugin_api.py").write_text(real.read_text())
+    (pkg / "suggest_engine.py").write_text(ENGINE_WITH_ADAPTER)
+    adapter = pkg / "llm_adapter.py"
+
+    def write(label: str, mtime_ns: int) -> None:
+        adapter.write_text(f'LABEL = "{label}"\n\n\ndef get_model_label():\n    return LABEL\n')
+        os.utime(adapter, ns=(mtime_ns, mtime_ns))
+
+    base = 1_700_000_000_200_000_000  # xxx.2 s
+    write("one", base)
+    if mode == "package":
+        monkeypatch.syspath_prepend(str(tmp_path))
+        api = importlib.import_module(f"{pkg.name}.plugin_api")
+    else:
+        spec = importlib.util.spec_from_file_location(f"{pkg.name}_plugin_api", pkg / "plugin_api.py")
+        api = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(api)
+    try:
+        assert api._load("suggest_engine", "suggest").suggest({}) == "one"
+        # Stale .pyc of the OLD adapter, then a same-size edit inside the same second: only the adapter changed.
+        py_compile.compile(str(adapter), doraise=True)
+        write("two", base + 100_000_000)
+        assert api._load("suggest_engine", "suggest").suggest({}) == "two"
+        assert api._load("llm_adapter", "get_model_label").get_model_label() == "two"
+    finally:
+        for name in [n for n in sys.modules if n.startswith(pkg.name)]:
+            del sys.modules[name]

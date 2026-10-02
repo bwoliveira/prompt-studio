@@ -10,6 +10,8 @@ import asyncio
 import importlib
 import importlib.util
 import logging
+import os
+import sys
 from pathlib import Path
 from typing import Annotated, Any, Literal, Optional
 
@@ -73,11 +75,75 @@ class SuggestRequest(BaseModel):
     session_context: str = Field("", max_length=SESSION_CONTEXT_TEXT)
 
 
+# Loaded sibling modules, name -> (file signature, module). The host imports this file by path and the
+# route handlers call _load() on every request: re-executing a sibling each time would build new thread
+# pools (suggest/compose/context) and drop their concurrency caps. Reload only when a file changed, or
+# on every call with the dev switch below.
+_MODULES: dict[str, tuple[tuple, Any]] = {}
+DEV_RELOAD_ENV = "PROMPT_STUDIO_DEV_RELOAD"
+
+
+def _signature() -> tuple:
+    """mtimes of the sibling modules (they import each other, so any change reloads them all)."""
+    here = Path(__file__).parent
+    stamps = []
+    for path in sorted(here.glob("*.py")):
+        try:
+            stamps.append((path.name, path.stat().st_mtime_ns))
+        except OSError:
+            continue
+    return tuple(stamps)
+
+
 def _load(name: str, attr: str) -> Any:
     """Import a sibling module without a top-level Hermes dependency (hot-reload friendly).
 
-    Returns the module once it exposes ``attr``; raises RuntimeError otherwise, whichever path loaded it.
+    Loaded once per process; reloaded when a file's mtime changed or when ``PROMPT_STUDIO_DEV_RELOAD`` is
+    set to a truthy value. Returns the module once it exposes ``attr``; raises RuntimeError otherwise,
+    whichever path loaded it.
     """
+    signature = _signature()
+    cached = _MODULES.get(name)
+    dev = os.environ.get(DEV_RELOAD_ENV, "").strip().lower() in ("1", "true", "yes", "on")
+    if cached is not None and cached[0] == signature and not dev:
+        module = cached[1]
+    else:
+        module = _import(name)
+        _MODULES[name] = (signature, module)
+    if not hasattr(module, attr):
+        raise RuntimeError(f"{name}.{attr} missing")
+    return module
+
+
+def _drop_stale_bytecode(name: str) -> None:
+    """Delete the module's cached .pyc: Python validates it by whole-second mtime + size only, so a same-size edit
+    inside the same second (which the ns signature above does detect) would otherwise run the old code."""
+    try:
+        Path(importlib.util.cache_from_source(str(Path(__file__).with_name(f"{name}.py")))).unlink()
+    except (OSError, NotImplementedError, ValueError):
+        pass
+
+
+# Siblings a module imports. They are refreshed before the module itself, or a reload would keep the old copy:
+# as a package `from . import llm_adapter` returns the module already in sys.modules; loaded by path the fallback
+# re-executes llm_adapter.py but would pick up its stale bytecode.
+_DEPENDENCIES = {"suggest_engine": ("llm_adapter",), "session_context": ("llm_adapter",)}
+
+
+def _refresh_dependencies(name: str) -> None:
+    for dep in _DEPENDENCIES.get(name, ()):
+        _drop_stale_bytecode(dep)
+        loaded = sys.modules.get(f"{__package__}.{dep}") if __package__ else None
+        if loaded is not None:
+            try:
+                importlib.reload(loaded)
+            except Exception:
+                logger.debug("Prompt Studio: reload of %s failed; using the loaded copy", dep, exc_info=True)
+
+
+def _import(name: str) -> Any:
+    _refresh_dependencies(name)
+    _drop_stale_bytecode(name)
     module = None
     try:
         module = importlib.import_module(f".{name}", __package__) if __package__ else None
@@ -94,8 +160,6 @@ def _load(name: str, attr: str) -> Any:
             raise RuntimeError(f"{name} could not be loaded")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-    if not hasattr(module, attr):
-        raise RuntimeError(f"{name}.{attr} missing")
     return module
 
 
