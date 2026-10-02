@@ -63,7 +63,9 @@ The UI is English-first through the Desktop plugin i18n API: `ctx.i18n.register(
 `usePluginI18n(id)` in React, `ctx.i18n.t` outside React. Rule: the `en` and `pt` bundles must have exactly the same
 keys and every key must be read by the UI code (the tests check both: a key no `ui-*.js` module reads fails
 `tests/desktop/studio-core.test.mjs`; keys built from a template such as `` `shortcuts.${key}` `` count when the value is in the code).
-Add a key to both in the same change and delete it from both when its last use goes. Generated prompts are not translated: section
+Add a key to both in the same change and delete it from both when its last use goes.
+`errors.<code>` is the backend's code table: `tests/test_contract.py` requires one text per code a client can receive
+(`docs/CONTRACT.md`) and none for a code the REST routes cannot return. Generated prompts are not translated: section
 headers and rule lines stay English, and the user's text is copied as written.
 
 ## Draft recognition languages
