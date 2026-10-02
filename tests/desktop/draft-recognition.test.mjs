@@ -623,6 +623,17 @@ const TABLE = [
   ['Create a spreadsheet summarizing the monthly sales.', 'data', 'spreadsheet summarizing'],
   ['Crie uma planilha contendo os dados de vendas', 'data', 'pt planilha contendo'],
   ['Create a spreadsheet generator in Python', 'implementation', 'near miss: a compound noun after spreadsheet'],
+  // a polite prefix before the requested noun (Codex P1)
+  ['Can you give me a plan to configure nginx?', 'plan', 'can you give me a plan'],
+  ['Could you outline a plan to configure nginx?', 'plan', 'could you outline a plan'],
+  ['Você pode me dar um plano para configurar o nginx?', 'plan', 'pt voce pode me dar um plano'],
+  ['Can you give me a script to configure nginx?', 'implementation', 'can you give me a script'],
+  ['Can you configure nginx?', 'workflow', 'near miss: no noun is requested'],
+  // a modifier never crosses a line (Codex P1)
+  ['Write a Python script\nInclude documentation', 'implementation', 'script, newline, instruction'],
+  ['Escreva um script Python\nInclua documentação', 'implementation', 'pt script, newline, instruction'],
+  ['Write a Python script generator', 'implementation', 'near miss: a compound noun on the same line'],
+  ['Write a marketing email', 'text', 'near miss: a text modifier on the same line'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
@@ -654,6 +665,32 @@ test('draft recognition: a question form that fails on a long run of spaces is s
       assert.ok(typeof out.deliverable === 'string', id)
       assert.ok(took < 1500, `${id}: analyze took ${Math.round(took)} ms on a ${goal.length}-character draft`)
     }
+  }
+})
+
+test('draft recognition: an instruction in the requirements field is not a modifier of the goal artifact on any engine (Codex P1)', () => {
+  const cases = [
+    [{ goal: 'Write a Python script', requirements: 'Include documentation' }, 'implementation'],
+    [{ goal: 'Escreva um script Python', requirements: 'Inclua documentação' }, 'implementation'],
+    [{ goal: 'Write a Python script', requirements: 'Write a blog post about it' }, 'implementation'],
+    [{ goal: 'Write a blog post', requirements: 'Include a script' }, 'text'],
+  ]
+  for (const [brief, expected] of cases) {
+    for (const [id, engine] of Object.entries(ENGINES)) assert.equal(engine.analyze(brief).deliverable, expected, `${id}: ${JSON.stringify(brief)}`)
+  }
+})
+
+test('draft recognition: a requested text with an explanatory clause stays text on Opus and Sonnet (Codex P2)', () => {
+  // Astra reads "explaining how to" as a question on the base and still does; this guards the two engines that regressed.
+  const cases = [
+    ['I need a blog post explaining how to configure nginx.', 'text'],
+    ['I want an email that explains how to configure nginx.', 'text'],
+    ['Preciso de um post de blog explicando como configurar o nginx.', 'text'],
+    ['I need a script explaining how to configure nginx.', 'implementation'],
+    ['I need a blog post. Then configure nginx.', 'workflow'],
+  ]
+  for (const [goal, expected] of cases) {
+    for (const id of ['opus', 'sonnet']) assert.equal(ENGINES[id].analyze({ goal }).deliverable, expected, `${id}: ${goal}`)
   }
 })
 

@@ -98,7 +98,9 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   why we first configure nginx and then build the app?" stays a question. "I need a script. Write it in Python" and
   "Write a script for video processing in Python" are code, as is "I need a React app. Write it in TypeScript with
   documentation."; "Tell me how to configure nginx!" stays a question, "Have a look at the repository and fix the login
-  bug." is the fix, and "Create a spreadsheet containing the sales data." is data.
+  bug." is the fix, and "Create a spreadsheet containing the sales data." is data. "Can you give me a plan to configure
+  nginx?" is the plan, a requirement such as "Include documentation" no longer turns a requested script into text, and
+  "I need a blog post explaining how to configure nginx." stays text.
 - Fix: *Gere um e-mail*, *Monte uma mensagem* and the like stay text, reports and summaries are text even when they
   mention tests ("Write a summary of the test results", "Escreva um relatório dos testes"), and a question such as
   "Como instalar o Docker?" or "Como resumir um livro?" stays an answer on Opus, Sonnet and Astra.
