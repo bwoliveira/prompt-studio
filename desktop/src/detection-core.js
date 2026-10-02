@@ -392,9 +392,13 @@ function createDetector(profile = {}) {
     if (signal === 'implementation' && GENERATE_VERB.test(request) && textWins) { signal = 'text'; category = 'writing' }
     // A request to be shown a code artifact, when no verb and no question form decided anything.
     const shown = signal === null && !question && ARTIFACT_REQUEST.exec(goal)
-    // The artifact must head the phrase asked for: "the name of the function", "the API key" ask for something else.
-    const shownNoun = shown && goal.slice(shown[0].length, shown[0].length + 120).split(/[.!?\n]|\s+(?:of|to|for|from|in|on|at|about|between|with|without|by|that|which|who|whose|where|when|and|or|but|de|do|da|dos|das|para|em|no|na|nos|nas|sobre|entre|com|sem|por|que|e|ou|mas)\b/, 1)[0]
-    if (shownNoun && pickArtifact(shownNoun) === 'code' && CODE_ARTIFACT_END.test(shownNoun)) { signal = 'implementation'; category = 'code' }
+    // The artifact must head the phrase asked for ("the name of the function", "the API key" ask for something else),
+    // while the whole sentence still tells which kind of artifact it is ("a script for a YouTube video" is text).
+    if (shown) {
+      const rest = goal.slice(shown[0].length, shown[0].length + 300)
+      const head = rest.split(/[.!?\n]|\s+(?:of|to|for|from|in|on|at|about|between|with|without|by|that|which|who|whose|where|when|and|or|but|de|do|da|dos|das|para|em|no|na|nos|nas|sobre|entre|com|sem|por|que|e|ou|mas)\b/, 1)[0]
+      if (CODE_ARTIFACT_END.test(head) && pickArtifact(rest.split(/[.!?\n]/, 1)[0]) === 'code') { signal = 'implementation'; category = 'code' }
+    }
     return { category, signal, text, goal, asksQuestion: goal.endsWith('?') || QUESTION_START.test(goal) }
   }
 
