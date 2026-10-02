@@ -611,6 +611,18 @@ const TABLE = [
   ['Can I configure nginx!', 'answer', 'can I ...!'],
   ['Tell me how to configure nginx! Then configure it.', 'workflow', 'near miss: an order after the exclamation'],
   ['Configure nginx!', 'workflow', 'near miss: an exclaimed order'],
+  // "do" and "have" open a question only before a subject (Codex P1)
+  ['Have a look at the repository and fix the login bug.', 'implementation', 'have a look ... and fix'],
+  ['Do a review of the authentication API.', 'review', 'do a review'],
+  ['Do a security audit of the API', 'review', 'do a security audit'],
+  ['Do we need to configure nginx', 'answer', 'near miss: do we, no mark'],
+  ['Does the script configure nginx?', 'answer', 'near miss: does the script ...?'],
+  ["Don't you think we should configure nginx?", 'answer', "near miss: don't you ...?"],
+  // a participial clause after the data noun (Codex P2)
+  ['Create a spreadsheet containing the sales data.', 'data', 'spreadsheet containing'],
+  ['Create a spreadsheet summarizing the monthly sales.', 'data', 'spreadsheet summarizing'],
+  ['Crie uma planilha contendo os dados de vendas', 'data', 'pt planilha contendo'],
+  ['Create a spreadsheet generator in Python', 'implementation', 'near miss: a compound noun after spreadsheet'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
