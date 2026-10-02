@@ -253,8 +253,12 @@ const SENTENCE_START = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor
 // A noun-signal word followed by a determiner is the verb wherever it sits ("... so plan the steps", "review our API").
 // Portuguese este/esta are left out: folded, "esta" is also "esta" ("Nosso plano esta pronto").
 const VERB_OBJECT = /^\s+(?:the|a|an|our|my|your|this|these|those|all|each|every|o|os|as|um|uma|uns|umas|nosso|nossa|nossos|nossas|meu|minha|seu|sua|esse|essa|esses|essas|todos|todas|cada)\b/
-// A verb right after a negation is a prohibition, not the order ("do not run any commands", "nao execute").
-const NEGATED = /(?:^|[\s,;:(])(?:(?:do not|don't|dont|does not|doesn't|never|not|nao|nunca|jamais)(?:\s+\w+){0,3}|without|sem)\s*$/
+// A verb right after a negation (an adverb at most in between) is a prohibition, not the order ("do not run any
+// commands", "never ever deploy", "nao execute"). A reminder ("don't forget to review") still asks for the review.
+const NEGATED = /(?:^|[\s,;:(])(?:(?:do not|don't|dont|does not|doesn't|never|not|nao|nunca|jamais)(?:\s+(?:ever|even|just|simply|actually|really|ainda|mesmo|sequer|simplesmente))?|without|sem)\s*$/
+// Only this many characters around a match are inspected, so the scan stays linear on long drafts; the prefixes
+// NEGATED and SENTENCE_START look for are far shorter than this.
+const CONTEXT_WINDOW = 120
 // Languages: Portuguese (unaccented) + English.
 // Between two artifact words, only bare modifiers ("API announcement email"): a preposition, clause word or
 // participle ("email announcing the app", "script that sends an e-mail", "app de blog") means the first word is the
@@ -273,9 +277,11 @@ function firstSignal(text) {
     while ((m = all.exec(text))) {
       if (m[0] === '') { all.lastIndex++; continue }
       const word = m[0].trim()
-      const before = text.slice(0, m.index)
+      // The sentinel keeps ^ from matching where the window was cut.
+      const before = m.index > CONTEXT_WINDOW ? '\u0000' + text.slice(m.index - CONTEXT_WINDOW, m.index) : text.slice(0, m.index)
       if (NEGATED.test(before)) continue
-      const isNoun = NOUN_SIGNAL.test(word) && !SENTENCE_START.test(before) && !VERB_OBJECT.test(text.slice(m.index + m[0].length))
+      const end = m.index + m[0].length
+      const isNoun = NOUN_SIGNAL.test(word) && !SENTENCE_START.test(before) && !VERB_OBJECT.test(text.slice(end, end + CONTEXT_WINDOW))
       if (isNoun) { if (m.index < nounAt) { noun = id; nounAt = m.index }; continue }
       if (m.index < at) { signal = id; at = m.index }
       break
@@ -295,7 +301,15 @@ function detect(b) {
   // is a task, and a style note ("Seja breve.") is not.
   const question = QUESTION_FORM.exec(goal)
   if (question) {
-    const restAt = (text.length - text.trimStart().length) + question[0].length
+    let restAt = (text.length - text.trimStart().length) + question[0].length
+    // Further questions ("Como instalar o Docker? Como configurar o nginx?") are still questions, not orders.
+    for (;;) {
+      const rest = text.slice(restAt)
+      const pad = rest.length - rest.trimStart().length
+      const next = QUESTION_FORM.exec(rest.slice(pad))
+      if (!next) break
+      restAt += pad + next[0].length
+    }
     const after = firstSignal(text.slice(restAt))
     if (after.verb) { signal = after.signal; at = restAt + after.at } else { signal = 'answer'; at = Infinity }
   }

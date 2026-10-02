@@ -57,7 +57,9 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   text (a participle opens a clause, not a modifier), and "Como instalar o Node.js?" or "nginx 1.26?" stays a question.
   "Can you plan the steps ..." and "so plan the rollout" keep the planning verb; a negated verb ("Do not execute
   any commands") is a prohibition, not the order; and only the verb that fired can make a request code
-  ("Analyze this script, then write a post" stays an analysis).
+  ("Analyze this script, then write a post" stays an analysis). A second question is still a question, a reminder
+  ("Don't forget to review the API") still asks for the review, and a very long draft no longer freezes the Studio
+  while it is read.
 - Fix: *Gere um e-mail*, *Monte uma mensagem* and the like stay text, reports and summaries are text even when they
   mention tests ("Write a summary of the test results", "Escreva um relatório dos testes"), and a question such as
   "Como instalar o Docker?" or "Como resumir um livro?" stays an answer on Opus, Sonnet and Astra.

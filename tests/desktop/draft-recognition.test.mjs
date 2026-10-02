@@ -187,6 +187,17 @@ const TABLE = [
   ['Analyze this Python script, then write a blog post about it.', 'analysis', 'a later write does not promote'],
   ['Analise este script Python e depois escreva um post sobre ele.', 'analysis', 'pt'],
   ['Write a Python script that parses the CSV', 'implementation', 'near miss: the verb that fired makes the script'],
+  // a second question is still a question (Codex P2)
+  ['Como instalar o Docker? Como configurar o nginx?', 'answer', 'two pt questions'],
+  ['How do I install Docker? How do I configure nginx?', 'answer', 'two en questions'],
+  ['What is Docker? How does it work? Explain briefly.', 'answer', 'three questions and a style note'],
+  ['What is Docker? How does it work? Fix the login bug.', 'implementation', 'near miss: an order after two questions'],
+  // a negated reminder still asks for the action (Codex P2)
+  ["Don't forget to review the API", 'review', 'reminder, not a prohibition'],
+  ['Não esqueça de revisar a API', 'review', 'pt reminder'],
+  ['Do not forget: review the API before Friday', 'review', 'reminder with a colon'],
+  ['Never ever deploy from this machine. Write a policy email', 'text', 'near miss: adverb between negation and verb'],
+  ['Do not run any commands; plan the steps instead', 'plan', 'near miss: the prohibited verb is skipped, the order stays'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
@@ -195,6 +206,19 @@ for (const [draft, expected, why] of TABLE) {
     assert.deepEqual(got, { opus: expected, sonnet: expected, astra: expected })
   })
 }
+
+test('draft recognition: a long draft full of context nouns is analysed in linear time on every engine (Codex P2)', () => {
+  const goal = 'The CSV is attached. '.repeat(10000) + 'Write an email to the team.'
+  for (const [id, engine] of Object.entries(ENGINES)) {
+    const started = performance.now()
+    const out = engine.analyze({ goal })
+    const took = performance.now() - started
+    // Opus and Sonnet fold() only the first 4 000 characters, so the closing order is out of their window; what
+    // this test guards is the time, not the deliverable.
+    assert.ok(typeof out.deliverable === 'string', id)
+    assert.ok(took < 1500, `${id}: analyze took ${Math.round(took)} ms on a 210k-character draft`)
+  }
+})
 
 test('draft recognition: Astra reads goal plus requirements, like Opus and Sonnet', () => {
   const brief = { goal: 'Preciso de ajuda com isto', requirements: 'Crie uma planilha de vendas' }
@@ -254,7 +278,7 @@ test('parity: Opus and Sonnet carry the identical detection block', async () => 
   const [opus, sonnet] = await Promise.all([src('engine-opus.js'), src('engine-sonnet.js')])
   const a = detection(opus)
   const b = detection(sonnet)
-  for (const needle of ['CATEGORY_RULES', 'DELIVERABLE_RULES', 'MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'QUESTION_START', 'NOUN_SIGNAL', 'SENTENCE_START', 'VERB_OBJECT', 'NEGATED', 'MODIFIER_GAP', 'INTERFACE', 'function firstSignal', 'function detect', 'function analyzeNormalized']) {
+  for (const needle of ['CATEGORY_RULES', 'DELIVERABLE_RULES', 'MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'QUESTION_START', 'NOUN_SIGNAL', 'SENTENCE_START', 'VERB_OBJECT', 'NEGATED', 'CONTEXT_WINDOW', 'MODIFIER_GAP', 'INTERFACE', 'function firstSignal', 'function detect', 'function analyzeNormalized']) {
     assert.ok(a.includes(needle), `opus block has ${needle}`)
   }
   assert.equal(a, b, 'Opus and Sonnet detection blocks drifted apart: change both engines identically')
@@ -262,7 +286,7 @@ test('parity: Opus and Sonnet carry the identical detection block', async () => 
 
 test('parity: the artifact constants are the same text on all three engines', async () => {
   const sources = await Promise.all(['engine-opus.js', 'engine-sonnet.js', 'engine-astra.js'].map(src))
-  for (const name of ['MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'NOUN_SIGNAL', 'SENTENCE_START', 'VERB_OBJECT', 'NEGATED', 'MODIFIER_GAP', 'REVIEW_OBJECT', 'PLAN_OBJECT', 'DATA_OBJECT', 'WORKFLOW_OBJECT']) {
+  for (const name of ['MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'NOUN_SIGNAL', 'SENTENCE_START', 'VERB_OBJECT', 'NEGATED', 'CONTEXT_WINDOW', 'MODIFIER_GAP', 'REVIEW_OBJECT', 'PLAN_OBJECT', 'DATA_OBJECT', 'WORKFLOW_OBJECT']) {
     const lines = sources.map(source => source.split('\n').find(line => line.startsWith(`const ${name} =`)))
     assert.ok(lines.every(Boolean), `${name} exists in every engine`)
     assert.equal(new Set(lines).size, 1, `${name} differs between engines:\n${lines.join('\n')}`)
