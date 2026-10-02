@@ -9,6 +9,9 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   not exactly one of the options (for example "Not applicable here" with options Yes/No) is now reported as an
   unlisted option instead of being mapped onto "No". Exact matches (any case) and a value that is the start of one
   option ("Y" for "Yes") are still accepted.
+- Fix: a thinking block the model never closed (cut off by the token limit) no longer leaks its JSON into the
+  suggestion, and a reply made of several parts keeps only the text parts, never the thinking parts. Both are
+  treated as an empty reply.
 - New target: **Claude Sonnet 5.5** (Alt+T, or pick **Sonnet**), next to Opus and Astra. It has its own prompt engine,
   question help and AI writer rules from Anthropic's Sonnet 5.5 prompting guide, and is the default when the
   session's model is a Sonnet. Opus and Astra prompts do not change.

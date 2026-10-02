@@ -71,7 +71,28 @@ def _answer_content(response: Any) -> Any:
     choices = response.get("choices") if isinstance(response, Mapping) else getattr(response, "choices", None)
     first = choices[0] if choices else response
     message = first.get("message") if isinstance(first, Mapping) else getattr(first, "message", first)
-    return message.get("content") if isinstance(message, Mapping) else getattr(message, "content", None)
+    content = message.get("content") if isinstance(message, Mapping) else getattr(message, "content", None)
+    return _answer_text(content)
+
+
+# A thinking block, closed or cut off by the token limit (then it runs to the end of the content).
+_THINKING_BLOCK = re.compile(r"<(think|thinking|reasoning)>.*?(?:</\1>|\Z)", re.DOTALL | re.IGNORECASE)
+
+
+def _answer_text(content: Any) -> Any:
+    """The answer text of ``content``: text parts of a list only, no thinking block, closed or unclosed."""
+    if isinstance(content, list):
+        texts = []
+        for part in content:
+            if isinstance(part, str):
+                texts.append(part)
+                continue
+            kind = part.get("type") if isinstance(part, Mapping) else getattr(part, "type", None)
+            text = part.get("text") if isinstance(part, Mapping) else getattr(part, "text", None)
+            if kind == "text" and isinstance(text, str):
+                texts.append(text)
+        content = "".join(texts)
+    return _THINKING_BLOCK.sub("", content) if isinstance(content, str) else content
 
 
 def _loads_dict(text: str) -> dict[str, Any] | None:

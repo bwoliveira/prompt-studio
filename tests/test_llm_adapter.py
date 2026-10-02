@@ -484,3 +484,35 @@ def test_the_answer_content_is_still_returned_when_there_is_reasoning_too(monkey
     response = {"choices": [{"finish_reason": "stop", "message": {"content": '{"value": "Não"}', "reasoning": '{"value": "Sim"}'}}]}
     _fake_with_host_fallback(monkeypatch, response)
     assert adapter._invoke(None, [], max_tokens=10, timeout=1, is_json=True)[0] == '{"value": "Não"}'
+
+
+def _content_response(content, finish_reason="stop"):
+    return {"choices": [{"finish_reason": finish_reason, "message": {"content": content}}]}
+
+
+def test_unclosed_think_block_is_never_the_answer(monkeypatch):
+    for tag in ("think", "thinking", "reasoning"):
+        content = f'<{tag}>working out {{"value":"Yes","reason":"internal candidate"}}'
+        _fake_with_host_fallback(monkeypatch, _content_response(content, "length"))
+        reply = adapter._invoke(None, [], max_tokens=10, timeout=1, is_json=True)
+        assert reply[0] == "" and reply.finish_reason == "length"
+
+
+def test_json_before_an_unclosed_think_block_is_still_the_answer(monkeypatch):
+    answer = '{"value": "No", "reason": "ok"}'
+    _fake_with_host_fallback(monkeypatch, _content_response(answer + '\n<think>and also {"value":"Yes"}', "length"))
+    assert adapter._invoke(None, [], max_tokens=10, timeout=1, is_json=True)[0] == answer
+
+
+def test_list_content_keeps_only_the_text_parts(monkeypatch):
+    answer = '{"value": "No", "reason": "ok"}'
+    parts = [
+        {"type": "thinking", "thinking": '{"value": "Yes"}'},
+        {"type": "reasoning", "text": '{"value": "Maybe"}'},
+        {"type": "text", "text": answer},
+    ]
+    _fake_with_host_fallback(monkeypatch, _content_response(parts))
+    assert adapter._invoke(None, [], max_tokens=10, timeout=1, is_json=True)[0] == answer
+    # Only thinking parts: nothing to answer with.
+    _fake_with_host_fallback(monkeypatch, _content_response(parts[:2], "length"))
+    assert adapter._invoke(None, [], max_tokens=10, timeout=1, is_json=True)[0] == ""
