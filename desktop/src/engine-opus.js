@@ -295,6 +295,16 @@ const CONTEXT_WINDOW = 120
 // "I need a script to write log files": the artifact asked for sits before the verb that tells its purpose; with the
 // request opener ("I need", "preciso de") it also decides the deliverable ("I need a script to configure nginx").
 const REQUESTED_ARTIFACT = /((?:(?:i|we) (?:need|want|would like)|i'd like|we'd like|give me|send me|preciso de|precisamos de|quero|queremos|gostaria de|gostariamos de|me de|me passe|me envie|me mande|what (?:i|we) (?:need|want|would like) is|o que (?:eu|nos) (?:preciso|precisamos|quero|queremos) e)\s+(?:me\s+)?)?(?:a|an|the|um|uma|o|os|as|some|algum|alguma|alguns|algumas)\s+(?:(?!(?:to|for|and|or|that|which|para|que|e|ou)\s)[\w-]+\s+){1,3}(?:to|that|which|para|que)\s+$/
+// "and fix the login bug", "e corrigir o bug": a coordinator followed by an order inside an explanation request.
+const ORDER_JOIN = /\b(?:and|then|e|depois|entao)\s+(?:then\s+|depois\s+)?/g
+function coordinatedOrder(text) {
+  ORDER_JOIN.lastIndex = 0
+  for (let n = 0, m; n < 8 && (m = ORDER_JOIN.exec(text)); n++) {
+    const rest = text.slice(m.index + m[0].length, m.index + m[0].length + CONTEXT_WINDOW)
+    if (firstSignal(rest).verb) return m.index
+  }
+  return -1
+}
 const INTRO_CLAUSE = /^([^.!?,:;\n]{1,60}),\s+/
 // "The configure script is broken", "I tried to configure nginx yesterday": the verb names a thing or tells the past.
 const MODIFIER_USE = /\b(?:the|a|an|this|that|these|those|my|our|your|o|os|a|as|um|uma|este|esta|esse|essa|meu|minha|nosso|nossa|seu|sua)\s+$/
@@ -352,18 +362,24 @@ function isQuestion(goal) {
   if (direct) return direct
   // "Before we begin, can I configure nginx without downtime?": a short clause without an order may introduce it.
   const intro = INTRO_CLAUSE.exec(goal)
-  if (!intro || firstSignal(intro[1]).verb) return null
+  if (!intro || DECLARATIVE.test(intro[1]) || firstSignal(intro[1]).verb) return null
   const rest = questionAt(goal.slice(intro[0].length))
   return rest ? [intro[0] + rest[0]] : null
 }
 function questionAt(goal) {
   const explain = EXPLAIN_FORM.exec(goal)
-  if (explain) return explain
+  // "Can you walk through the repository and fix the login bug?": the explanation carries an order after it.
+  if (explain) {
+    const order = coordinatedOrder(explain[0])
+    return order < 0 ? explain : [explain[0].slice(0, order)]
+  }
   const yesNo = YESNO_FORM.exec(goal)
   if (yesNo) return yesNo
   const m = QUESTION_FORM.exec(goal)
-  if (!m || m[0].includes('?')) return m
+  if (!m) return null
+  // "What I need is for you to build a React dashboard, can you do that?": a declarative request, with or without the mark.
   if (DECLARATIVE.test(m[0])) return null
+  if (m[0].includes('?')) return m
   if (!m[0].includes(',')) return m
   const head = m[0].slice(0, m[0].indexOf(','))
   return QUESTION_HEAD.test(head) || firstSignal(head).verb ? m : null

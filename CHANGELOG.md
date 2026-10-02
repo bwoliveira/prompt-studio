@@ -83,7 +83,9 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   nginx without downtime?" is a question, and "The configure script is broken. Review it." is a review. "Help me
   plan deployment before we configure nginx" asks for the plan, and "I need a script to write log files" is code,
   as is "I need a script to configure nginx". "Do not deploy, review the code instead" is the review, "Can you help me
-  plan deployment before we configure nginx?" is the plan, and "Review failed deployments" is the review.
+  plan deployment before we configure nginx?" is the plan, and "Review failed deployments" is the review. "Can you walk
+  through the repository and fix the login bug?" is the fix, and "What I need is for you to build a React dashboard, can
+  you do that?" is the build.
 - Fix: *Gere um e-mail*, *Monte uma mensagem* and the like stay text, reports and summaries are text even when they
   mention tests ("Write a summary of the test results", "Escreva um relatório dos testes"), and a question such as
   "Como instalar o Docker?" or "Como resumir um livro?" stays an answer on Opus, Sonnet and Astra.
