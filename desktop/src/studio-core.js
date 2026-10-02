@@ -221,6 +221,23 @@ export function studioPrompt(target, intent, ladder) {
   return { prompt, notes: notes || [] }
 }
 
+// Warnings for the preview, in the Studio's language: one per answer the engine flags as a conflict with the
+// draft (e.g. a deliverable picked against the draft's verb). The engine's own notes stay in English for the
+// prompt; these are what the user reads, with the option and question labels of the active locale.
+export function studioWarnings(target, intent, ladder, locale = 'en') {
+  const msg = coreMessages(locale)
+  const brief = briefFromLadder(target, intent, ladder)
+  const conflicts = engineOf(target).analyze(brief).conflicts || {}
+  const out = []
+  for (const [fieldId, values] of Object.entries(conflicts)) {
+    const step = stepById(fieldId)
+    if (!step || brief[fieldId] === undefined || !(values || []).includes(brief[fieldId])) continue
+    const question = msg.fields[fieldId]?.question(TARGET_NAME[target] || TARGET_NAME.opus) || fieldId
+    out.push(msg.conflict(optionLabel(fieldId, brief[fieldId], locale), question))
+  }
+  return out
+}
+
 // Question/answer pairs the AI writer gets: only steps really answered (skipped/empty/"none" left
 // out; the engine baseline carries the defaults). The design default is sent as its real text.
 export function studioAnswers(target, intent, ladder, locale = 'en') {

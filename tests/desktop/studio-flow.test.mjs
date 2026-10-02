@@ -572,10 +572,37 @@ test('a deliverable that contradicts the draft is kept and its conflict note is 
   await click(`[data-studio-option="${plan}"]`)
   assert.equal(field(), 'thirdPartyText')
   await click('[data-studio-generate]')
-  await waitFor(() => $('[data-studio-preview-note]'))
-  assert.match($('[data-studio-preview-note]').textContent, /conflict|reads as|contradict/i, 'the engine conflict note reaches the preview with the AI off')
+  await waitFor(() => $('[data-studio-preview-warning]'))
+  assert.match($('[data-studio-preview-warning]').textContent, /contradicts what the draft asks for/, 'the conflict reaches the preview with the AI off')
   await click('[data-studio-use-prompt]')
   assert.ok(draft().length > 100, 'the prompt built for the chosen deliverable is placed')
+})
+
+test('the conflict note is in the Studio language and stays when switching preview versions (Codex P2 round 2)', { skip }, async () => {
+  ui.i18n.locale = 'pt'
+  await ui.act(async () => { ui.$locale.set('pt') })
+  try {
+    await openStudio('Create a plan for the product launch', 'auto', { deliverable: true })
+    await waitFor(() => $('[data-studio-option]') && notLoading())
+    const plan = [...document.querySelectorAll('[data-studio-option]')].map(el => el.getAttribute('data-studio-option')).find(label => /^Plano\b/.test(label))
+    assert.ok(plan, 'the Portuguese plan option is offered')
+    await click(`[data-studio-option="${plan}"]`)
+    await pasteStep('')
+    await click('[data-studio-generate]')
+    await waitFor(() => $('[data-studio-preview-text]') && $('[data-studio-switch-version]'))
+    assert.match($('[data-studio-preview-text]').textContent, /PROMPT DA IA/, 'AI version shown first')
+    const warning = () => $('[data-studio-preview-warning]')?.textContent || ''
+    assert.match(warning(), /contradiz o que o rascunho pede/, 'warning in Portuguese on the AI version')
+    assert.doesNotMatch(warning(), /reads as|contradicts what/, 'no hard-coded English engine note')
+    assert.match(warning(), /Plano \/ roteiro/, 'the option label is translated too')
+    await click('[data-studio-switch-version]')
+    assert.match($('[data-studio-preview-title]').textContent, /sem IA/, 'engine version shown')
+    assert.match(warning(), /contradiz o que o rascunho pede/, 'warning still shown on the version without AI')
+    await click('[data-studio-cancel]')
+  } finally {
+    ui.i18n.locale = 'en'
+    await ui.act(async () => { ui.$locale.set('en') })
+  }
 })
 
 test('an empty AI suggestion on a step with a default offers "Use the recommended"; with no default only the step’s own Skip remains', { skip }, async () => {

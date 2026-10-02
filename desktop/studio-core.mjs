@@ -1168,6 +1168,7 @@ export const CORE_MESSAGES = {
   en: {
     core: {
       detected: detected => ` (detected: ${detected})`,
+      conflict: (option, question) => `Your choice "${option}" for "${question}" contradicts what the draft asks for; the prompt was built for your choice anyway.`,
       optional: question => `${question} (optional)`,
       done: 'Every step has been answered.',
       designDefault: 'recommended list',
@@ -1252,6 +1253,7 @@ export const CORE_MESSAGES = {
   pt: {
     core: {
       detected: detected => ` (detectado: ${detected})`,
+      conflict: (option, question) => `A escolha "${option}" em "${question}" contradiz o que o rascunho pede; o prompt foi montado com a sua escolha mesmo assim.`,
       optional: question => `${question} (opcional)`,
       done: 'Todas as etapas foram respondidas.',
       designDefault: 'lista recomendada',
@@ -1553,6 +1555,23 @@ export function stepCount(target, intent, ladder) {
 export function studioPrompt(target, intent, ladder) {
   const { prompt, notes } = engineOf(target).build(briefFromLadder(target, intent, ladder))
   return { prompt, notes: notes || [] }
+}
+
+// Warnings for the preview, in the Studio's language: one per answer the engine flags as a conflict with the
+// draft (e.g. a deliverable picked against the draft's verb). The engine's own notes stay in English for the
+// prompt; these are what the user reads, with the option and question labels of the active locale.
+export function studioWarnings(target, intent, ladder, locale = 'en') {
+  const msg = coreMessages(locale)
+  const brief = briefFromLadder(target, intent, ladder)
+  const conflicts = engineOf(target).analyze(brief).conflicts || {}
+  const out = []
+  for (const [fieldId, values] of Object.entries(conflicts)) {
+    const step = stepById(fieldId)
+    if (!step || brief[fieldId] === undefined || !(values || []).includes(brief[fieldId])) continue
+    const question = msg.fields[fieldId]?.question(TARGET_NAME[target] || TARGET_NAME.opus) || fieldId
+    out.push(msg.conflict(optionLabel(fieldId, brief[fieldId], locale), question))
+  }
+  return out
 }
 
 // Question/answer pairs the AI writer gets: only steps really answered (skipped/empty/"none" left

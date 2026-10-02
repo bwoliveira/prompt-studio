@@ -10,7 +10,7 @@ import { ENGINE as SONNET } from '../../desktop/src/engine-sonnet.js'
 import { CORE_MESSAGES } from '../../desktop/src/i18n-core.js'
 import { UI_MESSAGES } from '../../desktop/src/i18n-ui.js'
 
-const { SKIPPED, TARGETS, answerLabel, answerToValue, briefFromLadder, defaultTarget, fieldForTarget, nextQuestion, questionFor, stepCount, studioAnswers, studioPrompt } = core
+const { SKIPPED, TARGETS, answerLabel, answerToValue, briefFromLadder, defaultTarget, fieldForTarget, nextQuestion, questionFor, stepCount, studioAnswers, studioPrompt, studioWarnings } = core
 const ENGINES = { opus: OPUS, astra: ASTRA, sonnet: SONNET }
 const repo = fileURLToPath(new URL('../../', import.meta.url))
 const CODE = 'Crie um dashboard web em React para acompanhar gastos mensais da casa'
@@ -152,6 +152,25 @@ test('picking a deliverable that contradicts the draft keeps the choice and note
       const detected = studioPrompt(target, intent, [])
       assert.ok(!detected.notes.some(n => /deliverable/i.test(n)), `${target}: no conflict note for the detected value`)
     }
+  }
+})
+
+test('studioWarnings: a conflicting answer gives one warning in the asked locale, with the option and question labels', () => {
+  for (const target of ['opus', 'astra', 'sonnet']) {
+    const engine = ENGINES[target]
+    const detectedValue = engine.analyze({ goal: PLAN }).deliverable
+    const picked = engine.options.deliverable.find(value => value !== detectedValue && (engine.analyze({ goal: PLAN, deliverable: value }).conflicts.deliverable || []).includes(value))
+    assert.ok(picked, `${target}: a conflicting deliverable exists for "${PLAN}"`)
+    for (const locale of ['en', 'pt']) {
+      const label = CORE_MESSAGES[locale].core.fields.deliverable.options[picked]
+      const ladder = [{ category: 'deliverable', question: 'q', answer: label }]
+      const warnings = studioWarnings(target, PLAN, ladder, locale)
+      assert.equal(warnings.length, 1, `${target} ${locale}: ${warnings.join(' | ')}`)
+      assert.ok(warnings[0].includes(`"${label}"`), `${target} ${locale}: option label "${label}" in "${warnings[0]}"`)
+      assert.ok(warnings[0].includes(CORE_MESSAGES[locale].core.fields.deliverable.question()), `${target} ${locale}: question label`)
+      assert.doesNotMatch(warnings[0], /reads as|Conflict:/, `${target} ${locale}: not the engine's English note`)
+    }
+    assert.deepEqual(studioWarnings(target, PLAN, [], 'en'), [], `${target}: no warning for the detected value`)
   }
 })
 

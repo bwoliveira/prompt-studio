@@ -1207,6 +1207,7 @@ const CORE_MESSAGES = {
   en: {
     core: {
       detected: detected => ` (detected: ${detected})`,
+      conflict: (option, question) => `Your choice "${option}" for "${question}" contradicts what the draft asks for; the prompt was built for your choice anyway.`,
       optional: question => `${question} (optional)`,
       done: 'Every step has been answered.',
       designDefault: 'recommended list',
@@ -1291,6 +1292,7 @@ const CORE_MESSAGES = {
   pt: {
     core: {
       detected: detected => ` (detectado: ${detected})`,
+      conflict: (option, question) => `A escolha "${option}" em "${question}" contradiz o que o rascunho pede; o prompt foi montado com a sua escolha mesmo assim.`,
       optional: question => `${question} (opcional)`,
       done: 'Todas as etapas foram respondidas.',
       designDefault: 'lista recomendada',
@@ -1592,6 +1594,23 @@ function stepCount(target, intent, ladder) {
 function studioPrompt(target, intent, ladder) {
   const { prompt, notes } = engineOf(target).build(briefFromLadder(target, intent, ladder))
   return { prompt, notes: notes || [] }
+}
+
+// Warnings for the preview, in the Studio's language: one per answer the engine flags as a conflict with the
+// draft (e.g. a deliverable picked against the draft's verb). The engine's own notes stay in English for the
+// prompt; these are what the user reads, with the option and question labels of the active locale.
+function studioWarnings(target, intent, ladder, locale = 'en') {
+  const msg = coreMessages(locale)
+  const brief = briefFromLadder(target, intent, ladder)
+  const conflicts = engineOf(target).analyze(brief).conflicts || {}
+  const out = []
+  for (const [fieldId, values] of Object.entries(conflicts)) {
+    const step = stepById(fieldId)
+    if (!step || brief[fieldId] === undefined || !(values || []).includes(brief[fieldId])) continue
+    const question = msg.fields[fieldId]?.question(TARGET_NAME[target] || TARGET_NAME.opus) || fieldId
+    out.push(msg.conflict(optionLabel(fieldId, brief[fieldId], locale), question))
+  }
+  return out
 }
 
 // Question/answer pairs the AI writer gets: only steps really answered (skipped/empty/"none" left
@@ -2179,7 +2198,7 @@ export function reduceStudio(state, action) {
       // Preview before anything reaches the composer. `ai` is empty when the AI was off or failed;
       // `engine` is the prompt built without AI from the same answers.
       return state.status === 'briefing'
-        ? { ...state, preview: { ai: action.ai || '', engine: action.engine || '', showing: action.ai ? 'ai' : 'engine', note: action.note || '', noteDetail: action.noteDetail || '' }, status: 'preview' }
+        ? { ...state, preview: { ai: action.ai || '', engine: action.engine || '', showing: action.ai ? 'ai' : 'engine', note: action.note || '', noteDetail: action.noteDetail || '', warnings: action.warnings || [] }, status: 'preview' }
         : state
     case 'SHOW_VERSION':
       return state.status === 'preview' && state.preview?.[action.version]
@@ -2856,9 +2875,9 @@ async function generatePrompt() {
   }
   clearSuggestion()
   let prompt = engineResult.prompt
-  // The engine's notes (e.g. a deliverable that contradicts the draft) reach the preview whatever the AI mode:
-  // the AI prompt is written from the same baseline and choices, so they apply to both versions.
-  const engineNote = (engineResult.notes || []).join(' ')
+  // Conflicts between an answer and the draft (e.g. a deliverable picked against the draft's verb) are shown in
+  // the Studio's language, for both preview versions: the AI prompt is written from the same choices.
+  const warnings = studioWarnings(target, requestState.intent, ladder, locale)
   let note = ''
   let noteDetail = ''
   if ($aiMode.get() !== 'off' && pluginContext) {
@@ -2889,7 +2908,7 @@ async function generatePrompt() {
       }
     }
   }
-  update({ type: 'BRIEF_READY', ai: prompt !== engineResult.prompt ? prompt : '', engine: engineResult.prompt, note: [engineNote, note].filter(Boolean).join(' '), noteDetail })
+  update({ type: 'BRIEF_READY', ai: prompt !== engineResult.prompt ? prompt : '', engine: engineResult.prompt, note, noteDetail, warnings })
 }
 
 // Preview accepted: the prompt goes to the composer (not sent). setDraft replaces only the text,
@@ -3592,7 +3611,7 @@ function DoneRow() {
 function PreviewPanel({ state }) {
   const t = useT()
   const placing = useValue($placing)
-  const { ai, engine, showing, note, noteDetail } = state.preview
+  const { ai, engine, showing, note, noteDetail, warnings = [] } = state.preview
   const prompt = state.preview[showing]
   const failed = !ai && Boolean(note)
   return jsxs('div', {
@@ -3600,6 +3619,8 @@ function PreviewPanel({ state }) {
     style: { display: 'grid', marginTop: '14px', rowGap: '8px' },
     children: [
       jsx('span', { 'data-studio-preview-title': true, style: { color: 'var(--ui-text-primary, inherit)', fontFamily: 'var(--dt-font-sans, inherit)', fontSize: '14px', fontWeight: 500 }, children: showing === 'ai' ? t('preview.ai') : t('preview.engine') }),
+      // Answer/draft conflicts apply to both versions, so they stay whichever one is shown.
+      ...warnings.map(text => jsx('span', { role: 'note', 'data-studio-preview-warning': true, style: { color: 'var(--ui-text-primary)', fontSize: '12px', lineHeight: '16px' }, children: text })),
       note && (showing === 'ai' || failed)
         ? jsx('span', { 'aria-live': 'polite', 'data-studio-preview-note': true, style: { color: failed ? 'var(--ui-text-primary)' : 'var(--ui-text-secondary)', fontSize: '12px', lineHeight: '16px' }, title: noteDetail || undefined, children: note })
         : null,
