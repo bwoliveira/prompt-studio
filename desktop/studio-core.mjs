@@ -101,7 +101,7 @@ const INFINITIVE_MARK = /\b(?:(?:need|needs|needed|want|wants|wanted|have|has|ha
 // A noun-signal word that heads a requested noun phrase ("A plan to configure nginx", "Preciso de um plano para ...")
 // names the request: a determiner (after an optional request opener or verb) opens its sentence, up to two plain
 // modifiers may sit between them ("a migration plan"), and no copula follows ("The plan is ready. Build ..." is context).
-const REQUESTED_NOUN = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:can|could|would|will|may)\s+you\s+(?:please\s+)?|(?:(?:voce|voces)\s+)?(?:pode|poderia|podem|poderiam)\s+(?:por favor\s+)?)?(?:(?:(?:i|we) (?:need|want|would like)|i'd like|we'd like|give me|send me|show me|tell me|preciso de|precisamos de|quero|queremos|gostaria de|gostariamos de|me de|me dar|dar|me mostre|me mostrar|mostrar|mostre|me passe|me envie|me mande|outline|draft|prepare|propose|sketch|produce|provide|esboce|elabore|prepare|proponha|produza|forneca|apresente|what (?:i|we) (?:need|want|would like) is|o que (?:eu|nos) (?:preciso|precisamos|quero|queremos) e)\s+(?:me\s+)?)?(?:a|an|the|um|uma|o|os|as|some|algum|alguma|alguns|algumas)\s+(?:(?!(?:to|for|of|and|or|that|which|para|de|do|da|que|e|ou)\s)[\w-]+\s+){0,2}$/
+const REQUESTED_NOUN = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:can|could|would|will|may)\s+you\s+(?:please\s+)?|(?:(?:voce|voces)\s+)?(?:pode|poderia|podem|poderiam)\s+(?:por favor\s+)?)?(?:(?:(?:i|we) (?:need|want|would like)|i'd like|we'd like|give me|send me|show me|tell me|preciso de|precisamos de|quero|queremos|gostaria de|gostariamos de|me de|me dar|dar|me mostre|me mostrar|mostrar|mostre|me diga|diga-me|diga me|me dizer|dizer|diga|me passe|me envie|me mande|outline|draft|prepare|propose|sketch|produce|provide|esboce|elabore|prepare|proponha|produza|forneca|apresente|what (?:i|we) (?:need|want|would like) is|o que (?:eu|nos) (?:preciso|precisamos|quero|queremos) e)\s+(?:me\s+)?)?(?:a|an|the|um|uma|o|os|as|some|algum|alguma|alguns|algumas)\s+(?:(?!(?:to|for|of|and|or|that|which|para|de|do|da|que|e|ou)\s)[\w-]+\s+){0,2}$/
 // "Plano e cronograma para configurar nginx": the folded "e" (and/is) is a conjunction until proven otherwise, and
 // "esta" (this/is) counts only before a participle or state ("esta quebrado", "esta pronto", "esta anexa").
 const COPULA = /^\s+(?:(?:is|are|was|were|will|would|has|have|had|estao|era|eram|foi|foram|sera|serao|ja|fica|ficou|seems|looks|parece)\b|esta\s+\w*(?:ad[ao]s?|id[ao]s?|ndo|nte|pront[ao]s?|lent[ao]s?|anex[ao]s?|ok)\b)/
@@ -135,6 +135,41 @@ const QUESTION_HEAD = /\b(?:do|does|did|can|could|should|would|will|may|might|is
 // Only this many characters around a match are inspected, so the scan stays linear on long drafts; the prefixes
 // NEGATED and SENTENCE_START look for are far shorter than this.
 const CONTEXT_WINDOW = 120
+// "Can you show me a script that extracts data?": a polite request to be shown (given, sent, told) an artifact asks for
+// the artifact, with or without the mark, as "Show me a script that extracts data" does; no verb in it decides otherwise.
+// Languages: Portuguese (unaccented) + English.
+const ARTIFACT_REQUEST = /^(?:(?:please|pls|por favor),?\s+)?(?:(?:can|could|would|will)\s+you\s+(?:(?:please|kindly)\s+)?(?:show|give|send|tell|pass)\s+(?:me|us)|(?:(?:voce|voces)\s+)?(?:pode|poderia|podem|poderiam)\s+(?:por favor\s+)?me\s+(?:mostrar|dizer|passar|enviar|mandar|dar))\s+(?:(?:please\s+)?(?:a|an|the|some|another|my|our|your|um|uma|o|os|as|algum|alguma|alguns|algumas|outro|outra|meu|minha|nosso|nossa|seu|sua)\s+)/
+// "Can you tell me an existing Python module for parsing ISO dates?": a word that picks among things that already exist
+// (existing, available, good, best, recommended ...) asks about an artifact, not for one to be made.
+// Languages: Portuguese (unaccented) + English.
+// "Can you show me my function?", "... o nosso script": an artifact the writer already owns is looked up, not made.
+// Languages: Portuguese (unaccented) + English.
+const OWNED_ARTIFACT = /\b(?:my|our|meu|minha|meus|minhas|nosso|nossa|nossos|nossas)\s+$/
+const OWNED_HEAD = /^\s*(?:my|our|meu|minha|meus|minhas|nosso|nossa|nossos|nossas)\b/
+const LOOKUP_MODIFIER = /\b(?:existing|available|good|better|best|recommended|popular|common|standard|built-in|well-known|open-source|free|existente|existentes|disponivel|disponiveis|bom|boa|melhor|melhores|recomendado|recomendada|populares|conhecido|conhecida|padrao|nativo|nativa)\b/
+// "Can you show me a module for parsing dates?", "Voce pode me mostrar uma API para clima?": a module, library, package or
+// API named for a purpose is a thing to be found, not written.
+const REFERENCE_NOUN_END = /\b(?:modul[oe]s?|apis?|librar(?:y|ies)|packages?|frameworks?|sdks?|bibliotecas?|pacotes?)\s*$/
+const FOR_PURPOSE = /^\s+(?:for|para)\b/
+// "Can you show me the function in utils.py?", "a Python module from the standard library": an artifact identified by
+// the file, repository or library it lives in is one that exists; a language ("a function in Python") is not a source.
+// Languages: Portuguese (unaccented) + English.
+const LOOKUP_SOURCE = /^\s+(?:(?:from|do|da|dos|das)\s+(?!(?:scratch|zero|nothing|nada|inicio|python|bash|shell|zsh|node|nodejs|javascript|typescript|ruby|perl|php|powershell|lua|sql)\b)\S|(?:in|inside|within|at|on|de|do|da|dos|das|em|no|na|nos|nas|dentro)\s+(?:(?:the|our|my|this|that|your|a|an|o|a|os|as|nosso|nossa|meu|minha|este|esta|esse|essa|um|uma)\s+)?(?:[\w-]+(?:[./][\w-]+)+|(?:standard|stdlib|std|core|built-?in|padrao)\s+librar\w*|biblioteca\s+padrao|(?:(?!(?:for|to|that|which|who|and|or|of|with|para|que|e|ou|de|com)\b)[\w-]+\s+){0,2}(?:files?|repos?|repositor(?:y|ies)|codebase|projects?|librar(?:y|ies)|stdlib|packages?|modules?|classes|class|namespace|directory|folder|dir|src|arquivos?|repositorio|projetos?|bibliotecas?|pasta|diretorio|codigo|pacotes?)\b))/
+// "Could you tell me an API that already exists for weather data?": the same qualifiers, said after the noun.
+const LOOKUP_AFTER = /^\s+(?:that|which|que)\s+(?:(?:already|ja)\s+)?(?:exists?|existe|existem|(?:is|are|esta|estao)\s+(?:already\s+|ja\s+)?(?:the\s+)?(?:available|existing|recommended|popular|best|good|better|disponivel|disponiveis|recomendad[ao]s?|existentes?)(?=\s+(?:for|para|on|from|in|at|via|through|no|na|em|de|pelo|pela)\b|\s*[.,;:!?]|\s*$))\b/
+// "Can you show me a script? Why does it fail?", "... and tell me how it works": a clause or sentence after the artifact
+// that asks to understand it makes the draft a question, whatever the artifact. It opens a clause (the start, a
+// sentence or comma mark, or a coordinator), so "a script that explains how it works" still asks for the script.
+// Languages: Portuguese (unaccented) + English.
+// "Can you show me a script? What does it do?", "... Can I run it on Windows?": a later sentence that opens as a question
+// about the artifact (a question word, or an auxiliary with its own subject) asks to understand it as well; an order in
+// question form ("Can you make it faster?") is addressed to the reader and stays a task. A question about what was already done
+// ("Have you tested it?", "Did you test it?", "Voce testou ele?") or how sure the reader is asks about the artifact too.
+// Languages: Portuguese (unaccented) + English.
+const QUESTION_TAIL = /(?:[.!?]\s+|\n\s*)(?:(?:and|also|but|e|mas)\s+)?(?:(?:what|which|who|whom|whose|where|when|why|how|qual|quais|quem|onde|quando|por que|porque|o que|quanto|quantos|quantas)\b|como\b(?!\s+(?:um\s+|uma\s+)?(?:especialista|expert|engenheir|desenvolvedor|analista|consultor|revisor|professor|designer|arquitet))|(?:does|do|did|is|are|was|were|can|could|will|would|should|has|have|may|might)\s+(?:i|we|it|this|that|these|those|they|there|the|a|an|my|our)\b|(?:can|could|would|will|do|does)\s+you\s+(?:(?:please|also|kindly)\s+)?(?:tell|know|say|explain|describe|clarify|think|believe)\b|(?:have|has|had|did)\s+you\b|(?:are|were)\s+you\s+(?:sure|certain|confident|positive)\b|voces?\s+(?:ja\s+)?\w+(?:ou|eu|iu|aram|eram|iram)\b|(?:voce\s+)?(?:sabe|acha|pode\s+(?:me\s+)?(?:dizer|explicar|contar|descrever)|consegue\s+(?:me\s+)?(?:dizer|explicar))\b|(?:posso|podemos|devo|devemos|existe|existem|funciona|funcionam)\b)/
+const EXPLAIN_TAIL = /\b(?:with|plus|including|along\s+with|com|mais)\s+(?:an?\s+|uma?\s+)?(?:explanation|walkthrough|breakdown|explicacao|explicacoes)\b|(?:[.!?;:\n,]|\b(?:and|then|also|but|plus|e|tambem|depois|mas)\b)\s*(?:(?:please|por favor|also|tambem|e|me|nos)\s+)*(?:(?:(?:can|could|would|will|do|does)\s+you|voces?\s+(?:pode|podem|poderia|poderiam|consegue|conseguem))\s+(?:(?:please|also)\s+)?)?(?:(?:explain|describe|clarify|walk\s+(?:me|us)\s+through|tell\s+(?:(?:me|us)\s+)?(?:how|why|what|when|where|which|whether|if)|(?:know|say)\s+(?:how|why|what|when|where|which|whether|if)|show\s+(?:me|us)\s+how|let\s+(?:me|us)\s+know\s+(?:how|why|whether|if)|tell\s+(?:me|us)\s+about|help\s+(?:me|us)\s+(?:to\s+)?(?:understand|figure\s+out|learn|know|see|grasp)|(?:(?:me|nos)\s+)?ajud(?:ar|e|em)\s+a\s+(?:entender|compreender|saber)|ajud(?:e|em)-(?:me|nos)\s+a\s+(?:entender|compreender|saber)|(?:i|we)(?:\s+(?:want|need|wish|would\s+like|would\s+love)|'d\s+like)\s+to\s+(?:know|understand|learn|find\s+out|see\s+(?:how|why))|(?:i|we)(?:\s+(?:want|need|would\s+like)|'d\s+like)\s+(?:an?\s+)?(?:explanation|walkthrough|breakdown)|(?:i|we)(?:'m|\s+am|\s+are|'re)\s+(?:curious|wondering|trying\s+to\s+understand)|quero\s+(?:saber|entender)|queria\s+(?:saber|entender)|preciso\s+(?:saber|entender)|gostaria\s+de\s+(?:saber|entender)|(?:quero|preciso\s+d[ea]|gostaria\s+d[ea])\s+uma?\s+explicacao|explique|expliquem|explicar|descreva|descrever|esclareca|esclarecer|diga\s+(?:como|por que|porque|se)|dizer\s+(?:como|por que|porque|se)|mostre\s+como|mostrar\s+como|conte\s+como)\b|(?:why|how|por que|porque|como)\s+(?:does|do|did|is|are|can|could|would|will|it|this|that|they|these|those|funciona|funcionam|isso|ele|ela|eles|elas|falha|falhou)\b)/
+// The phrase ends with a code artifact: the artifact is the head noun, not a modifier ("the API key").
+const CODE_ARTIFACT_END = new RegExp(`(?:${CODE_ARTIFACT.source})\\s*$`)
 // "I need a script to write log files": the artifact asked for sits before the verb that tells its purpose; with the
 // request opener ("I need", "preciso de") it also decides the deliverable ("I need a script to configure nginx").
 // "I need a React app. Write it in TypeScript": the thing asked in the sentence before is what the order writes.
@@ -388,6 +423,21 @@ function createDetector(profile = {}) {
     else if ((signal === 'data' || signal === 'text') && MAKE_VERB.test(verbWord) && codeWins) { signal = 'implementation'; category = 'code' }
     // "Gere um e-mail", "Monte uma mensagem": the verb does not say what is made, the first artifact named does.
     if (signal === 'implementation' && GENERATE_VERB.test(request) && textWins) { signal = 'text'; category = 'writing' }
+    // A request to be shown a code artifact, when no verb and no question form decided anything.
+    const shown = signal === null && !question && ARTIFACT_REQUEST.exec(goal)
+    // The artifact must head the phrase asked for ("the name of the function", "the API key" ask for something else),
+    // while the whole sentence still tells which kind of artifact it is ("a script for a YouTube video" is text).
+    if (shown) {
+      const tail = goal.slice(shown[0].length, shown[0].length + 1000)
+      const rest = goal.slice(shown[0].length, shown[0].length + 300)
+      const head = rest.split(/[.!?\n]|\s+(?:of|to|for|from|in|on|at|about|between|with|without|by|that|which|who|whose|where|when|and|or|but|de|do|da|dos|das|para|em|no|na|nos|nas|sobre|entre|com|sem|por|que|e|ou|mas)\b/, 1)[0]
+      if (EXPLAIN_TAIL.test(tail) || QUESTION_TAIL.test(tail)) signal = 'answer'
+      else if (CODE_ARTIFACT_END.test(head) && pickArtifact(rest.split(/[.!?\n]/, 1)[0]) === 'code') {
+        // Asking about an existing artifact, or for a recommendation, is a question; asking for one to be made is a task.
+        if (OWNED_ARTIFACT.test(shown[0]) || OWNED_HEAD.test(head) || LOOKUP_MODIFIER.test(head) || LOOKUP_AFTER.test(rest.slice(head.length)) || LOOKUP_SOURCE.test(rest.slice(head.length)) || (REFERENCE_NOUN_END.test(head) && FOR_PURPOSE.test(rest.slice(head.length)))) signal = 'answer'
+        else { signal = 'implementation'; category = 'code' }
+      }
+    }
     return { category, signal, text, goal, asksQuestion: goal.endsWith('?') || QUESTION_START.test(goal) }
   }
 
@@ -960,7 +1010,8 @@ const DETECTOR = DETECTION.createDetector({
     ['text', /\b(escreva|escrever|redija|redigir|rascunhe|reescreva|traduza|write|draft|rewrite|translate|compose)\b/],
     ['workflow', /\b(automatize|automatizar|automate|agende|agendar|schedule|execute|executar|rode|rodar|deploy|publique|migre|migrate|configure|configurar|instale|instalar)\b/],
     ['data', /\b(planilhas?|csv|datasets?|spreadsheets?|limpe os dados|clean the data|extraia|extract)\b/],
-    ['implementation', /\b(build|create|implement|develop|fix|make|add|refactor|code|programe|implemente|implementar|crie|criar|desenvolva|desenvolver|construa|construir|corrija|corrigir|conserte|adicione|refatore|gere|gerar|monte|montar)\b/],
+    // "code review" and "code audit" name a review, not the verb "code" (Opus and Sonnet have no such verb).
+    ['implementation', /\b(build|create|implement|develop|fix|make|add|refactor|code(?!\s+(?:reviews?|audits?|critiques?)\b)|programe|implemente|implementar|crie|criar|desenvolva|desenvolver|construa|construir|corrija|corrigir|conserte|adicione|refatore|gere|gerar|monte|montar)\b/],
     ['answer', /(^|\s)(explique|explain)\b|\s(o que|qual|quais|como|por que|porque|what|which|how|why|who|quem)\b/]
   ],
   // Languages: Portuguese (unaccented) + English.
