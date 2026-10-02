@@ -133,6 +133,16 @@ def test_secrets_are_redacted_before_the_model_sees_them(monkeypatch):
     assert all(s not in sc.redact(text) for s in (SECRET, "abcdefghijklmnop1234", "hunter2hunter2"))  # gitleaks:allow (fake keys for the redaction test)
 
 
+def test_model_summary_is_redacted_on_the_way_out():
+    sc = _load()
+    reply = json.dumps({"summary": f"Deploying with key {SECRET} and password=hunter2hunter2 to prod."})
+    llm, _ = _llm(reply)
+    out = sc.context({"session_id": "s1"}, llm=llm, opener=_opener(FakeDB([msg("user", "hello")])))
+    assert out["ok"]
+    assert SECRET not in out["summary"] and "hunter2hunter2" not in out["summary"]
+    assert "Deploying with key" in out["summary"] and "to prod." in out["summary"]
+
+
 def test_transcript_cap_keeps_the_recent_end():
     sc = _load()
     llm, calls = _llm()

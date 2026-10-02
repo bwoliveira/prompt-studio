@@ -188,5 +188,5 @@ def context(payload: Mapping[str, Any], llm: Callable[..., Any] | None = None, d
     result = data.get("summary") if isinstance(data, dict) else None
     if not isinstance(result, str) or not result.strip():
         return _error("invalid_summary", "model reply is not a valid summary", model=model)
-    return {"ok": True, "summary": result.strip()[:SUMMARY_LIMIT], "model": model, "turns": len(turns),
+    return {"ok": True, "summary": redact(result.strip())[:SUMMARY_LIMIT], "model": model, "turns": len(turns),
             "ms": int((time.monotonic() - started) * 1000)}

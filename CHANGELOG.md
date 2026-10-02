@@ -18,6 +18,10 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   fails leaves the previous install intact.
   If an earlier run was killed between the two `mv`, the next run restores the previous install from
   `plugins/prompt-studio.old` before doing anything else, so a retry that fails no longer loses it.
+- Fix: the session summary the model writes for the optional chat-session context now goes through the same secret
+  redactor as the transcript before it is returned (and so before it reaches the suggestions). Answers and field texts
+  placed on single lines of the suggestion prompt have their line breaks collapsed, so an answer cannot pose as a new
+  section such as `Field to fill:`.
 - New target: **Claude Sonnet 5.5** (Alt+T, or pick **Sonnet**), next to Opus and Astra. It has its own prompt engine,
   question help and AI writer rules from Anthropic's Sonnet 5.5 prompting guide, and is the default when the
   session's model is a Sonnet. Opus and Astra prompts do not change.
