@@ -11,6 +11,7 @@ import importlib
 import importlib.util
 import logging
 import os
+import sys
 from pathlib import Path
 from typing import Annotated, Any, Literal, Optional
 
@@ -123,7 +124,25 @@ def _drop_stale_bytecode(name: str) -> None:
         pass
 
 
+# Siblings a module imports. They are refreshed before the module itself, or a reload would keep the old copy:
+# as a package `from . import llm_adapter` returns the module already in sys.modules; loaded by path the fallback
+# re-executes llm_adapter.py but would pick up its stale bytecode.
+_DEPENDENCIES = {"suggest_engine": ("llm_adapter",), "session_context": ("llm_adapter",)}
+
+
+def _refresh_dependencies(name: str) -> None:
+    for dep in _DEPENDENCIES.get(name, ()):
+        _drop_stale_bytecode(dep)
+        loaded = sys.modules.get(f"{__package__}.{dep}") if __package__ else None
+        if loaded is not None:
+            try:
+                importlib.reload(loaded)
+            except Exception:
+                logger.debug("Prompt Studio: reload of %s failed; using the loaded copy", dep, exc_info=True)
+
+
 def _import(name: str) -> Any:
+    _refresh_dependencies(name)
     _drop_stale_bytecode(name)
     module = None
     try:

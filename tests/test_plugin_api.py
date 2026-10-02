@@ -468,3 +468,55 @@ def test_reload_runs_the_new_source_when_a_stale_pyc_matches_second_and_size(tmp
     finally:
         for name in [n for n in sys.modules if n.startswith(pkg.name)]:
             del sys.modules[name]
+
+
+# ---- #27 (Codex P2): an edit of the adapter the engine imports is picked up when the engine reloads ----
+ENGINE_WITH_ADAPTER = (
+    "try:\n"
+    "    from . import llm_adapter as _llm\n"
+    "except ImportError:\n"
+    "    import importlib.util\n"
+    "    from pathlib import Path\n"
+    "    _spec = importlib.util.spec_from_file_location('prompt_studio_llm_adapter', Path(__file__).with_name('llm_adapter.py'))\n"
+    "    _llm = importlib.util.module_from_spec(_spec)\n"
+    "    _spec.loader.exec_module(_llm)\n"
+    "\n\ndef suggest(payload):\n    return _llm.LABEL\n"
+)
+
+
+@pytest.mark.parametrize("mode", ["standalone", "package"])
+def test_reload_refreshes_the_adapter_the_engine_imports(tmp_path, monkeypatch, mode):
+    import os
+    import py_compile
+
+    pkg = tmp_path / f"psadapter_{mode}"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    real = Path(__file__).resolve().parents[1] / "dashboard" / "plugin_api.py"
+    (pkg / "plugin_api.py").write_text(real.read_text())
+    (pkg / "suggest_engine.py").write_text(ENGINE_WITH_ADAPTER)
+    adapter = pkg / "llm_adapter.py"
+
+    def write(label: str, mtime_ns: int) -> None:
+        adapter.write_text(f'LABEL = "{label}"\n\n\ndef get_model_label():\n    return LABEL\n')
+        os.utime(adapter, ns=(mtime_ns, mtime_ns))
+
+    base = 1_700_000_000_200_000_000  # xxx.2 s
+    write("one", base)
+    if mode == "package":
+        monkeypatch.syspath_prepend(str(tmp_path))
+        api = importlib.import_module(f"{pkg.name}.plugin_api")
+    else:
+        spec = importlib.util.spec_from_file_location(f"{pkg.name}_plugin_api", pkg / "plugin_api.py")
+        api = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(api)
+    try:
+        assert api._load("suggest_engine", "suggest").suggest({}) == "one"
+        # Stale .pyc of the OLD adapter, then a same-size edit inside the same second: only the adapter changed.
+        py_compile.compile(str(adapter), doraise=True)
+        write("two", base + 100_000_000)
+        assert api._load("suggest_engine", "suggest").suggest({}) == "two"
+        assert api._load("llm_adapter", "get_model_label").get_model_label() == "two"
+    finally:
+        for name in [n for n in sys.modules if n.startswith(pkg.name)]:
+            del sys.modules[name]
