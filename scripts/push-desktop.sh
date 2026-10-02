@@ -44,6 +44,7 @@ runs Hermes Desktop, into DIR/prompt-studio/plugin.js.
                  is refused by default; this flag removes the marker so the folder becomes a standalone plugin
                  (still refused when a local prompt-studio package under the Hermes home, the parent of DIR, holds a
                  byte-identical desktop/plugin.js: Desktop would adopt the folder again; remove that install first)
+                 (close Hermes Desktop on HOST while converting: a rescan that overlaps the conversion can undo it)
   --dry-run      print what would happen; open no connection
   -h, --help     show this help
 USAGE
@@ -94,7 +95,8 @@ EXPECTED="$(cksum < "$SOURCE")"
 # Stage beside the target, then mv: Desktop never reads a half-written plugin.js. Remote exit codes: 3 = the folder
 # is managed for a local package (marker present) and the user did not ask to replace that; 4 = plugin.js is a
 # directory; 5 = the staged or installed file does not match the checksum; 6 = a prompt-studio package installed
-# locally on the app machine (its Hermes home, or a profile's) holds a byte-identical desktop/plugin.js.
+# locally on the app machine (its Hermes home, or a profile's) holds a byte-identical desktop/plugin.js; 7 = after --replace-managed the
+# folder changed again (a Desktop rescan deleted it or stamped the marker back).
 REMOTE_SCRIPT="set -e; d=$REMOTE_DIR; mkdir -p \"\$d\"; m=\"\$d/$MARKER\"; sum=$(shq "$EXPECTED"); if [ -d \"\$d/plugin.js\" ]; then exit 4; fi"
 if [[ "$REPLACE_MANAGED" == 1 ]]; then
   REMOTE_SCRIPT+='; rm_marker=1'
@@ -109,6 +111,9 @@ REMOTE_SCRIPT+='; h=$(dirname "$(dirname "$d")"); for p in "$h"/plugins/prompt-s
 # its marker could match the local package's and be adopted again. The final check also catches a folder Desktop
 # deleted in between.
 REMOTE_SCRIPT+='; mv -f "$t" "$d/plugin.js"; if [ "$rm_marker" = 1 ]; then rm -f "$m"; fi; [ -f "$d/plugin.js" ] && [ "$(cksum < "$d/plugin.js")" = "$sum" ] || exit 5'
+# A Desktop rescan that read the old marker just before the conversion can still delete the folder or stamp the
+# marker back a moment later (its reconcile does not recheck): wait a beat and look again before claiming success.
+REMOTE_SCRIPT+='; if [ "$rm_marker" = 1 ]; then sleep 1; [ -f "$d/plugin.js" ] && [ ! -e "$m" ] && [ ! -L "$m" ] && [ "$(cksum < "$d/plugin.js")" = "$sum" ] || exit 7; fi'
 REMOTE_COMMAND="sh -c $(shq "$REMOTE_SCRIPT")"
 
 if [[ "$DRY_RUN" == 1 ]]; then
@@ -126,6 +131,8 @@ elif [[ "$rc" == 4 ]]; then
   die 1 "$HOST:$TARGET is a directory, not a file; nothing was copied (remove or rename that directory, then rerun)"
 elif [[ "$rc" == 6 ]]; then
   die 1 "$HOST has a locally installed prompt-studio package whose desktop/plugin.js is identical to $SOURCE. Hermes Desktop would adopt $DIR/prompt-studio as that package's managed copy on its next rescan and delete it when the package is removed, so nothing was copied (the local package's own copy already serves Desktop). To push instead, remove the local install first (hermes plugins remove prompt-studio), then rerun."
+elif [[ "$rc" == 7 ]]; then
+  die 1 "Hermes Desktop on $HOST changed $DIR/prompt-studio right after the conversion (it deleted the folder or stamped $MARKER back during a rescan), so the push did not hold. Close Hermes Desktop on $HOST and rerun with --replace-managed."
 elif [[ "$rc" == 5 ]]; then
   die 1 "the plugin.js received by $HOST does not match $SOURCE (checksum $EXPECTED); do not trust $HOST:$TARGET, rerun the script"
 elif [[ "$rc" != 0 ]]; then

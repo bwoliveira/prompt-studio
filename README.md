@@ -94,7 +94,9 @@ overwrites. If the local install's own `desktop/plugin.js` is byte-identical to 
 would adopt the folder as that install's managed copy again (and delete it with the install), so the script refuses
 that case too, even with `--replace-managed`: remove the local install first, then push. The script looks in
 `<Hermes home>/plugins` and `<Hermes home>/profiles/*/plugins`, the Hermes home being the parent of `--dir`. Other
-files in the folder are left alone.
+files in the folder are left alone. Convert with `--replace-managed` only after you close Hermes Desktop on the app
+machine: a rescan that overlaps the conversion could delete the folder or mark it again, which the script checks for
+a second after the conversion and reports instead of `[OK]`.
 
 The `desktop-plugins` folder is `<Hermes home>/desktop-plugins`, where the Hermes home on the app machine is
 `$HERMES_HOME` when set, else `~/.hermes` on Linux and macOS and `%LOCALAPPDATA%\hermes` on Windows (an existing

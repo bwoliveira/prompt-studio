@@ -348,6 +348,30 @@ class PushDesktopTests(unittest.TestCase):
         self.assertEqual(seen.read_bytes(), self.source.read_bytes(), "plugin.js is already the new file when the marker goes")
         self.assertFalse((target / MARKER).exists())
 
+    def test_a_rescan_that_deletes_or_re_marks_the_folder_after_conversion_is_not_reported_as_ok(self) -> None:
+        """Desktop's reconcile can read a stale marker, then delete the folder (package gone) or re-stamp the marker
+        a moment after the conversion. The script waits a beat and re-checks before claiming success. Round 3, P2."""
+        for what in ("delete", "restamp"):
+            with self.subTest(late_desktop_rescan=what):
+                shutil.rmtree(self.fakehome)
+                self.fakehome.mkdir()
+                app, target, _ = self.managed_target(package_alive=False)
+                action = (
+                    f'rm -rf "{target}"' if what == "delete" else f'echo "{{}}" > "{target}/{MARKER}"'
+                )
+                shim = self.bin / "sleep"
+                shim.write_text(f"#!/usr/bin/env bash\n{action}\nexit 0\n", encoding="utf-8")
+                shim.chmod(0o755)
+                result = self.run_script("me@laptop", "--dir", str(app), "--replace-managed", mode="run")
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertNotIn("[OK]", result.stdout)
+                self.assertIn("Desktop", result.stderr)
+                self.assertIn("rerun", result.stderr)
+
+    def test_help_and_readme_say_to_close_desktop_for_replace_managed(self) -> None:
+        self.assertIn("close Hermes Desktop", self.run_script("--help").stdout)
+        self.assertIn("close Hermes Desktop", (REPO / "README.md").read_text(encoding="utf-8"))
+
     def test_replace_managed_on_an_unmarked_folder_is_a_plain_push(self) -> None:
         result = self.run_script("me@laptop", "--replace-managed", mode="run")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
