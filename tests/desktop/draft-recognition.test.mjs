@@ -335,6 +335,26 @@ const TABLE = [
   ['Escreva um roteiro de vídeo para o blog', 'text', 'pt roteiro'],
   ['Write a bash script for the deploy', 'implementation', 'near miss: a bash script is code'],
   ['Write a script that parses the CSV', 'implementation', 'near miss: a script that does something is code'],
+  // a yes/no question addressed to "you" is a question; only can/could/would/will you is a request (Codex P2)
+  ['Do you configure nginx with TLS by default?', 'answer', 'do you'],
+  ['Did you deploy the app yesterday?', 'answer', 'did you'],
+  ['Have you configured nginx before?', 'answer', 'have you'],
+  ['Should you configure nginx before Docker?', 'answer', 'should you'],
+  ['Can you configure nginx with TLS?', 'workflow', 'near miss: can you is a request'],
+  ['Will you configure nginx for me?', 'workflow', 'near miss: will you is a request'],
+  // a script named with a language is code, whatever it is for (Codex P2)
+  ['Write a Python script for a YouTube video.', 'implementation', 'python script for a video'],
+  ['Write a bash script for the podcast feed', 'implementation', 'bash script'],
+  ['Escreva um script Python para o canal do YouTube', 'implementation', 'pt script python'],
+  ['Write a deploy script for the blog', 'implementation', 'deploy script'],
+  ['Write a script for a YouTube video', 'text', 'near miss: no language, a video script'],
+  // the prohibition carries across a coordinated clause with an object (Codex P2)
+  ['What is Docker? Do not build the app or configure nginx.', 'answer', 'do not build the app or configure'],
+  ['O que é Docker? Não construa o app nem configure o nginx.', 'answer', 'pt nao construa o app nem configure'],
+  ['What is Docker? Never deploy the API and configure nginx.', 'answer', 'never ... and configure'],
+  ['What is Docker? I do not want you to build the app or configure nginx', 'answer', 'indirect, with an object'],
+  ['What is Docker? Do not build the app. Configure nginx.', 'workflow', 'near miss: a new sentence is an order'],
+  ['Docker is not installed, configure nginx anyway', 'workflow', 'near miss: a negated predicate forbids nothing'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
@@ -427,7 +447,7 @@ test('parity: Opus and Sonnet carry the identical detection block', async () => 
   const [opus, sonnet] = await Promise.all([src('engine-opus.js'), src('engine-sonnet.js')])
   const a = detection(opus)
   const b = detection(sonnet)
-  for (const needle of ['CATEGORY_RULES', 'DELIVERABLE_RULES', 'MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'YESNO_FORM', 'QUESTION_START', 'NOUN_SIGNAL', 'SENTENCE_START', 'VERB_OBJECT', 'REQUESTED_NOUN', 'COPULA', 'INFINITIVE_MARK', 'NEGATED', 'COORDINATED', 'PREDICATE_NEGATION', 'QUESTION_HEAD', 'DECLARATIVE', 'CONTEXT_WINDOW', 'MODIFIER_GAP', 'INTERFACE', 'function contextBefore', 'function prohibited', 'function isQuestion', 'function pickArtifact', 'function firstSignal', 'function detect', 'function analyzeNormalized']) {
+  for (const needle of ['CATEGORY_RULES', 'DELIVERABLE_RULES', 'MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'YESNO_FORM', 'QUESTION_START', 'NOUN_SIGNAL', 'SENTENCE_START', 'VERB_OBJECT', 'REQUESTED_NOUN', 'COPULA', 'INFINITIVE_MARK', 'NEGATED', 'COORDINATED', 'PREDICATE_NEGATION', 'CLAUSE_NEGATION', 'QUESTION_HEAD', 'DECLARATIVE', 'CONTEXT_WINDOW', 'MODIFIER_GAP', 'INTERFACE', 'function contextBefore', 'function prohibited', 'function isQuestion', 'function pickArtifact', 'function firstSignal', 'function detect', 'function analyzeNormalized']) {
     assert.ok(a.includes(needle), `opus block has ${needle}`)
   }
   assert.equal(a, b, 'Opus and Sonnet detection blocks drifted apart: change both engines identically')
@@ -435,7 +455,7 @@ test('parity: Opus and Sonnet carry the identical detection block', async () => 
 
 test('parity: the artifact constants are the same text on all three engines', async () => {
   const sources = await Promise.all(['engine-opus.js', 'engine-sonnet.js', 'engine-astra.js'].map(src))
-  for (const name of ['MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'YESNO_FORM', 'NOUN_SIGNAL', 'SENTENCE_START', 'VERB_OBJECT', 'REQUESTED_NOUN', 'COPULA', 'INFINITIVE_MARK', 'NEGATED', 'COORDINATED', 'PREDICATE_NEGATION', 'QUESTION_HEAD', 'DECLARATIVE', 'CONTEXT_WINDOW', 'MODIFIER_GAP', 'REVIEW_OBJECT', 'PLAN_OBJECT', 'DATA_OBJECT', 'WORKFLOW_OBJECT']) {
+  for (const name of ['MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'YESNO_FORM', 'NOUN_SIGNAL', 'SENTENCE_START', 'VERB_OBJECT', 'REQUESTED_NOUN', 'COPULA', 'INFINITIVE_MARK', 'NEGATED', 'COORDINATED', 'PREDICATE_NEGATION', 'CLAUSE_NEGATION', 'QUESTION_HEAD', 'DECLARATIVE', 'CONTEXT_WINDOW', 'MODIFIER_GAP', 'REVIEW_OBJECT', 'PLAN_OBJECT', 'DATA_OBJECT', 'WORKFLOW_OBJECT']) {
     const lines = sources.map(source => source.split('\n').find(line => line.startsWith(`const ${name} =`)))
     assert.ok(lines.every(Boolean), `${name} exists in every engine`)
     assert.equal(new Set(lines).size, 1, `${name} differs between engines:\n${lines.join('\n')}`)
