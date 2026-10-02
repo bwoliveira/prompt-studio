@@ -170,6 +170,23 @@ const TABLE = [
   ['How do I configure nginx 1.26?', 'answer', 'version'],
   ['How do I configure nginx 1.26', 'answer', 'version, no mark'],
   ['Como instalar o Node.js. Depois configure o nginx.', 'workflow', 'near miss: a real sentence end, then an order'],
+  // a request prefix keeps the planning verb (Codex P1)
+  ['Can you plan the steps to configure nginx; do not run any commands?', 'plan', 'can you + plan'],
+  ['I need you to plan the rollout before we configure anything', 'plan', 'i need you to + plan'],
+  ['Could you review the API and then configure the proxy?', 'review', 'could you + review'],
+  ['Preciso que você planeje os passos para configurar o nginx', 'plan', 'pt: preciso que voce + planeje'],
+  ['We are late, so plan the rollout and then configure nginx', 'plan', 'plan + determiner mid-sentence'],
+  ['Can you build the dashboard from our plan?', 'implementation', 'near miss: plan is a noun after the verb'],
+  // a negated verb is a prohibition, not the order (Codex P1)
+  ['How do I install Docker? Do not execute any commands.', 'answer', 'negated execute after the question'],
+  ['Como instalar o Docker? Não execute comandos.', 'answer', 'pt nao execute'],
+  ['How do I install Docker? Never deploy from this machine.', 'answer', 'never deploy'],
+  ['Never deploy on Fridays. Write a policy email to the team', 'text', 'negated deploy, then write'],
+  ['How do I install Docker? Then configure nginx.', 'workflow', 'near miss: an affirmative order after the question'],
+  // only the verb that fired promotes a request to code (Codex P2)
+  ['Analyze this Python script, then write a blog post about it.', 'analysis', 'a later write does not promote'],
+  ['Analise este script Python e depois escreva um post sobre ele.', 'analysis', 'pt'],
+  ['Write a Python script that parses the CSV', 'implementation', 'near miss: the verb that fired makes the script'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
@@ -237,7 +254,7 @@ test('parity: Opus and Sonnet carry the identical detection block', async () => 
   const [opus, sonnet] = await Promise.all([src('engine-opus.js'), src('engine-sonnet.js')])
   const a = detection(opus)
   const b = detection(sonnet)
-  for (const needle of ['CATEGORY_RULES', 'DELIVERABLE_RULES', 'MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'QUESTION_START', 'NOUN_SIGNAL', 'SENTENCE_START', 'MODIFIER_GAP', 'INTERFACE', 'function firstSignal', 'function detect', 'function analyzeNormalized']) {
+  for (const needle of ['CATEGORY_RULES', 'DELIVERABLE_RULES', 'MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'QUESTION_START', 'NOUN_SIGNAL', 'SENTENCE_START', 'VERB_OBJECT', 'NEGATED', 'MODIFIER_GAP', 'INTERFACE', 'function firstSignal', 'function detect', 'function analyzeNormalized']) {
     assert.ok(a.includes(needle), `opus block has ${needle}`)
   }
   assert.equal(a, b, 'Opus and Sonnet detection blocks drifted apart: change both engines identically')
@@ -245,7 +262,7 @@ test('parity: Opus and Sonnet carry the identical detection block', async () => 
 
 test('parity: the artifact constants are the same text on all three engines', async () => {
   const sources = await Promise.all(['engine-opus.js', 'engine-sonnet.js', 'engine-astra.js'].map(src))
-  for (const name of ['MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'NOUN_SIGNAL', 'SENTENCE_START', 'MODIFIER_GAP', 'REVIEW_OBJECT', 'PLAN_OBJECT', 'DATA_OBJECT', 'WORKFLOW_OBJECT']) {
+  for (const name of ['MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'NOUN_SIGNAL', 'SENTENCE_START', 'VERB_OBJECT', 'NEGATED', 'MODIFIER_GAP', 'REVIEW_OBJECT', 'PLAN_OBJECT', 'DATA_OBJECT', 'WORKFLOW_OBJECT']) {
     const lines = sources.map(source => source.split('\n').find(line => line.startsWith(`const ${name} =`)))
     assert.ok(lines.every(Boolean), `${name} exists in every engine`)
     assert.equal(new Set(lines).size, 1, `${name} differs between engines:\n${lines.join('\n')}`)

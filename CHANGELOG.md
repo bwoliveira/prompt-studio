@@ -55,6 +55,9 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   hides a later verb of the same kind ("The CSV is attached. Extract the totals" is data); an order after an
   opening question ("How does it work? Fix the login bug.") is the task. "Write an email announcing the app" is
   text (a participle opens a clause, not a modifier), and "Como instalar o Node.js?" or "nginx 1.26?" stays a question.
+  "Can you plan the steps ..." and "so plan the rollout" keep the planning verb; a negated verb ("Do not execute
+  any commands") is a prohibition, not the order; and only the verb that fired can make a request code
+  ("Analyze this script, then write a post" stays an analysis).
 - Fix: *Gere um e-mail*, *Monte uma mensagem* and the like stay text, reports and summaries are text even when they
   mention tests ("Write a summary of the test results", "Escreva um relatório dos testes"), and a question such as
   "Como instalar o Docker?" or "Como resumir um livro?" stays an answer on Opus, Sonnet and Astra.

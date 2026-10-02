@@ -239,9 +239,15 @@ const COMPATIBLE = {
 // A signal that is a noun, not an order ("Our plan is ready. Build ..."): it decides only when no verb does.
 const NOUN_SIGNAL = /^(plano|planos|plan|roadmap|cronograma|estrategia|strategy|workflows?|pipelines?|planilhas?|csv|datasets?|spreadsheets?|revisao|reviews|pesquisa)$/
 // The match opens the draft or a sentence (only punctuation or a line break and spaces before it), or follows a
-// one-word opener and its comma ("First, plan ...") or a polite prefix ("Please plan ...", "Por favor, planeje").
+// one-word opener and its comma ("First, plan ..."), a polite prefix ("Please plan ...", "Por favor, planeje") or a
+// request prefix ("Can you plan ...", "I need you to plan ...", "Preciso que voce planeje ...").
 // A noun-signal word there names the request ("Plan the steps ...", "Plano de acao para ..."), not context.
-const SENTENCE_START = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?$/
+const SENTENCE_START = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:can|could|would|will) you|i need you to|i want you to|voce pode|preciso que voce|quero que voce)\s+(?:please\s+)?)?$/
+// A noun-signal word followed by a determiner is the verb wherever it sits ("... so plan the steps", "review our API").
+// Portuguese este/esta are left out: folded, "esta" is also "esta" ("Nosso plano esta pronto").
+const VERB_OBJECT = /^\s+(?:the|a|an|our|my|your|this|these|those|all|each|every|o|os|as|um|uma|uns|umas|nosso|nossa|nossos|nossas|meu|minha|seu|sua|esse|essa|esses|essas|todos|todas|cada)\b/
+// A verb right after a negation is a prohibition, not the order ("do not run any commands", "nao execute").
+const NEGATED = /(?:^|[\s,;:(])(?:(?:do not|don't|dont|does not|doesn't|never|not|nao|nunca|jamais)(?:\s+\w+){0,3}|without|sem)\s*$/
 // Languages: Portuguese (unaccented) + English.
 // Between two artifact words, only bare modifiers ("API announcement email"): a preposition, clause word or
 // participle ("email announcing the app", "script that sends an e-mail", "app de blog") means the first word is the
@@ -260,7 +266,9 @@ function firstSignal(text) {
     while ((m = all.exec(text))) {
       if (m[0] === '') { all.lastIndex++; continue }
       const word = m[0].trim()
-      const isNoun = NOUN_SIGNAL.test(word) && !SENTENCE_START.test(text.slice(0, m.index))
+      const before = text.slice(0, m.index)
+      if (NEGATED.test(before)) continue
+      const isNoun = NOUN_SIGNAL.test(word) && !SENTENCE_START.test(before) && !VERB_OBJECT.test(text.slice(m.index + m[0].length))
       if (isNoun) { if (m.index < nounAt) { noun = id; nounAt = m.index }; continue }
       if (m.index < at) { signal = id; at = m.index }
       break
@@ -286,6 +294,8 @@ function detect(goal, requirements) {
   // unless it only modifies the other ("Write an API announcement email" is text).
   // Only what follows the verb names its object: context before it ("For our app, write a blog post") does not.
   const request = Number.isFinite(at) ? text.slice(at) : text
+  // Only the verb that fired can make a code artifact: a later "write" does not turn an analysis into code.
+  const verbWord = (request.match(/^\s*(\w+)/) || [])[1] || ''
   const code = CODE_ARTIFACT.exec(request)
   const txt = TEXT_ARTIFACT.exec(request)
   const codeAt = code ? code.index : -1
@@ -293,7 +303,7 @@ function detect(goal, requirements) {
   const modifier = (first, nextAt) => nextAt >= 0 && MODIFIER_GAP.test(request.slice(first.index + first[0].length, nextAt))
   const codeWins = codeAt >= 0 && (textAt < 0 || (codeAt < textAt ? !modifier(code, textAt) : modifier(txt, codeAt)))
   const textWins = textAt >= 0 && (codeAt < 0 || (textAt < codeAt ? !modifier(txt, codeAt) : modifier(code, textAt)))
-  if ((kind === 'text' || kind === 'data' || kind === 'analysis') && MAKE_VERB.test(request) && codeWins) kind = 'implementation'
+  if ((kind === 'text' || kind === 'data' || kind === 'analysis') && MAKE_VERB.test(verbWord) && codeWins) kind = 'implementation'
   // "Gere um e-mail", "Monte uma mensagem": the verb does not say what is made, the first artifact named does.
   if (kind === 'implementation' && GENERATE_VERB.test(request) && textWins) kind = 'text'
   if (kind === 'analysis' && DATA_NOUN.test(text) && !/\b(pesquis|research|compar)/.test(text)) kind = 'data'
