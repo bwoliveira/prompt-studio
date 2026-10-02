@@ -24,6 +24,9 @@ The three models need different prompts, and the engines follow each vendor's gu
   - An optional **subagents** step. "Team" splits the task into independent parts that run in parallel,
     and names one reviewer who did not write any of the work and starts from a fresh context.
   - Examples go in `<example>` tags.
-  - Pasted text is escaped so it cannot close its tags, and it is marked as data, not instructions.
+  - Pasted text is escaped so it cannot close its tags, and it is marked as data, not instructions. When the text
+    holds `<` or `&`, one line tells the model that `&lt;` and `&amp;` stand for them.
+  - The subagents step recommends "the model decides" on every target; a team is added only when you pick it, one
+    rule per line.
 
 `PROMPT-DOCS-REVIEW.md` lists every rule line with the quote it comes from.
