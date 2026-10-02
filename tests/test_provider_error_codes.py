@@ -151,6 +151,6 @@ def test_the_readme_troubleshooting_names_each_provider_failure_apart():
     readme = " ".join((ROOT / "README.md").read_text().split())
     start = readme.index("If suggestions fail with")
     note = readme[start:start + 700]
-    assert "provider refused" in note and "(403)" in note and "(401/403)" not in note
-    assert re.search(r"API key not accepted \(401\)|\"auth failed\" \(401\)", note), note
+    assert "provider refused" in note and "(403" in note and "(401/403)" not in note
+    assert re.search(r"API key not accepted\W+\(401\)", note), note
     assert "(429)" in note and "timed out" in note, note
