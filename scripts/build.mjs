@@ -6,27 +6,180 @@
 // and desktop/studio-core.mjs (same code, with exports) is written for the Node tests.
 // `node scripts/build.mjs --check` writes nothing and exits 1 when either output is stale.
 import { readFile, writeFile } from 'node:fs/promises'
+import { realpathSync } from 'node:fs'
+import { pathToFileURL } from 'node:url'
 
 const url = path => new URL(`../${path}`, import.meta.url)
 const read = path => readFile(url(path), 'utf8')
-const check = process.argv.includes('--check')
+// Like read, but a missing file is null: --check must tell "missing" from "stale".
+const readIfPresent = path => read(path).catch(error => (error.code === 'ENOENT' ? null : Promise.reject(error)))
 
 const IMPORT_LINE = /^import\s[^\n]*\n/gm
-const stripImports = source => source.replace(IMPORT_LINE, '')
-const stripExports = source => source.replace(/^export (?=(const|let|function|class|async function) )/gm, '')
+export const stripImports = source => source.replace(IMPORT_LINE, '')
+
+// `export const|let|var|function|class|async function` loses its keyword; `export default function|class` too;
+// `export { a, b }` (one or many lines) is dropped. Re-exports and `export default <expression>` cannot be inlined.
+export function stripExports(source) {
+  if (/^export\s*(?:\*|\{[^}]*\})\s*(?:as\s+[\w$]+\s*)?from\b/m.test(source)) throw new Error('re-export (`export ... from`) cannot be inlined into the single-scope build')
+  const defaults = source.replace(/^export default (?=(?:async function|function|class)\b)/gm, '')
+  if (/^export\s+default\b/m.test(defaults)) throw new Error('`export default` is only supported before a named function or class')
+  return defaults
+    .replace(/^export\s*\{[^}]*\}[ \t]*;?[ \t]*(?:\r?\n|$)/gm, '')
+    .replace(/^export (?=(?:const|let|var|function|class|async function)\b)/gm, '')
+}
+
+// Walk source code, skipping strings, template literals, comments and regex literals. visit(i, ch, depth, prev) sees
+// every other character with the ([{ nesting depth before it and the previous significant character; returning true
+// stops the walk. Returns the index where it stopped.
+function walk(source, visit, from = 0) {
+  const quoted = new Set(['"', "'", '`'])
+  let depth = 0
+  let prev = ''
+  let i = from
+  const skipString = (start) => {
+    const quote = source[start]
+    let j = start + 1
+    while (j < source.length && source[j] !== quote) {
+      if (source[j] === '\\') j++
+      else if (quote === '`' && source[j] === '$' && source[j + 1] === '{') {
+        let nest = 1
+        j += 2
+        while (j < source.length && nest) {
+          if (quoted.has(source[j])) j = skipString(j)
+          else if (source[j] === '{') nest++
+          else if (source[j] === '}') nest--
+          j++
+        }
+        continue
+      }
+      j++
+    }
+    return j + 1
+  }
+  while (i < source.length) {
+    const ch = source[i]
+    if (ch === '/' && source[i + 1] === '/') { while (i < source.length && source[i] !== '\n') i++; continue }
+    if (ch === '/' && source[i + 1] === '*') { const close = source.indexOf('*/', i + 2); i = close < 0 ? source.length : close + 2; continue }
+    if (quoted.has(ch)) { i = skipString(i); prev = 'x'; continue }
+    if (ch === '/' && (prev === '' || '=(,:[!&|?{};+-*%<>~^'.includes(prev))) {
+      let j = i + 1
+      let inClass = false
+      while (j < source.length && source[j] !== '\n' && (inClass || source[j] !== '/')) {
+        if (source[j] === '\\') j++
+        else if (source[j] === '[') inClass = true
+        else if (source[j] === ']') inClass = false
+        j++
+      }
+      i = j + 1
+      prev = 'x'
+      continue
+    }
+    if (visit(i, ch, depth, prev)) return i
+    if ('([{'.includes(ch)) depth++
+    else if (')]}'.includes(ch)) depth--
+    if (!/\s/.test(ch)) prev = ch
+    i++
+  }
+  return i
+}
+
+// Split text at top-level (depth 0, outside strings and comments) occurrences of sep.
+function splitTop(text, sep) {
+  const parts = []
+  let last = 0
+  walk(text, (i, ch, depth) => {
+    if (depth === 0 && ch === sep) { parts.push(text.slice(last, i)); last = i + 1 }
+  })
+  parts.push(text.slice(last))
+  return parts
+}
+
+// Names bound by a declarator target: `a`, `{a, b: c, d = 1, ...e}`, `[p, , q = 2, ...r]`, nested.
+function bindingNames(target, out) {
+  const text = target.trim()
+  if (!text) return
+  if (text[0] === '{' || text[0] === '[') {
+    for (const element of splitTop(text.slice(1, -1), ',')) {
+      let item = element.trim()
+      if (item.startsWith('...')) item = item.slice(3)
+      else if (text[0] === '{') item = splitTop(item, ':').slice(1).join(':').trim() || item
+      bindingNames(splitTop(item, '=')[0], out)
+    }
+  } else if (/^[A-Za-z_$][\w$]*$/.test(text)) {
+    out.add(text)
+  }
+}
+
+// Does the declaration continue on the next line? It does after an operator or comma, and before a leading operator.
+function continuesAfterNewline(source, at, prev) {
+  if (prev && ',=+-*/%&|^?:<>!~'.includes(prev)) return true
+  let j = at
+  for (;;) {
+    while (j < source.length && /\s/.test(source[j])) j++
+    if (source[j] === '/' && source[j + 1] === '/') { while (j < source.length && source[j] !== '\n') j++ }
+    else if (source[j] === '/' && source[j + 1] === '*') { const close = source.indexOf('*/', j + 2); j = close < 0 ? source.length : close + 2 }
+    else break
+  }
+  return j < source.length && ',.?:&|*%^<>=+-'.includes(source[j])
+}
+
+// Names declared by one const/let/var statement starting right after the keyword: every comma-separated declarator.
+function declaredNames(source, from, out) {
+  const declarators = []
+  let last = from
+  const stop = walk(source, (i, ch, depth, prev) => {
+    if (depth !== 0) return false
+    if (ch === ',') { declarators.push(source.slice(last, i)); last = i + 1 }
+    else if (ch === ';') return true
+    else if (ch === '\n' && !continuesAfterNewline(source, i, prev)) return true
+    return false
+  }, from)
+  declarators.push(source.slice(last, stop))
+  for (const declarator of declarators) {
+    const [binding] = splitTop(declarator, '=')
+    bindingNames(binding, out)
+  }
+}
 
 // Top-level declared names (column 0), to prove the inlined code cannot collide with plugin.js.
-function topLevelNames(source) {
+export function topLevelNames(source) {
   const names = new Set()
-  for (const m of source.matchAll(/^(?:export )?(?:const|let|var|class|function|async function)\s+([A-Za-z_$][\w$]*)/gm)) names.add(m[1])
+  for (const m of source.matchAll(/^(?:export\s+)?(?:class|function\s*\*?|async\s+function\s*\*?)\s*([A-Za-z_$][\w$]*)/gm)) names.add(m[1])
+  for (const m of source.matchAll(/^(?:export\s+)?(?:const|let|var)\s+/gm)) declaredNames(source, m.index + m[0].length, names)
   for (const m of source.matchAll(/^import\s*\{([^}]*)\}/gm)) {
     for (const part of m[1].split(',')) {
       const name = part.trim().split(/\s+as\s+/).pop()
       if (name) names.add(name)
     }
   }
-  for (const m of source.matchAll(/^import\s+([A-Za-z_$][\w$]*)\s/gm)) names.add(m[1])
+  for (const m of source.matchAll(/^import\s+([A-Za-z_$][\w$]*)\s*(?:,|from\b)/gm)) names.add(m[1])
+  for (const m of source.matchAll(/^import\s+(?:[A-Za-z_$][\w$]*\s*,\s*)?\*\s+as\s+([A-Za-z_$][\w$]*)/gm)) names.add(m[1])
+  for (const m of source.matchAll(/^import\s+[A-Za-z_$][\w$]*\s*,\s*\{([^}]*)\}/gm)) {
+    for (const part of m[1].split(',')) {
+      const name = part.trim().split(/\s+as\s+/).pop()
+      if (name) names.add(name)
+    }
+  }
   return names
+}
+
+// All entries share plugin.js's single module scope (engines expose only their NAME): [label, source] in file order.
+// A top-level name declared twice, within one file or across any two, fails the build.
+export function findCollisions(entries) {
+  const seen = new Map()
+  for (const [label, source] of entries) {
+    for (const name of topLevelNames(source)) {
+      if (seen.has(name)) throw new Error(`name collision: ${name} declared by both ${seen.get(name)} and ${label}`)
+      seen.set(name, label)
+    }
+  }
+}
+
+// expected / actual: { path: text }; actual is null for a file that does not exist.
+export function compareOutputs(expected, actual) {
+  const missing = Object.keys(expected).filter(path => actual[path] == null)
+  const stale = Object.keys(expected).filter(path => actual[path] != null && actual[path] !== expected[path])
+  return { missing, stale }
 }
 
 // Each engine keeps its private names inside its own function scope; only NAME is exposed.
@@ -38,60 +191,66 @@ function engineModule(source, name, file) {
 // Hand-written plugin code, in plugin.js order. They share plugin.js's single module scope.
 const UI_FILES = ['studio-state.js', 'ui-locale.js', 'ui-prefs.js', 'ui-flow.js', 'ui-components.js']
 
-const [opus, astra, sonnet, coreI18n, core, uiI18n, head, plugin, oldMjs, ...uiSources] = await Promise.all([
-  read('desktop/src/engine-opus.js'), read('desktop/src/engine-astra.js'), read('desktop/src/engine-sonnet.js'), read('desktop/src/i18n-core.js'),
-  read('desktop/src/studio-core.js'), read('desktop/src/i18n-ui.js'), read('desktop/src/plugin-head.js'),
-  read('desktop/plugin.js').catch(() => ''), read('desktop/studio-core.mjs').catch(() => ''),
-  ...UI_FILES.map(file => read(`desktop/src/${file}`))
-])
-UI_FILES.forEach((file, i) => {
-  if (/^\s*import\b/m.test(uiSources[i])) throw new Error(`desktop/src/${file} must not import anything (imports live in plugin-head.js)`)
-})
-const ui = uiSources.join('')
+async function main() {
+  const check = process.argv.includes('--check')
 
-const coreImports = [...core.matchAll(/^import\s[^\n]*from\s+'([^']+)'/gm)].map(m => m[1]).sort()
-const allowed = ['./engine-astra.js', './engine-opus.js', './engine-sonnet.js', './i18n-core.js']
-if (JSON.stringify(coreImports) !== JSON.stringify(allowed)) throw new Error(`studio-core.js may import only ${allowed.join(', ')}; found ${coreImports.join(', ')}`)
+  const [opus, astra, sonnet, coreI18n, core, uiI18n, head, plugin, oldMjs, ...uiSources] = await Promise.all([
+    read('desktop/src/engine-opus.js'), read('desktop/src/engine-astra.js'), read('desktop/src/engine-sonnet.js'), read('desktop/src/i18n-core.js'),
+    read('desktop/src/studio-core.js'), read('desktop/src/i18n-ui.js'), read('desktop/src/plugin-head.js'),
+    readIfPresent('desktop/plugin.js'), readIfPresent('desktop/studio-core.mjs'),
+    ...UI_FILES.map(file => read(`desktop/src/${file}`))
+  ])
+  UI_FILES.forEach((file, i) => {
+    if (/^\s*import\b/m.test(uiSources[i])) throw new Error(`desktop/src/${file} must not import anything (imports live in plugin-head.js)`)
+  })
+  const ui = uiSources.join('')
 
-const header = '// Generated by scripts/build.mjs from desktop/src/*: do not edit here.'
-const withExports = [
-  header,
-  engineModule(opus, 'OPUS_ENGINE', 'desktop/src/engine-opus.js'),
-  engineModule(astra, 'ASTRA_ENGINE', 'desktop/src/engine-astra.js'),
-  engineModule(sonnet, 'SONNET_ENGINE', 'desktop/src/engine-sonnet.js'),
-  `// desktop/src/i18n-core.js\n${coreI18n.trim()}`,
-  `// desktop/src/studio-core.js\n${stripImports(core).trim()}`
-].join('\n\n')
-const mjs = `${withExports}\n`
-const studioBlock = stripExports(withExports)
-const uiBlock = `// Copied from desktop/src/i18n-ui.js (the build inlines it; do not edit here).\n${stripExports(uiI18n).trim()}`
+  const coreImports = [...core.matchAll(/^import\s[^\n]*from\s+'([^']+)'/gm)].map(m => m[1]).sort()
+  const allowed = ['./engine-astra.js', './engine-opus.js', './engine-sonnet.js', './i18n-core.js']
+  if (JSON.stringify(coreImports) !== JSON.stringify(allowed)) throw new Error(`studio-core.js may import only ${allowed.join(', ')}; found ${coreImports.join(', ')}`)
 
-// Collision check: names the blocks declare vs every other top-level name in plugin.js.
-const rest = `${head}${ui}`
-const outside = topLevelNames(rest)
-const seen = new Map()
-// Engine internals live in their own function scope, so only their exposed names count.
-const modules = [['engine-opus.js', 'const OPUS_ENGINE = 0'], ['engine-astra.js', 'const ASTRA_ENGINE = 0'], ['engine-sonnet.js', 'const SONNET_ENGINE = 0'], ['i18n-core.js', coreI18n], ['studio-core.js', stripImports(core)], ['i18n-ui.js', uiI18n]]
-for (const [label, source] of modules) {
-  for (const name of topLevelNames(source)) {
-    if (outside.has(name)) throw new Error(`name collision: ${name} (${label} block) is also declared in plugin.js`)
-    if (seen.has(name)) throw new Error(`name collision: ${name} declared by both ${seen.get(name)} and ${label}`)
-    seen.set(name, label)
+  const header = '// Generated by scripts/build.mjs from desktop/src/*: do not edit here.'
+  const withExports = [
+    header,
+    engineModule(opus, 'OPUS_ENGINE', 'desktop/src/engine-opus.js'),
+    engineModule(astra, 'ASTRA_ENGINE', 'desktop/src/engine-astra.js'),
+    engineModule(sonnet, 'SONNET_ENGINE', 'desktop/src/engine-sonnet.js'),
+    `// desktop/src/i18n-core.js\n${coreI18n.trim()}`,
+    `// desktop/src/studio-core.js\n${stripImports(core).trim()}`
+  ].join('\n\n')
+  const mjs = `${withExports}\n`
+  const studioBlock = stripExports(withExports)
+  const uiBlock = `// Copied from desktop/src/i18n-ui.js (the build inlines it; do not edit here).\n${stripExports(uiI18n).trim()}`
+
+  // Collision check: every top-level name of plugin.js (head, each UI file, the inlined blocks) is declared once.
+  // Engine internals live in their own function scope, so only their exposed names count.
+  findCollisions([
+    ['plugin-head.js', head],
+    ...UI_FILES.map((file, i) => [file, uiSources[i]]),
+    ['engine-opus.js', 'const OPUS_ENGINE = 0'], ['engine-astra.js', 'const ASTRA_ENGINE = 0'], ['engine-sonnet.js', 'const SONNET_ENGINE = 0'],
+    ['i18n-core.js', coreI18n], ['studio-core.js', stripImports(core)], ['i18n-ui.js', uiI18n]
+  ])
+
+  const pluginHeader = `// Generated by scripts/build.mjs: do not edit here. Edit desktop/src/plugin-head.js, ${UI_FILES.map(f => `desktop/src/${f}`).join(', ')} (hand-written UI) or the inlined desktop/src/* modules, then run node scripts/build.mjs.\n`
+  const next = `${pluginHeader}${head}// @studio-start\n${studioBlock}\n// @studio-end\n\n// @ui-i18n-start\n${uiBlock}\n// @ui-i18n-end\n\n${ui}`
+
+  if (check) {
+    const { missing, stale } = compareOutputs({ 'desktop/plugin.js': next, 'desktop/studio-core.mjs': mjs }, { 'desktop/plugin.js': plugin, 'desktop/studio-core.mjs': oldMjs })
+    if (missing.length) console.error(`missing build output: ${missing.join(', ')}. Run: node scripts/build.mjs`)
+    if (stale.length) console.error(`stale build output: ${stale.join(', ')}. Run: node scripts/build.mjs`)
+    if (missing.length || stale.length) process.exit(1)
+    console.log('build output is up to date')
+  } else {
+    await writeFile(url('desktop/plugin.js'), next, 'utf8')
+    await writeFile(url('desktop/studio-core.mjs'), mjs, 'utf8')
+    console.log(`studio block: ${studioBlock.length} chars; ui-i18n block: ${uiBlock.length} chars`)
   }
 }
 
-const pluginHeader = `// Generated by scripts/build.mjs: do not edit here. Edit desktop/src/plugin-head.js, ${UI_FILES.map(f => `desktop/src/${f}`).join(', ')} (hand-written UI) or the inlined desktop/src/* modules, then run node scripts/build.mjs.\n`
-const next = `${pluginHeader}${head}// @studio-start\n${studioBlock}\n// @studio-end\n\n// @ui-i18n-start\n${uiBlock}\n// @ui-i18n-end\n\n${ui}`
-
-if (check) {
-  const stale = [next !== plugin && 'desktop/plugin.js', mjs !== oldMjs && 'desktop/studio-core.mjs'].filter(Boolean)
-  if (stale.length) {
-    console.error(`stale build output: ${stale.join(', ')}. Run: node scripts/build.mjs`)
+// Run as a CLI, not when the tests import the helpers.
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
+  main().catch(error => {
+    console.error(error.message)
     process.exit(1)
-  }
-  console.log('build output is up to date')
-} else {
-  await writeFile(url('desktop/plugin.js'), next, 'utf8')
-  await writeFile(url('desktop/studio-core.mjs'), mjs, 'utf8')
-  console.log(`studio block: ${studioBlock.length} chars; ui-i18n block: ${uiBlock.length} chars`)
+  })
 }
