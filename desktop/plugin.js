@@ -168,6 +168,20 @@ const DONE_LINES = {
   workflow: 'Running it again must not repeat side effects; show the output of a real run.'
 }
 
+// What the user chose to get, said once in TASK when it is not what the draft's verb reads as: the DONE WHEN
+// line is replaced by a custom success criterion and plan, text and answer have none, so without this the
+// explicit choice could leave no trace in the prompt.
+const DELIVERABLE_LINES = {
+  implementation: 'Deliverable: the working change itself (code, configuration or files), not a plan or an analysis of it.',
+  analysis: 'Deliverable: an analysis with findings and conclusions; do not implement changes.',
+  review: 'Deliverable: a review with findings and their evidence; do not fix what you find unless asked.',
+  plan: 'Deliverable: a plan or roadmap for the work; do not start building or changing anything.',
+  text: 'Deliverable: the written text itself, ready to use.',
+  data: 'Deliverable: the processed data (extracted, transformed or summarized), with its source accounted for.',
+  workflow: 'Deliverable: the automation or process run end to end, with the result of a real run.',
+  answer: 'Deliverable: a direct answer to the question; do not build or change anything.'
+}
+
 // ---------------------------------------------------------------- helpers
 
 function str(value) {
@@ -326,7 +340,9 @@ function buildNormalized(b) {
     if (long) add('material', 'THIRD-PARTY MATERIAL', paste.lines)
   }
 
-  add('task', 'TASK', [b.goal || 'No task was given. Ask the user what they want done.'])
+  const { category, signal } = detect(b)
+  const chosen = b.deliverable !== 'auto' && deliverable !== (signal || CATEGORY_DEFAULT[category])
+  add('task', 'TASK', [b.goal || 'No task was given. Ask the user what they want done.', chosen ? DELIVERABLE_LINES[deliverable] : ''])
 
   const explore = !b.context && b.goal.length < 280 && ['workflow', 'data'].includes(deliverable)
   add('context', 'CONTEXT', [b.context, explore ? (paste ? `${EXPLORE_LINE} ${EXPLORE_UNTRUSTED}` : EXPLORE_LINE) : ''])
@@ -682,9 +698,23 @@ const PLAIN = [...WRITTEN, 'implementation', 'review', 'workflow']
 const EXPLORING = ['analysis', 'data', 'review']
 const READ_ONLY = ['analysis', 'review', 'plan', 'answer', 'data']
 
+// What the user chose to get, said once in TASK when it is not what the draft's verb reads as: a custom success
+// criterion replaces the DONE WHEN line, so without this the explicit choice could leave no trace in the prompt.
+const DELIVERABLE_LINES = {
+  implementation: 'Deliverable: the working change itself (code, configuration or files), not a plan or an analysis of it.',
+  analysis: 'Deliverable: an analysis with findings and conclusions; do not implement changes.',
+  review: 'Deliverable: a review with findings and their evidence; do not fix what you find unless asked.',
+  plan: 'Deliverable: a plan or roadmap for the work; do not start building or changing anything.',
+  text: 'Deliverable: the written text itself, ready to use.',
+  data: 'Deliverable: the processed data (extracted, transformed or summarized), with its source accounted for.',
+  workflow: 'Deliverable: the automation or process run end to end, with the result of a real run.',
+  answer: 'Deliverable: a direct answer to the question; do not build or change anything.'
+}
+
 function buildSafe(brief) {
   const b = read(brief)
   const { deliverable, conflicts } = analyzeSafe(b)
+  const chosen = pick(b.deliverable, DELIVERABLES, 'auto') !== 'auto' && deliverable !== detect(b.goal).resolved
   const autonomy = pick(b.autonomy, AUTONOMIES, 'balanced')
   const format = pick(b.format, FORMATS, 'auto')
   const length = pick(b.length, LENGTHS, 'balanced')
@@ -696,7 +726,7 @@ function buildSafe(brief) {
     if (body) sections.push({ id, title, body })
   }
 
-  add('task', 'TASK', [b.goal.trim() ? b.goal : 'No task was given. Ask the user what they need.'])
+  add('task', 'TASK', [b.goal.trim() ? b.goal : 'No task was given. Ask the user what they need.', chosen ? DELIVERABLE_LINES[deliverable] : ''])
   add('context', 'CONTEXT', [b.context])
   const acts = ACTION.includes(deliverable)
   // Frontend lines are for building or changing an interface (implementation), not for automation work.
@@ -932,6 +962,20 @@ const LENGTH_LINES = {
   detailed: 'Give a complete, detailed response: cover every part of the task with the specifics needed to act on it.'
 }
 
+// What the user chose to get, said once in TASK when it is not what the draft's verb reads as: the DONE WHEN
+// line is replaced by a custom success criterion and plan, text and answer have none, so without this the
+// explicit choice could leave no trace in the prompt.
+const DELIVERABLE_LINES = {
+  implementation: 'Deliverable: the working change itself (code, configuration or files), not a plan or an analysis of it.',
+  analysis: 'Deliverable: an analysis with findings and conclusions; do not implement changes.',
+  review: 'Deliverable: a review with findings and their evidence; do not fix what you find unless asked.',
+  plan: 'Deliverable: a plan or roadmap for the work; do not start building or changing anything.',
+  text: 'Deliverable: the written text itself, ready to use.',
+  data: 'Deliverable: the processed data (extracted, transformed or summarized), with its source accounted for.',
+  workflow: 'Deliverable: the automation or process run end to end, with the result of a real run.',
+  answer: 'Deliverable: a direct answer to the question; do not build or change anything.'
+}
+
 // DONE WHEN lines. [review] E1. Plan, text and answer get no line.
 const DONE_LINES = {
   // [sonnet55] "Verification on coding tasks": the doc's paragraph, verbatim ("If you see changes reported as complete
@@ -1108,7 +1152,9 @@ function buildNormalized(b) {
     if (long) add('material', 'THIRD-PARTY MATERIAL', paste.lines)
   }
 
-  add('task', 'TASK', [b.goal || 'No task was given. Ask the user what they want done.'])
+  const { category, signal } = detect(b)
+  const chosen = b.deliverable !== 'auto' && deliverable !== (signal || CATEGORY_DEFAULT[category])
+  add('task', 'TASK', [b.goal || 'No task was given. Ask the user what they want done.', chosen ? DELIVERABLE_LINES[deliverable] : ''])
 
   const explore = !b.context && b.goal.length < 280 && ['workflow', 'data'].includes(deliverable)
   add('context', 'CONTEXT', [b.context, explore ? (paste ? `${EXPLORE_LINE} ${EXPLORE_UNTRUSTED}` : EXPLORE_LINE) : ''])

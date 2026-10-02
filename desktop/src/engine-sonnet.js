@@ -139,6 +139,20 @@ const LENGTH_LINES = {
   detailed: 'Give a complete, detailed response: cover every part of the task with the specifics needed to act on it.'
 }
 
+// What the user chose to get, said once in TASK when it is not what the draft's verb reads as: the DONE WHEN
+// line is replaced by a custom success criterion and plan, text and answer have none, so without this the
+// explicit choice could leave no trace in the prompt.
+const DELIVERABLE_LINES = {
+  implementation: 'Deliverable: the working change itself (code, configuration or files), not a plan or an analysis of it.',
+  analysis: 'Deliverable: an analysis with findings and conclusions; do not implement changes.',
+  review: 'Deliverable: a review with findings and their evidence; do not fix what you find unless asked.',
+  plan: 'Deliverable: a plan or roadmap for the work; do not start building or changing anything.',
+  text: 'Deliverable: the written text itself, ready to use.',
+  data: 'Deliverable: the processed data (extracted, transformed or summarized), with its source accounted for.',
+  workflow: 'Deliverable: the automation or process run end to end, with the result of a real run.',
+  answer: 'Deliverable: a direct answer to the question; do not build or change anything.'
+}
+
 // DONE WHEN lines. [review] E1. Plan, text and answer get no line.
 const DONE_LINES = {
   // [sonnet55] "Verification on coding tasks": the doc's paragraph, verbatim ("If you see changes reported as complete
@@ -315,7 +329,9 @@ function buildNormalized(b) {
     if (long) add('material', 'THIRD-PARTY MATERIAL', paste.lines)
   }
 
-  add('task', 'TASK', [b.goal || 'No task was given. Ask the user what they want done.'])
+  const { category, signal } = detect(b)
+  const chosen = b.deliverable !== 'auto' && deliverable !== (signal || CATEGORY_DEFAULT[category])
+  add('task', 'TASK', [b.goal || 'No task was given. Ask the user what they want done.', chosen ? DELIVERABLE_LINES[deliverable] : ''])
 
   const explore = !b.context && b.goal.length < 280 && ['workflow', 'data'].includes(deliverable)
   add('context', 'CONTEXT', [b.context, explore ? (paste ? `${EXPLORE_LINE} ${EXPLORE_UNTRUSTED}` : EXPLORE_LINE) : ''])

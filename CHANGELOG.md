@@ -36,7 +36,8 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   for Opus, Sonnet and Astra. Before, a draft the engine had misread (for example "Como funciona o cron do Linux?"
   as an executed workflow, or "Create a plan for the product launch" as an implementation) hid the right option,
   so the guess could not be corrected. A choice that contradicts the draft's verb is kept: the prompt is built for
-  it and the preview says so in the Studio's language, on both versions (with or without AI).
+  it (the prompt's TASK names the chosen deliverable, so a custom success criterion cannot erase the choice) and
+  the preview says so in the Studio's language, on both versions (with or without AI).
 - New target: **Claude Sonnet 5.5** (Alt+T, or pick **Sonnet**), next to Opus and Astra. It has its own prompt engine,
   question help and AI writer rules from Anthropic's Sonnet 5.5 prompting guide, and is the default when the
   session's model is a Sonnet. Opus and Astra prompts do not change.

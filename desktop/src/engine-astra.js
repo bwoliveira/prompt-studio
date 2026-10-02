@@ -276,9 +276,23 @@ const PLAIN = [...WRITTEN, 'implementation', 'review', 'workflow']
 const EXPLORING = ['analysis', 'data', 'review']
 const READ_ONLY = ['analysis', 'review', 'plan', 'answer', 'data']
 
+// What the user chose to get, said once in TASK when it is not what the draft's verb reads as: a custom success
+// criterion replaces the DONE WHEN line, so without this the explicit choice could leave no trace in the prompt.
+const DELIVERABLE_LINES = {
+  implementation: 'Deliverable: the working change itself (code, configuration or files), not a plan or an analysis of it.',
+  analysis: 'Deliverable: an analysis with findings and conclusions; do not implement changes.',
+  review: 'Deliverable: a review with findings and their evidence; do not fix what you find unless asked.',
+  plan: 'Deliverable: a plan or roadmap for the work; do not start building or changing anything.',
+  text: 'Deliverable: the written text itself, ready to use.',
+  data: 'Deliverable: the processed data (extracted, transformed or summarized), with its source accounted for.',
+  workflow: 'Deliverable: the automation or process run end to end, with the result of a real run.',
+  answer: 'Deliverable: a direct answer to the question; do not build or change anything.'
+}
+
 function buildSafe(brief) {
   const b = read(brief)
   const { deliverable, conflicts } = analyzeSafe(b)
+  const chosen = pick(b.deliverable, DELIVERABLES, 'auto') !== 'auto' && deliverable !== detect(b.goal).resolved
   const autonomy = pick(b.autonomy, AUTONOMIES, 'balanced')
   const format = pick(b.format, FORMATS, 'auto')
   const length = pick(b.length, LENGTHS, 'balanced')
@@ -290,7 +304,7 @@ function buildSafe(brief) {
     if (body) sections.push({ id, title, body })
   }
 
-  add('task', 'TASK', [b.goal.trim() ? b.goal : 'No task was given. Ask the user what they need.'])
+  add('task', 'TASK', [b.goal.trim() ? b.goal : 'No task was given. Ask the user what they need.', chosen ? DELIVERABLE_LINES[deliverable] : ''])
   add('context', 'CONTEXT', [b.context])
   const acts = ACTION.includes(deliverable)
   // Frontend lines are for building or changing an interface (implementation), not for automation work.
