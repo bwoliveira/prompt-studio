@@ -155,9 +155,9 @@ const lifecycle = {
   starting: false,
   // The draft taken out of the composer while the Studio opens (not yet in $studio).
   pendingDraft: null,
-  // Bumped on dispose so an opening cut short by disable or hot reload never continues (see disposeComposerFlow).
+  // Bumped on dispose so an opening cut short by disable or hot reload never continues (see closeStudio).
   generation: 0,
-  // The preview placement in flight (a promise of its success), so a dispose waits for it (see disposeComposerFlow).
+  // The preview placement in flight (a promise of its success), so a dispose waits for it (see closeStudio).
   placement: null,
   // Counters that make a late answer (compose, context read, suggestion) stale: each is bumped when the thing is
   // cancelled or asked again, and an answer that finds another value is dropped.

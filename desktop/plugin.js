@@ -2629,9 +2629,9 @@ const lifecycle = {
   starting: false,
   // The draft taken out of the composer while the Studio opens (not yet in $studio).
   pendingDraft: null,
-  // Bumped on dispose so an opening cut short by disable or hot reload never continues (see disposeComposerFlow).
+  // Bumped on dispose so an opening cut short by disable or hot reload never continues (see closeStudio).
   generation: 0,
-  // The preview placement in flight (a promise of its success), so a dispose waits for it (see disposeComposerFlow).
+  // The preview placement in flight (a promise of its success), so a dispose waits for it (see closeStudio).
   placement: null,
   // Counters that make a late answer (compose, context read, suggestion) stale: each is bumped when the thing is
   // cancelled or asked again, and an answer that finds another value is dropped.
@@ -4171,24 +4171,6 @@ function hostFocusSettled() {
   })
 }
 
-// On dispose the composer gets its draft back, whether the Studio was opening or open.
-function disposeComposerFlow() {
-  lifecycle.generation += 1
-  const state = $studio.get()
-  const lost = lifecycle.pendingDraft ?? (state.status !== 'idle' && state.intent ? { text: state.intent, address: lifecycle.openedAddress } : null)
-  const inFlight = lifecycle.placement
-  lifecycle.pendingDraft = null
-  lifecycle.starting = false
-  $placing.set(false)
-  if (!lost) return
-  // pluginContext is cleared right after this, and restore may run later: take the clipboard API now.
-  const os = lifecycle.pluginContext?.os
-  const restore = () => returnDraftTo(lost.address, lost.text, { os, reason: 'closed' })
-  // A prompt being placed wins: the request comes back only if that placement fails.
-  if (inFlight) inFlight.then(ok => { if (!ok) restore() })
-  else restore()
-}
-
 async function startFromComposer() {
   if ($studio.get().status !== 'idle' || lifecycle.starting) return
   if (!composerAdapter.available()) {
@@ -4296,17 +4278,32 @@ async function returnDraftTo(address, draft, { reason = 'switch', os = lifecycle
   return false
 }
 
-function cancelStudio() {
+// The one way out of the studio: Cancel, a placed or sent prompt, and dispose. Settings is the studio's own dialog,
+// so it closes with it. restoreDraft gives the request back to its composer (Cancel, dispose); a placed or sent
+// prompt has no draft to give back. A prompt being placed wins: the request comes back only if that placement fails.
+function closeStudio({ restoreDraft }) {
   const state = $studio.get()
-  // While the prompt is being placed, Close would race it and put the old draft over the prompt.
-  if (state.status === 'idle' || $placing.get()) return
+  const lost = restoreDraft ? lifecycle.pendingDraft ?? (state.status !== 'idle' && state.intent ? { text: state.intent, address: lifecycle.openedAddress } : null) : null
+  const inFlight = lifecycle.placement
+  // pluginContext is cleared right after a dispose, and restore may run later: take the clipboard API now.
+  const os = lifecycle.pluginContext?.os
+  lifecycle.pendingDraft = null
   clearSuggestion()
   lifecycle.composeSerial += 1
   stopContextRead()
   $helpOpen.set(false)
-  const intent = state.intent
+  $settingsOpen.set(false)
   update({ type: 'RESET' })
-  if (intent) returnDraftTo(lifecycle.openedAddress, intent, { reason: 'closed' })
+  if (!lost) return
+  const restore = () => returnDraftTo(lost.address, lost.text, { os, reason: 'closed' })
+  if (inFlight) inFlight.then(ok => { if (!ok) restore() })
+  else restore()
+}
+
+function cancelStudio() {
+  // While the prompt is being placed, Close would race it and put the old draft over the prompt.
+  if ($studio.get().status === 'idle' || $placing.get()) return
+  closeStudio({ restoreDraft: true })
 }
 
 // Session context read on opening: null | { status: 'reading'|'ready'|'error', summary, model, ms, reason }
@@ -4472,9 +4469,7 @@ async function usePreview() {
     $placing.set(false)
   }
   if ($studio.get() !== state) return
-  stopContextRead()
-  $helpOpen.set(false)
-  update({ type: 'RESET' })
+  closeStudio({ restoreDraft: false })
 }
 
 // F9 on the preview: send as if the user pressed Enter, in the session the Studio was opened in.
@@ -4505,9 +4500,7 @@ async function sendPreview() {
     host.notify({ kind: 'info', message: tr('notify.placedNotSent') })
   }
   if ($studio.get() !== state) return
-  stopContextRead()
-  $helpOpen.set(false)
-  update({ type: 'RESET' })
+  closeStudio({ restoreDraft: false })
 }
 
 // Session context indicator: reading / used (model, seconds) / not available (short reason).
@@ -4566,18 +4559,13 @@ export default {
   register(ctx) {
     lifecycle.pluginContext = ctx
     ctx.onDispose(() => {
-      disposeComposerFlow()
-      cancelAutoSuggestion()
-      lifecycle.suggestSerial += 1
-      lifecycle.composeSerial += 1
+      lifecycle.generation += 1
+      lifecycle.starting = false
+      $placing.set(false)
+      closeStudio({ restoreDraft: true })
       lifecycle.suggestionCache.clear()
       lifecycle.pluginContext = null
-      $studio.set(initialStudioState())
-      $suggestion.set(null)
-      $helpOpen.set(false)
       $target.set(null)
-      stopContextRead()
-      $settingsOpen.set(false)
     })
     ctx.i18n?.register(UI_MESSAGES)
     $aiMode.set(readAiMode())
