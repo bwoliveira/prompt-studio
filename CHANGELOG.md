@@ -4,6 +4,13 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
 
 ## Unreleased
 
+- Feature: Prompt Studio opens without an F-key. It adds a binding to Hermes Desktop's keybinds area, **Ctrl+Shift+E**
+  (**⌘⇧E** on a Mac), which you can reassign in Desktop's settings; its default is a chord none of Desktop's own
+  actions uses, and it runs the same opening as F4 (an empty or short draft and a missing message field are reported
+  the same way). F4 and the ⌘K command keep working. Each of F5 to F10 also has an Alt+letter twin so a Mac user
+  never needs fn: Alt+Y accept, Alt+K skip, Alt+L use the AI suggestion, Alt+B back, Alt+G generate, Alt+X close
+  (never E, I, N or U, the Option dead keys). The control prints both keys, the F1 list shows both, and both are
+  announced to screen readers. The studio still never takes Enter, Alt+Enter, Tab, Esc or any Ctrl/Super chord.
 - Fix: on a Mac, ⌥E (Put in composer), ⌥N (Another suggestion) and ⌥I (AI mode) did nothing: macOS reports them as
   dead keys (key `Dead`, keyCode 229 or `isComposing`) and the key listener dropped every such event. An Alt chord on
   a letter or digit key is now read by its physical key even then; a real input-method composition without an Alt
