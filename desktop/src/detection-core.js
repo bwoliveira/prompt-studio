@@ -135,6 +135,8 @@ const CONTEXT_WINDOW = 120
 // the artifact, with or without the mark, as "Show me a script that extracts data" does; no verb in it decides otherwise.
 // Languages: Portuguese (unaccented) + English.
 const ARTIFACT_REQUEST = /^(?:(?:please|pls|por favor),?\s+)?(?:(?:can|could|would|will)\s+you\s+(?:(?:please|kindly)\s+)?(?:show|give|send|tell|pass)\s+(?:me|us)|(?:(?:voce|voces)\s+)?(?:pode|poderia|podem|poderiam)\s+(?:por favor\s+)?me\s+(?:mostrar|dizer|passar|enviar|mandar|dar))\s+(?:(?:please\s+)?(?:a|an|the|some|another|my|our|your|um|uma|o|os|as|algum|alguma|alguns|algumas|outro|outra|meu|minha|nosso|nossa|seu|sua)\s+)/
+// The phrase ends with a code artifact: the artifact is the head noun, not a modifier ("the API key").
+const CODE_ARTIFACT_END = new RegExp(`(?:${CODE_ARTIFACT.source})\\s*$`)
 // "I need a script to write log files": the artifact asked for sits before the verb that tells its purpose; with the
 // request opener ("I need", "preciso de") it also decides the deliverable ("I need a script to configure nginx").
 // "I need a React app. Write it in TypeScript": the thing asked in the sentence before is what the order writes.
@@ -390,7 +392,9 @@ function createDetector(profile = {}) {
     if (signal === 'implementation' && GENERATE_VERB.test(request) && textWins) { signal = 'text'; category = 'writing' }
     // A request to be shown a code artifact, when no verb and no question form decided anything.
     const shown = signal === null && !question && ARTIFACT_REQUEST.exec(goal)
-    if (shown && pickArtifact(goal.slice(shown[0].length).split(/[.!?\n]/, 1)[0]) === 'code') { signal = 'implementation'; category = 'code' }
+    // The artifact must head the phrase asked for: "the name of the function", "the API key" ask for something else.
+    const shownNoun = shown && goal.slice(shown[0].length, shown[0].length + 120).split(/[.!?\n]|\s+(?:of|to|for|from|in|on|at|about|between|with|without|by|that|which|who|whose|where|when|and|or|but|de|do|da|dos|das|para|em|no|na|nos|nas|sobre|entre|com|sem|por|que|e|ou|mas)\b/, 1)[0]
+    if (shownNoun && pickArtifact(shownNoun) === 'code' && CODE_ARTIFACT_END.test(shownNoun)) { signal = 'implementation'; category = 'code' }
     return { category, signal, text, goal, asksQuestion: goal.endsWith('?') || QUESTION_START.test(goal) }
   }
 
