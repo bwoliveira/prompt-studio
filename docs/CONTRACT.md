@@ -179,7 +179,7 @@ signature it is about to use, so a Hermes update fails in one place with a stabl
 | `_resolve_task_provider_model(task)` returns a tuple of 5; `_get_auxiliary_task_config(task)` returns a dict; `extract_content_or_reasoning(response)`, `_is_model_not_found_error(exc)` | before each call |
 | `hermes_constants.parse_reasoning_effort(effort)` | before each call |
 | `agent.redact.redact_sensitive_text(text, force=True)` | before each call |
-| `hermes_cli.web_server_sessions._open_session_db_for_profile(profile, read_only=True)` (else `hermes_state.SessionDB(read_only=True)` for the default profile) and the store methods `resolve_session_id`, `resolve_resume_session_id` (optional), `get_messages(session_id, limit=, latest=)`, `close` | when a store is opened |
+| `hermes_cli.web_server_sessions._open_session_db_for_profile(profile, read_only=True)` (else `hermes_state.SessionDB(read_only=True)` for the default profile) and the store methods `resolve_session_id`, `resolve_resume_session_id` (optional), `get_messages(session_id, limit=, latest=)`, `close()` (no argument) | when a store is opened |
 
 A symbol that is gone, a keyword that is no longer accepted, a new required argument, a resolution of another length or
 a Hermes module that fails to import while Hermes is installed (moved or removed, a missing dependency, an

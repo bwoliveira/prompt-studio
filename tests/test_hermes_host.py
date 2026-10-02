@@ -411,3 +411,42 @@ def test_suggest_and_compose_answer_host_incompatible_when_hermes_changed(monkey
     out = se.compose({"target": "opus", "intent": "Build a thing", "answers": [], "baseline": "b"})
     assert out["ok"] is False and out["code"] == "host_incompatible"
     assert "route_info" not in json.dumps(out)  # the response never carries Hermes internals
+
+
+# --- R5: SessionDB.close must be callable with no argument ----------------------------------------------------------
+class _CloseNeedsAnArgument:
+    def __init__(self, db_path=None, read_only=False):
+        pass
+
+    def resolve_session_id(self, session_id):
+        return session_id
+
+    def get_messages(self, session_id, limit=None, latest=False):
+        return []
+
+    def close(self, new_required):
+        pass
+
+
+def test_verify_raises_host_incompatible_when_the_store_class_close_needs_an_argument(monkeypatch):
+    calls = _fake_hermes(monkeypatch, **_override("hermes_state", "SessionDB", _CloseNeedsAnArgument))
+    with pytest.raises(host.HostIncompatible, match="close"):
+        host.verify()
+    assert calls["opened"] == []
+
+
+def test_an_opened_store_whose_close_needs_an_argument_is_host_incompatible_before_it_is_used(monkeypatch):
+    used = []
+
+    class Broken(_CloseNeedsAnArgument):
+        def get_messages(self, session_id, limit=None, latest=False):
+            used.append(1)
+            return []
+
+    _fake_hermes(monkeypatch, **_override("hermes_cli.web_server_sessions", "_open_session_db_for_profile",
+                                          lambda profile, *, read_only: Broken()))
+    with pytest.raises(host.HostIncompatible, match="close"):
+        host.open_session_store("")
+    with pytest.raises(host.HostIncompatible, match="close"):
+        host.check_session_store(Broken())
+    assert used == []

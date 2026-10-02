@@ -127,9 +127,10 @@ def test_secrets_are_redacted_before_the_model_sees_them(monkeypatch):
     sc.context({"session_id": "s1"}, llm=llm, opener=_opener(FakeDB([msg("user", text)])))
     sent = json.dumps(calls[0]["messages"])
     assert SECRET not in sent and "abcdefghijklmnop1234" not in sent and "hunter2hunter2" not in sent
-    # Without agent.redact the local fallback still redacts.
+    # Without Hermes at all the local fallback still redacts (a Hermes that lost agent.redact is host_incompatible).
     import sys
-    monkeypatch.setitem(sys.modules, "agent.redact", None)
+    for name in ("agent", "agent.redact", "hermes_cli"):
+        monkeypatch.setitem(sys.modules, name, None)
     assert all(s not in sc.redact(text) for s in (SECRET, "abcdefghijklmnop1234", "hunter2hunter2"))  # gitleaks:allow (fake keys for the redaction test)
 
 

@@ -157,7 +157,7 @@ def _check_store_class(cls: Any) -> None:
         if not callable(getattr(cls, name, None)):
             raise HostIncompatible(f"{_STATE}.SessionDB.{name} is missing")
     for name, args, kwargs in (("get_messages", ("session-id",), {"limit": 1, "latest": True}),
-                               ("resolve_session_id", ("session-id",), {})):
+                               ("resolve_session_id", ("session-id",), {}), ("close", (), {})):
         _check_call(getattr(cls, name), f"{_STATE}.SessionDB.{name}", object(), *args, **kwargs)
     resume = getattr(cls, "resolve_resume_session_id", None)
     if resume is not None:
@@ -171,6 +171,7 @@ def check_session_store(store: Any) -> None:
             raise HostIncompatible(f"the session store no longer has {name}()")
     _check_call(store.get_messages, "session store get_messages", "session-id", limit=1, latest=True)
     _check_call(store.resolve_session_id, "session store resolve_session_id", "session-id")
+    _check_call(store.close, "session store close")
     resume = getattr(store, "resolve_resume_session_id", None)
     if resume is not None:
         _check_call(resume, "session store resolve_resume_session_id", "session-id")

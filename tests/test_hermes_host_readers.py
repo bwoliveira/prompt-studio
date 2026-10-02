@@ -98,6 +98,25 @@ def test_context_answers_host_incompatible_when_the_redactor_module_is_gone_not_
     assert out["ok"] is False and out["code"] == "host_incompatible" and not called
 
 
+def test_context_answers_host_incompatible_when_the_store_close_needs_an_argument(monkeypatch):
+    used = []
+
+    class Broken(_Db):
+        def get_messages(self, sid, **kw):
+            used.append(1)
+            return []
+
+        def close(self, new_required):
+            pass
+
+    _fake_hermes(monkeypatch, **_override("hermes_cli.web_server_sessions", "_open_session_db_for_profile",
+                                          lambda profile, *, read_only: Broken()))
+    sc = _context()
+    called = []
+    out = sc.context({"session_id": "s1"}, llm=lambda **kw: called.append(1) or ('{"summary": "x"}', "m"))
+    assert out["ok"] is False and out["code"] == "host_incompatible" and not called and not used
+
+
 def test_health_reports_host_incompatible_when_an_installed_hermes_lost_a_module(monkeypatch):
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
