@@ -4,9 +4,13 @@
 //   // @ui-i18n-start .. // @ui-i18n-end  desktop/src/i18n-ui.js
 //   UI_FILES (below), concatenated verbatim  studio-state.js holds the // @core-start .. // @core-end reducer
 // and desktop/studio-core.mjs (same code, with exports) is written for the Node tests.
+// Both outputs are syntax-checked as ES modules before anything is written or compared.
 // `node scripts/build.mjs --check` writes nothing and exits 1 when either output is stale.
 import { readFile, writeFile } from 'node:fs/promises'
-import { realpathSync } from 'node:fs'
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 const url = path => new URL(`../${path}`, import.meta.url)
@@ -30,8 +34,9 @@ export function stripExports(source) {
 
 // Walk source code, skipping strings, template literals, comments and regex literals. visit(i, ch, depth, prev) sees
 // every other character with the ([{ nesting depth before it and the previous significant character; returning true
-// stops the walk. Returns the index where it stopped.
-function walk(source, visit, from = 0) {
+// stops the walk. onSkip(start, end), when given, sees every skipped span (string, template, comment, regex). Returns
+// the index where it stopped.
+function walk(source, visit, from = 0, onSkip = () => {}) {
   const quoted = new Set(['"', "'", '`'])
   let depth = 0
   let prev = ''
@@ -45,8 +50,8 @@ function walk(source, visit, from = 0) {
         let nest = 1
         j += 2
         while (j < source.length && nest) {
-          if (quoted.has(source[j])) j = skipString(j)
-          else if (source[j] === '{') nest++
+          if (quoted.has(source[j])) { j = skipString(j); continue }
+          if (source[j] === '{') nest++
           else if (source[j] === '}') nest--
           j++
         }
@@ -58,9 +63,9 @@ function walk(source, visit, from = 0) {
   }
   while (i < source.length) {
     const ch = source[i]
-    if (ch === '/' && source[i + 1] === '/') { while (i < source.length && source[i] !== '\n') i++; continue }
-    if (ch === '/' && source[i + 1] === '*') { const close = source.indexOf('*/', i + 2); i = close < 0 ? source.length : close + 2; continue }
-    if (quoted.has(ch)) { i = skipString(i); prev = 'x'; continue }
+    if (ch === '/' && source[i + 1] === '/') { const start = i; while (i < source.length && source[i] !== '\n') i++; onSkip(start, i); continue }
+    if (ch === '/' && source[i + 1] === '*') { const start = i; const close = source.indexOf('*/', i + 2); i = close < 0 ? source.length : close + 2; onSkip(start, i); continue }
+    if (quoted.has(ch)) { const start = i; i = skipString(i); onSkip(start, i); prev = 'x'; continue }
     if (ch === '/' && (prev === '' || '=(,:[!&|?{};+-*%<>~^'.includes(prev))) {
       let j = i + 1
       let inClass = false
@@ -70,6 +75,7 @@ function walk(source, visit, from = 0) {
         else if (source[j] === ']') inClass = false
         j++
       }
+      onSkip(i, j + 1)
       i = j + 1
       prev = 'x'
       continue
@@ -81,6 +87,18 @@ function walk(source, visit, from = 0) {
     i++
   }
   return i
+}
+
+// The source with comments blanked and each string, template literal or regex literal reduced to a lone `0`; line
+// breaks and offsets are kept. Name scanning then cannot be fooled by declaration-looking text inside them.
+function maskNonCode(source) {
+  const chars = [...source]
+  walk(source, () => false, 0, (start, end) => {
+    const isComment = source[start] === '/' && (source[start + 1] === '/' || source[start + 1] === '*')
+    for (let k = start; k < Math.min(end, chars.length); k++) if (chars[k] !== '\n') chars[k] = ' '
+    if (!isComment) chars[start] = '0'
+  })
+  return chars.join('')
 }
 
 // Split text at top-level (depth 0, outside strings and comments) occurrences of sep.
@@ -142,7 +160,8 @@ function declaredNames(source, from, out) {
 }
 
 // Top-level declared names (column 0), to prove the inlined code cannot collide with plugin.js.
-export function topLevelNames(source) {
+export function topLevelNames(code) {
+  const source = maskNonCode(code)
   const names = new Set()
   for (const m of source.matchAll(/^(?:export\s+)?(?:class|function\s*\*?|async\s+function\s*\*?)\s*([A-Za-z_$][\w$]*)/gm)) names.add(m[1])
   for (const m of source.matchAll(/^(?:export\s+)?(?:const|let|var)\s+/gm)) declaredNames(source, m.index + m[0].length, names)
@@ -172,6 +191,24 @@ export function findCollisions(entries) {
       if (seen.has(name)) throw new Error(`name collision: ${name} declared by both ${seen.get(name)} and ${label}`)
       seen.set(name, label)
     }
+  }
+}
+
+// Syntax-check a generated module the way Node itself would load it: catches what the name scan cannot, such as a
+// duplicate binding in a declaration form it does not parse.
+export function assertValidModule(label, source) {
+  const dir = mkdtempSync(join(tmpdir(), 'ps-syntax-'))
+  try {
+    const file = join(dir, 'bundle.mjs')
+    writeFileSync(file, source)
+    const result = spawnSync(process.execPath, ['--check', file], { encoding: 'utf8' })
+    if (result.error) throw result.error
+    if (result.status !== 0) {
+      const detail = result.stderr.split('\n').filter(line => line.trim()).slice(0, 6).join('\n')
+      throw new Error(`${label} is not valid ESM:\n${detail}`)
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
   }
 }
 
@@ -233,6 +270,9 @@ async function main() {
 
   const pluginHeader = `// Generated by scripts/build.mjs: do not edit here. Edit desktop/src/plugin-head.js, ${UI_FILES.map(f => `desktop/src/${f}`).join(', ')} (hand-written UI) or the inlined desktop/src/* modules, then run node scripts/build.mjs.\n`
   const next = `${pluginHeader}${head}// @studio-start\n${studioBlock}\n// @studio-end\n\n// @ui-i18n-start\n${uiBlock}\n// @ui-i18n-end\n\n${ui}`
+
+  assertValidModule('desktop/plugin.js', next)
+  assertValidModule('desktop/studio-core.mjs', mjs)
 
   if (check) {
     const { missing, stale } = compareOutputs({ 'desktop/plugin.js': next, 'desktop/studio-core.mjs': mjs }, { 'desktop/plugin.js': plugin, 'desktop/studio-core.mjs': oldMjs })

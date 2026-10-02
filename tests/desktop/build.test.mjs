@@ -7,7 +7,7 @@ import { cp, mkdtemp, rm, unlink, writeFile, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { compareOutputs, findCollisions, stripExports, stripImports, topLevelNames } from '../../scripts/build.mjs'
+import { assertValidModule, compareOutputs, findCollisions, stripExports, stripImports, topLevelNames } from '../../scripts/build.mjs'
 
 const repo = fileURLToPath(new URL('../../', import.meta.url))
 const names = source => [...topLevelNames(source)].sort()
@@ -66,6 +66,35 @@ test('topLevelNames: ignores indented code, comments, export lists and reads imp
     '}'
   ].join('\n')
   assert.deepEqual(names(source), ['React', 'f', 'ns', 'useEffect', 'useS'])
+})
+
+test('topLevelNames: a template literal with interpolation does not hide the next declarator or declaration', () => {
+  assert.deepEqual(names("const a = `${'x'}`, hidden = 1"), ['a', 'hidden'])
+  assert.deepEqual(names('const a = `${b}-${`n${c}`}`, hidden = 1\nconst after = 2'), ['a', 'after', 'hidden'])
+  assert.deepEqual(names("const t = `${'x'}`\nconst following = 1"), ['following', 't'])
+})
+
+test('topLevelNames: declaration-looking lines inside a template literal or block comment are not names', () => {
+  assert.deepEqual(names('const t = `\nconst fake = 1\nfunction ghost() {}\n`\nconst real = 2'), ['real', 't'])
+  assert.deepEqual(names('/*\nconst fake = 1\n*/\nconst real = 2'), ['real'])
+})
+
+test('topLevelNames: comments between declarators do not hide a binding', () => {
+  assert.deepEqual(names('const a = 1, /* why */ hidden = 2'), ['a', 'hidden'])
+  assert.deepEqual(names('const a = 1, // why\n  hidden = 2'), ['a', 'hidden'])
+  assert.deepEqual(names('const a = 1,\n  /* why\n  still */\n  hidden = 2\nlet z'), ['a', 'hidden', 'z'])
+  assert.deepEqual(names('const /* c */ {x, y} = o'), ['x', 'y'])
+})
+
+test('findCollisions: a duplicate hidden behind a template literal or a comment is found', () => {
+  assert.throws(() => findCollisions([['ui-a.js', "const a = `${'x'}`, hidden = 1"], ['ui-b.js', 'const hidden = 2']]), /collision: hidden declared by both ui-a\.js and ui-b\.js/)
+  assert.throws(() => findCollisions([['ui-a.js', 'const a = 1, /* c */ hidden = 2'], ['ui-b.js', 'let hidden']]), /collision: hidden/)
+})
+
+test('assertValidModule: accepts a module and rejects a duplicate binding with the label', () => {
+  assert.doesNotThrow(() => assertValidModule('ok.js', "import x from 'x'\nconst a = 1\nexport { a, x }\n"))
+  assert.throws(() => assertValidModule('desktop/plugin.js', 'const a = 1\n  const a = 2\n'), /desktop\/plugin\.js is not valid ESM[\s\S]*already been declared/)
+  assert.throws(() => assertValidModule('broken.js', 'const = ;'), /broken\.js is not valid ESM/)
 })
 
 test('stripExports: keeps declarations, drops export lists and default markers', () => {
@@ -144,6 +173,36 @@ test('CLI: a name declared in two UI files fails the build', async () => {
     const result = run(dir)
     assert.notEqual(result.status, 0)
     assert.match(result.stderr, /name collision: uiFlowTwin declared by both ui-prefs\.js and ui-flow\.js/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('CLI: a duplicate const the name scan cannot see fails the build, and --check, with a syntax error', async () => {
+  const dir = await buildCopy()
+  try {
+    assert.equal(run(dir).status, 0)
+    await writeFile(join(dir, 'desktop/src/ui-prefs.js'), '  const indentedTwin = 1\n', { flag: 'a' })
+    await writeFile(join(dir, 'desktop/src/ui-flow.js'), 'const indentedTwin = 2\n', { flag: 'a' })
+    for (const args of [[], ['--check']]) {
+      const result = run(dir, ...args)
+      assert.notEqual(result.status, 0, result.stdout)
+      assert.match(result.stderr, /desktop\/plugin\.js is not valid ESM/)
+      assert.match(result.stderr, /already been declared/)
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('CLI: a duplicate hidden behind a template literal or a comment fails the build as a name collision', async () => {
+  const dir = await buildCopy()
+  try {
+    await writeFile(join(dir, 'desktop/src/ui-prefs.js'), "const tplTwin = `${'x'}`, hiddenTwin = 1\n", { flag: 'a' })
+    await writeFile(join(dir, 'desktop/src/ui-flow.js'), 'const hiddenTwin = 2\n', { flag: 'a' })
+    const result = run(dir)
+    assert.notEqual(result.status, 0)
+    assert.match(result.stderr, /name collision: hiddenTwin declared by both ui-prefs\.js and ui-flow\.js/)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
