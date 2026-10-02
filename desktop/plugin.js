@@ -894,6 +894,7 @@ const STATE_LINE = 'When you stop, say whether the task is fully done; if it is 
 // and use the smallest useful fallback."
 const EXPLORE_STOP_LINE = 'Stop exploring once the core request can be answered with useful evidence. If required evidence is still missing, name the missing fact and use the smallest useful fallback.'
 // gpt6-rethinking-prompts.md: "define completion before starting". Used only when the user gave no success criteria.
+// A plain answer has none: "Done when the question is answered directly" only restates the request.
 const DONE_LINES = {
   implementation: 'Done when the requested behavior works in the environment it is meant for.',
   analysis: 'Done when the question is answered with a recommendation and the evidence behind it.',
@@ -901,8 +902,7 @@ const DONE_LINES = {
   plan: 'Done when the plan gives ordered steps with their dependencies, the main risks and the first action to take.',
   text: 'Done when the text is ready to send or publish as it stands.',
   data: 'Done when the figures are computed from the data provided, with units, and the method is stated.',
-  workflow: 'Done when the workflow has run end to end and its effects are in place.',
-  answer: 'Done when the question is answered directly.'
+  workflow: 'Done when the workflow has run end to end and its effects are in place.'
 }
 
 // gpt6-using.md, writing style (verbatim): "Use plain, simple language: familiar words, concrete
@@ -1050,7 +1050,9 @@ function documentBlock(pasted, source) {
 }
 
 const ACTION = ['implementation', 'workflow']
-const WRITTEN = ['text', 'answer', 'analysis']
+// A plain answer is not here: it gets neither the plain-language nor the style lines, so a trivial question
+// stays as short as the Opus prompt (#38).
+const WRITTEN = ['text', 'analysis']
 // AS-10: gpt6-using.md also asks for plain language in technical communication ("Use plain language
 // over jargon"), so the plain-language line also covers code, review and workflow reports.
 const PLAIN = [...WRITTEN, 'implementation', 'review', 'workflow']

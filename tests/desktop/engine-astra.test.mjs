@@ -346,10 +346,33 @@ test('AS-9 guard: no sentence is repeated in the Astra prompt, so the writer has
 test('AS-10: plain-language line appears once for writing, code, review and workflow drafts', () => {
   const PLAIN = 'Use plain, simple language: familiar words, concrete examples, and precise verbs. Prefer active voice and direct statements.'
   const count = (brief) => ENGINE.build(brief).prompt.split(PLAIN).length - 1
-  for (const deliverable of ['implementation', 'review', 'workflow', 'text', 'answer', 'analysis']) {
+  for (const deliverable of ['implementation', 'review', 'workflow', 'text', 'analysis']) {
     assert.equal(count({ goal: 'Fix the login bug in the React app', deliverable }), 1, deliverable)
   }
-  for (const deliverable of ['plan', 'data']) {
+  // #38: a plain answer has no plain-language or style line.
+  for (const deliverable of ['plan', 'data', 'answer']) {
     assert.equal(count({ goal: 'Fix the login bug in the React app', deliverable }), 0, deliverable)
+  }
+})
+
+test('#38: a plain answer carries no style, plain-language or empty DONE WHEN lines, so it is as short as the Opus prompt', async () => {
+  const { ENGINE: OPUS } = await import('../../desktop/src/engine-opus.js')
+  const STYLE = 'Do not use concluding summary statements such as "In short:".'
+  const PLAIN = 'Use plain, simple language'
+  const question = { goal: 'Como funciona o cron do Linux?' }
+  const out = ENGINE.build(question)
+  assert.deepEqual(out.sections.map(s => s.title), ['TASK', 'AUTONOMY', 'OUTPUT'], out.prompt)
+  assert.equal(out.sections.find(s => s.id === 'output').body, LANGUAGE)
+  assert.ok(!out.prompt.includes(STYLE) && !out.prompt.includes(PLAIN) && !out.prompt.includes('DONE WHEN') && !out.prompt.includes('Done when'))
+  assert.deepEqual(out.sections.map(s => s.title), OPUS.build(question).sections.map(s => s.title), 'same sections as Opus')
+  // What the user asked for stays: a criterion, a format, a length.
+  const asked = ENGINE.build({ ...question, success: 'Cabe em dez linhas', format: 'steps', length: 'concise' })
+  assert.equal(asked.sections.find(s => s.id === 'done').body, 'Cabe em dez linhas')
+  assert.ok(asked.sections.find(s => s.id === 'output').body.includes('Present the result as numbered steps'))
+  assert.ok(!asked.prompt.includes(STYLE) && !asked.prompt.includes(PLAIN))
+  // Writing and analysis keep both lines and their DONE WHEN line.
+  for (const deliverable of ['text', 'analysis']) {
+    const full = ENGINE.build({ goal: 'Do it', deliverable }).prompt
+    assert.ok(full.includes(STYLE) && full.includes(PLAIN) && full.includes('DONE WHEN\nDone when'), deliverable)
   }
 })
