@@ -47,6 +47,9 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   configurar, instalar* are recognised. Astra also reads the requirements, trims and lower-cases the deliverable
   and accepts Windows line endings. Marketing copy ("Write the copy for the landing page", "Redija a descrição do
   app") is text: the Studio asks for examples, not design patterns.
+- Fix: *Gere um e-mail*, *Monte uma mensagem* and the like stay text, reports and summaries are text even when they
+  mention tests ("Write a summary of the test results", "Escreva um relatório dos testes"), and a question such as
+  "Como instalar o Docker?" or "Como resumir um livro?" stays an answer on Opus, Sonnet and Astra.
 - New target: **Claude Sonnet 5.5** (Alt+T, or pick **Sonnet**), next to Opus and Astra. It has its own prompt engine,
   question help and AI writer rules from Anthropic's Sonnet 5.5 prompting guide, and is the default when the
   session's model is a Sonnet. Opus and Astra prompts do not change.

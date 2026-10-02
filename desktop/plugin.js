@@ -250,9 +250,16 @@ const DELIVERABLE_RULES = [
 // Languages: Portuguese (unaccented) + English.
 const MAKE_VERB = /\b(crie|criar|escreva|escrever|write|create|build|construa|desenvolva|develop|implemente|implement|programe|gere|gerar|monte|montar)\b/
 // Languages: Portuguese (unaccented) + English.
-const CODE_ARTIFACT = /\b(scripts?|func(ao|oes)|functions?|apis?|endpoints?|cli|clis|apps?|aplicativos?|modul[oe]s?|class(e|es)?|programas?|programs?|bots?|tests?|testes?|quer(y|ies)|regex(es)?|readme|dockerfile)\b/
+const CODE_ARTIFACT = /\b(scripts?|func(ao|oes)|functions?|apis?|endpoints?|cli|clis|apps?|aplicativos?|modul[oe]s?|class(e|es)?|programas?|programs?|bots?|(?:tests?|testes?)(?!\s+(?:report|relatorio|results?|resultados?|summary|resumo)\b)|quer(y|ies)|regex(es)?|readme|dockerfile)\b/
 // Languages: Portuguese (unaccented) + English.
-const TEXT_ARTIFACT = /((?<!\b(?:and|then|also|e|depois|por|via|by)\s)\be-?mails?\b(?!\s+(?:me|us|him|her|them|you)\b)|\b(posts?|artigos?|articles?|blog|carta|letter|newsletter|texto|essay|ensaio|roteiro|mensagem|message|copy(?!\s+(?:of|function|script|command|files?|folders?)\b)|description|descricao)\b)/
+const TEXT_ARTIFACT = /((?<!\b(?:and|then|also|e|depois|por|via|by)\s)\be-?mails?\b(?!\s+(?:me|us|him|her|them|you)\b)|\b(posts?|artigos?|articles?|blog|carta|letter|newsletter|texto|essay|ensaio|roteiro|mensagem|message|copy(?!\s+(?:of|function|script|command|files?|folders?)\b)|description|descricao|reports?|relatorios?|summar(?:y|ies)|resumos?)\b)/
+// Languages: Portuguese (unaccented).
+// A generate/assemble verb at the start of the match: it does not say which artifact is made, so the first artifact named decides ("Gere um e-mail").
+const GENERATE_VERB = /^(gere|gerar|monte|montar)\b/
+// Languages: Portuguese (unaccented) + English.
+// A question: the draft opens with a question word and its first sentence is a question (or one phrase without
+// punctuation). The verbs inside it ("Como instalar o Docker?") are what is asked about, not an order.
+const QUESTION_FORM = /^(?:como|o que|qual|quais|por que|porque|quando|onde|quem|quanto|how|what|why|which|who|when|where)\b(?:[^.!?\n]*\?|[^.!?,\n]*$)/
 // Languages: Portuguese (unaccented) + English.
 // "Analise a planilha" stays a data task: the analysis verb with a data file as its subject.
 const DATA_NOUN = /\b(planilhas?|csv|datasets?|spreadsheets?)\b/
@@ -291,8 +298,12 @@ function detect(b) {
   const codeAt = text.search(CODE_ARTIFACT)
   const textAt = text.search(TEXT_ARTIFACT)
   if ((signal === 'data' || signal === 'text') && MAKE_VERB.test(text) && codeAt >= 0 && (textAt < 0 || codeAt < textAt)) { signal = 'implementation'; category = 'code' }
+  // "Gere um e-mail", "Monte uma mensagem": the verb does not say what is made, the first artifact named does.
+  if (signal === 'implementation' && GENERATE_VERB.test(text.slice(at)) && textAt >= 0 && (codeAt < 0 || textAt < codeAt)) { signal = 'text'; category = 'writing' }
+  const goal = fold(b.goal).trim()
+  // A question stays an answer, whatever verbs it contains; only an order is a task.
+  if (QUESTION_FORM.test(goal)) signal = 'answer'
   if (!signal) {
-    const goal = fold(b.goal).trim()
     if (goal.endsWith('?') || QUESTION_START.test(goal)) signal = 'answer'
   }
   return { category, signal, text }
@@ -644,14 +655,21 @@ const VERBS = [
   ['workflow', /\b(automatize|automatizar|automate|agende|agendar|schedule|execute|executar|rode|rodar|deploy|publique|migre|migrate|configure|configurar|instale|instalar)\b/],
   ['data', /\b(planilhas?|csv|datasets?|spreadsheets?|limpe os dados|clean the data|extraia|extract)\b/],
   ['implementation', /\b(build|create|implement|develop|fix|make|add|refactor|code|programe|implemente|implementar|crie|criar|desenvolva|desenvolver|construa|construir|corrija|corrigir|conserte|adicione|refatore|gere|gerar|monte|montar)\b/],
-  ['answer', /(^|\s)(o que|qual|quais|como|por que|porque|explique|what|which|how|why|explain|who|quem)\b/]
+  ['answer', /(^|\s)(explique|explain)\b|\s(o que|qual|quais|como|por que|porque|what|which|how|why|who|quem)\b/]
 ]
 // Languages: Portuguese (unaccented) + English.
 const MAKE_VERB = /\b(crie|criar|escreva|escrever|write|create|build|construa|desenvolva|develop|implemente|implement|programe|gere|gerar|monte|montar)\b/
 // Languages: Portuguese (unaccented) + English.
-const CODE_ARTIFACT = /\b(scripts?|func(ao|oes)|functions?|apis?|endpoints?|cli|clis|apps?|aplicativos?|modul[oe]s?|class(e|es)?|programas?|programs?|bots?|tests?|testes?|quer(y|ies)|regex(es)?|readme|dockerfile)\b/
+const CODE_ARTIFACT = /\b(scripts?|func(ao|oes)|functions?|apis?|endpoints?|cli|clis|apps?|aplicativos?|modul[oe]s?|class(e|es)?|programas?|programs?|bots?|(?:tests?|testes?)(?!\s+(?:report|relatorio|results?|resultados?|summary|resumo)\b)|quer(y|ies)|regex(es)?|readme|dockerfile)\b/
 // Languages: Portuguese (unaccented) + English.
-const TEXT_ARTIFACT = /((?<!\b(?:and|then|also|e|depois|por|via|by)\s)\be-?mails?\b(?!\s+(?:me|us|him|her|them|you)\b)|\b(posts?|artigos?|articles?|blog|carta|letter|newsletter|texto|essay|ensaio|roteiro|mensagem|message|copy(?!\s+(?:of|function|script|command|files?|folders?)\b)|description|descricao)\b)/
+const TEXT_ARTIFACT = /((?<!\b(?:and|then|also|e|depois|por|via|by)\s)\be-?mails?\b(?!\s+(?:me|us|him|her|them|you)\b)|\b(posts?|artigos?|articles?|blog|carta|letter|newsletter|texto|essay|ensaio|roteiro|mensagem|message|copy(?!\s+(?:of|function|script|command|files?|folders?)\b)|description|descricao|reports?|relatorios?|summar(?:y|ies)|resumos?)\b)/
+// Languages: Portuguese (unaccented).
+// A generate/assemble verb at the start of the match: it does not say which artifact is made, so the first artifact named decides ("Gere um e-mail").
+const GENERATE_VERB = /^(gere|gerar|monte|montar)\b/
+// Languages: Portuguese (unaccented) + English.
+// A question: the draft opens with a question word and its first sentence is a question (or one phrase without
+// punctuation). The verbs inside it ("Como instalar o Docker?") are what is asked about, not an order.
+const QUESTION_FORM = /^(?:como|o que|qual|quais|por que|porque|quando|onde|quem|quanto|how|what|why|which|who|when|where)\b(?:[^.!?\n]*\?|[^.!?,\n]*$)/
 // Languages: Portuguese (unaccented) + English.
 const DATA_NOUN = /\b(planilha|csv|xlsx|spreadsheet|dataset|dados|data|sql|tabela de vendas|metricas|metrics)\b/
 // Languages: Portuguese (unaccented) + English.
@@ -679,6 +697,10 @@ function detect(goal, requirements) {
   const codeAt = text.search(CODE_ARTIFACT)
   const textAt = text.search(TEXT_ARTIFACT)
   if ((kind === 'text' || kind === 'data' || kind === 'analysis') && MAKE_VERB.test(text) && codeAt >= 0 && (textAt < 0 || codeAt < textAt)) kind = 'implementation'
+  // "Gere um e-mail", "Monte uma mensagem": the verb does not say what is made, the first artifact named does.
+  if (kind === 'implementation' && GENERATE_VERB.test(text.slice(best.at)) && textAt >= 0 && (codeAt < 0 || textAt < codeAt)) kind = 'text'
+  // A question stays an answer, whatever verbs it contains; only an order is a task.
+  if (QUESTION_FORM.test(fold(goal).trim())) kind = 'answer'
   if (kind === 'analysis' && DATA_NOUN.test(text) && !/\b(pesquis|research|compar)/.test(text)) kind = 'data'
   const fallback = fold(goal).trim().endsWith('?') || !CODE_NOUN.test(text) ? 'answer' : 'implementation'
   return { detected: kind, resolved: kind ?? fallback, text }
@@ -1098,9 +1120,16 @@ const DELIVERABLE_RULES = [
 // Languages: Portuguese (unaccented) + English.
 const MAKE_VERB = /\b(crie|criar|escreva|escrever|write|create|build|construa|desenvolva|develop|implemente|implement|programe|gere|gerar|monte|montar)\b/
 // Languages: Portuguese (unaccented) + English.
-const CODE_ARTIFACT = /\b(scripts?|func(ao|oes)|functions?|apis?|endpoints?|cli|clis|apps?|aplicativos?|modul[oe]s?|class(e|es)?|programas?|programs?|bots?|tests?|testes?|quer(y|ies)|regex(es)?|readme|dockerfile)\b/
+const CODE_ARTIFACT = /\b(scripts?|func(ao|oes)|functions?|apis?|endpoints?|cli|clis|apps?|aplicativos?|modul[oe]s?|class(e|es)?|programas?|programs?|bots?|(?:tests?|testes?)(?!\s+(?:report|relatorio|results?|resultados?|summary|resumo)\b)|quer(y|ies)|regex(es)?|readme|dockerfile)\b/
 // Languages: Portuguese (unaccented) + English.
-const TEXT_ARTIFACT = /((?<!\b(?:and|then|also|e|depois|por|via|by)\s)\be-?mails?\b(?!\s+(?:me|us|him|her|them|you)\b)|\b(posts?|artigos?|articles?|blog|carta|letter|newsletter|texto|essay|ensaio|roteiro|mensagem|message|copy(?!\s+(?:of|function|script|command|files?|folders?)\b)|description|descricao)\b)/
+const TEXT_ARTIFACT = /((?<!\b(?:and|then|also|e|depois|por|via|by)\s)\be-?mails?\b(?!\s+(?:me|us|him|her|them|you)\b)|\b(posts?|artigos?|articles?|blog|carta|letter|newsletter|texto|essay|ensaio|roteiro|mensagem|message|copy(?!\s+(?:of|function|script|command|files?|folders?)\b)|description|descricao|reports?|relatorios?|summar(?:y|ies)|resumos?)\b)/
+// Languages: Portuguese (unaccented).
+// A generate/assemble verb at the start of the match: it does not say which artifact is made, so the first artifact named decides ("Gere um e-mail").
+const GENERATE_VERB = /^(gere|gerar|monte|montar)\b/
+// Languages: Portuguese (unaccented) + English.
+// A question: the draft opens with a question word and its first sentence is a question (or one phrase without
+// punctuation). The verbs inside it ("Como instalar o Docker?") are what is asked about, not an order.
+const QUESTION_FORM = /^(?:como|o que|qual|quais|por que|porque|quando|onde|quem|quanto|how|what|why|which|who|when|where)\b(?:[^.!?\n]*\?|[^.!?,\n]*$)/
 // Languages: Portuguese (unaccented) + English.
 // "Analise a planilha" stays a data task: the analysis verb with a data file as its subject.
 const DATA_NOUN = /\b(planilhas?|csv|datasets?|spreadsheets?)\b/
@@ -1139,8 +1168,12 @@ function detect(b) {
   const codeAt = text.search(CODE_ARTIFACT)
   const textAt = text.search(TEXT_ARTIFACT)
   if ((signal === 'data' || signal === 'text') && MAKE_VERB.test(text) && codeAt >= 0 && (textAt < 0 || codeAt < textAt)) { signal = 'implementation'; category = 'code' }
+  // "Gere um e-mail", "Monte uma mensagem": the verb does not say what is made, the first artifact named does.
+  if (signal === 'implementation' && GENERATE_VERB.test(text.slice(at)) && textAt >= 0 && (codeAt < 0 || textAt < codeAt)) { signal = 'text'; category = 'writing' }
+  const goal = fold(b.goal).trim()
+  // A question stays an answer, whatever verbs it contains; only an order is a task.
+  if (QUESTION_FORM.test(goal)) signal = 'answer'
   if (!signal) {
-    const goal = fold(b.goal).trim()
     if (goal.endsWith('?') || QUESTION_START.test(goal)) signal = 'answer'
   }
   return { category, signal, text }

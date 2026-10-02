@@ -53,14 +53,48 @@ const TABLE = [
   ['Limpe os dados da planilha de clientes', 'data', 'data verb'],
   ['Analise a planilha de vendas', 'data', 'analysis of a spreadsheet stays data'],
   // Portuguese verbs
-  ['Gere um relatório de erros do log', 'implementation', 'gerar'],
+  ['Gere um script que leia o log de erros', 'implementation', 'gerar'],
   ['Monte uma lista de tarefas para a semana', 'implementation', 'montar'],
   ['Resuma o relatório de vendas', 'analysis', 'resumir'],
   ['Configure o nginx no servidor', 'workflow', 'configurar'],
   ['Instale o node na máquina nova', 'workflow', 'instalar'],
   // questions and open drafts
   ['O que é um pull request?', 'answer', 'question'],
-  ['Me ajuda com o projeto da empresa', 'answer', 'nothing to recognise']
+  ['Me ajuda com o projeto da empresa', 'answer', 'nothing to recognise'],
+  // a text artifact named by a generate/assemble verb is text (review of #24, finding 1)
+  ['Gere um e-mail de cobrança para o cliente', 'text', 'gerar + e-mail'],
+  ['Monte um e-mail de boas-vindas', 'text', 'montar + e-mail'],
+  ['Gere um post de blog sobre o lançamento', 'text', 'gerar + post'],
+  ['Monte uma mensagem de boas-vindas', 'text', 'montar + mensagem'],
+  ['Gere uma carta de apresentação', 'text', 'gerar + carta'],
+  ['Gere um script que envie um e-mail', 'implementation', 'near miss: the script comes first'],
+  ['Gere um app de blog', 'implementation', 'near miss: app comes before blog'],
+  ['Monte uma API para o envio de e-mails', 'implementation', 'near miss: api comes before e-mails'],
+  // a question stays an answer; the verbs inside it do not fire (finding 2)
+  ['Como instalar o Docker?', 'answer', 'pt question with instalar'],
+  ['Como instalar o Docker', 'answer', 'pt question without the mark'],
+  ['Como resumir um livro?', 'answer', 'pt question with resumir'],
+  ['Como configurar o nginx?', 'answer', 'pt question with configurar'],
+  ['Como faço para instalar o Docker no servidor?', 'answer', 'pt long question'],
+  ['Como instalar o Docker? Seja breve.', 'answer', 'question first, then a style note'],
+  ['Como criar um app?', 'answer', 'question form wins over a create verb'],
+  ['How do I install Docker?', 'answer', 'en question'],
+  ['How do I summarize a book?', 'answer', 'en question'],
+  ['How do I write a script?', 'answer', 'en question with a make verb'],
+  ['Instale o Docker no servidor', 'workflow', 'near miss: an order, not a question'],
+  ['Resuma o livro em dez linhas', 'analysis', 'near miss: an order'],
+  ['Como especialista em redes, escreva um e-mail de cobrança', 'text', 'near miss: "como" means "as a" here'],
+  ['Can you create a script that parses dates?', 'implementation', 'near miss: a polite order, not a wh-question'],
+  // a report, summary or description is text; tests as a noun inside it is not code (finding 3)
+  ['Write a summary of the test results for the team', 'text', 'summary of test results'],
+  ['Escreva um relatório dos testes de usuário', 'text', 'pt relatório dos testes'],
+  ['Write a report on the test results', 'text', 'report'],
+  ['Write a test report for the team', 'text', 'test as a modifier of report'],
+  ['Escreva um relatório de testes', 'text', 'pt'],
+  ['Gere um resumo dos testes', 'text', 'gerar + resumo + testes'],
+  ['Write a script that generates a report of the tests', 'implementation', 'near miss: script comes first'],
+  ['Escreva um script para testes', 'implementation', 'near miss: script first'],
+  ['Write tests for the report generator', 'implementation', 'near miss: tests are the artifact'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
@@ -128,7 +162,7 @@ test('parity: Opus and Sonnet carry the identical detection block', async () => 
   const [opus, sonnet] = await Promise.all([src('engine-opus.js'), src('engine-sonnet.js')])
   const a = detection(opus)
   const b = detection(sonnet)
-  for (const needle of ['CATEGORY_RULES', 'DELIVERABLE_RULES', 'MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'QUESTION_START', 'INTERFACE', 'function detect', 'function analyzeNormalized']) {
+  for (const needle of ['CATEGORY_RULES', 'DELIVERABLE_RULES', 'MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'QUESTION_START', 'INTERFACE', 'function detect', 'function analyzeNormalized']) {
     assert.ok(a.includes(needle), `opus block has ${needle}`)
   }
   assert.equal(a, b, 'Opus and Sonnet detection blocks drifted apart: change both engines identically')
@@ -136,7 +170,7 @@ test('parity: Opus and Sonnet carry the identical detection block', async () => 
 
 test('parity: the artifact constants are the same text on all three engines', async () => {
   const sources = await Promise.all(['engine-opus.js', 'engine-sonnet.js', 'engine-astra.js'].map(src))
-  for (const name of ['MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'PLAN_OBJECT', 'DATA_OBJECT']) {
+  for (const name of ['MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'PLAN_OBJECT', 'DATA_OBJECT']) {
     const lines = sources.map(source => source.split('\n').find(line => line.startsWith(`const ${name} =`)))
     assert.ok(lines.every(Boolean), `${name} exists in every engine`)
     assert.equal(new Set(lines).size, 1, `${name} differs between engines:\n${lines.join('\n')}`)
