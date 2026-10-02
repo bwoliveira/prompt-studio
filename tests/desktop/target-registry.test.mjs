@@ -48,8 +48,9 @@ test('a registered target without its i18n help and guide entries is reported', 
     missingTargetText([...TARGETS, { id: 'ghost' }], CORE_MESSAGES).sort(),
     ['en.autonomy.guide.ghost', 'en.autonomy.help.ghost', 'pt.autonomy.guide.ghost', 'pt.autonomy.help.ghost']
   )
-  const partial = structuredClone(CORE_MESSAGES)
-  delete partial.pt.core.fields.autonomy.help.sonnet
+  const { sonnet, ...helpWithoutSonnet } = CORE_MESSAGES.pt.core.fields.autonomy.help
+  const partial = { pt: { core: { fields: { autonomy: { ...CORE_MESSAGES.pt.core.fields.autonomy, help: helpWithoutSonnet } } } } }
+  assert.ok(typeof sonnet === 'string')
   assert.deepEqual(missingTargetText(TARGETS, partial), ['pt.autonomy.help.sonnet'])
 })
 
