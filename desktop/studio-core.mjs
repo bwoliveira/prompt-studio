@@ -148,7 +148,7 @@ const LOOKUP_MODIFIER = /\b(?:existing|available|good|better|best|recommended|po
 const REFERENCE_NOUN_END = /\b(?:modul[oe]s?|apis?|librar(?:y|ies)|packages?|frameworks?|sdks?|bibliotecas?|pacotes?)\s*$/
 const FOR_PURPOSE = /^\s+(?:for|para)\b/
 // "Could you tell me an API that already exists for weather data?": the same qualifiers, said after the noun.
-const LOOKUP_AFTER = /^\s+(?:that|which|que)\s+(?:(?:already|ja)\s+)?(?:exists?|existe|existem|(?:is|are|esta|estao)\s+(?:already\s+|ja\s+)?(?:the\s+)?(?:available|existing|recommended|popular|best|good|better|disponivel|disponiveis|recomendad[ao]s?|existentes?)(?=\s+(?:for|para)\b|\s*[.,;:!?]|\s*$))\b/
+const LOOKUP_AFTER = /^\s+(?:that|which|que)\s+(?:(?:already|ja)\s+)?(?:exists?|existe|existem|(?:is|are|esta|estao)\s+(?:already\s+|ja\s+)?(?:the\s+)?(?:available|existing|recommended|popular|best|good|better|disponivel|disponiveis|recomendad[ao]s?|existentes?)(?=\s+(?:for|para|on|from|in|at|via|through|no|na|em|de|pelo|pela)\b|\s*[.,;:!?]|\s*$))\b/
 // "Can you show me a script? Why does it fail?", "... and tell me how it works": a clause or sentence after the artifact
 // that asks to understand it makes the draft a question, whatever the artifact. It opens a clause (the start, a
 // sentence or comma mark, or a coordinator), so "a script that explains how it works" still asks for the script.
