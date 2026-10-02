@@ -1,100 +1,41 @@
-# Prompt Studio: keep secrets, local state and build noise out of git.
+# Prompt Studio: keep local state and build noise out of git.
 
-# --- Secrets and credentials (never commit) ---
+# Local environment files (none are used today; keep a stray one out of git)
 .env
 .env.*
 !.env.example
-*.pem
-*.key
-*.crt
-*.p12
-*.pfx
-*.gpg
-*.asc
-id_rsa*
-id_ed25519*
-*.token
-*secret*
-*credential*
-# ...but the plugin's own code may carry those words (GI-2).
-!*.py
-!*.js
-!*.mjs
-auth.json
-.netrc
-.npmrc
-.pypirc
-*.env
-.envrc
-*service-account*.json
-*-key.json
-token.txt
-api_key*
-apikey*
-id_ecdsa*
-id_dsa*
-.docker/
-kubeconfig
-*.kubeconfig
-*.kdbx
-cookies.txt
-*.sql
-*.dump
-*.bak
 
-# --- Hermes runtime state (config, sessions, logs, installs) ---
-config.yaml
-.hermes/
-.hermes-package.json
-.install-metadata.json*
-sessions/
-logs/
-*.log
-*.sqlite
-*.sqlite3
-*.db
-
-# --- Python ---
+# Python
 __pycache__/
 *.py[cod]
-*.egg-info/
 .venv/
 venv/
-.python-version
 .pytest_cache/
-.mypy_cache/
 .ruff_cache/
 .coverage
 .coverage.*
 htmlcov/
 
-# --- Node ---
+# Node
 node_modules/
 npm-debug.log*
-.npm/
-.cache/
 
-# --- Local copies of third-party material (kept outside the repo) ---
-official-docs/
-prompt-builders/
-*.bundle
+# Scratch space and logs
+.scratch/
+*.log
 
-# --- Test and harness output ---
-*.tmp
-*.harness.js
+# Screenshots of real sessions never go in git; curated README images live in docs/images/
 screenshots/
 *.png
 *.jpg
 *.jpeg
 *.webp
-*.har
-# ...except curated images for the README (GI-3): only docs/images/, never screenshots of real sessions.
 !docs/images/
 !docs/images/*.png
 !docs/images/*.jpg
 !docs/images/*.webp
 
-# --- Editors and OS ---
+# Editors and OS
 .DS_Store
 Thumbs.db
 .idea/

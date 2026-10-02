@@ -1,6 +1,6 @@
 # Changelog
 
-Versions come from the commit subjects; releases from 1.6.0 on are also git tags. Newest first.
+Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.6.0` ...); 1.1.0 to 1.5.5 were never tagged. `main` may run ahead of the last tag: entries under Unreleased are on `main` but not in a release yet. Newest first.
 
 ## Unreleased
 
@@ -111,6 +111,8 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
 - Fix: *Gere um e-mail*, *Monte uma mensagem* and the like stay text, reports and summaries are text even when they
   mention tests ("Write a summary of the test results", "Escreva um relatório dos testes"), and a question such as
   "Como instalar o Docker?" or "Como resumir um livro?" stays an answer on Opus, Sonnet and Astra.
+- Fix: the Sonnet 5.5 rule that asks for a real check before reporting code changes as done no longer contains the word "sudo" (it now says "never with elevated privileges or the system package manager"), so `hermes plugins validate` no longer shows a `sudo_usage` caution.
+- Repository housekeeping: the CHANGELOG no longer carries internal audit codes, `.gitignore` covers only this project, generated files are marked `linguist-generated`, and the build script fails clearly on a missing output, checks name collisions across all UI files and has tests. Its syntax check runs in-process, writing nothing and starting no process (so `--check` also runs in a read-only sandbox), and text that only looks like an export inside a template literal, string or comment is left untouched, including after a regex literal that follows `return` (even with a comment between them) or an `if (…)` condition, a division after `count++`, or an emoji in a comment.
 - New target: **Claude Sonnet 5.5** (Alt+T, or pick **Sonnet**), next to Opus and Astra. It has its own prompt engine,
   question help and AI writer rules from Anthropic's Sonnet 5.5 prompting guide, and is the default when the
   session's model is a Sonnet. Opus and Astra prompts do not change.
@@ -205,58 +207,62 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
 
 ## 1.5.4
 
-- Repository prepared for publishing: README rewritten, this CHANGELOG, workflow note in `docs/DESKTOP-DEV.md` (CT-11).
-- CT-04: suggest/compose system prompts written one rule per source line (runtime strings byte-identical).
-- CT-06: each draft-recognition pattern documents that it covers Portuguese (accents folded) and English.
-- GI-3: curated README images may live in `docs/images/`; images elsewhere stay ignored.
+- Repository prepared for publishing: README rewritten, this CHANGELOG, workflow note in `docs/DESKTOP-DEV.md`.
+- The suggest and compose system prompts are written one rule per source line (the text sent to the model is unchanged).
+- Each draft-recognition pattern now documents that it covers Portuguese (accents folded) and English.
+- Curated README images may live in `docs/images/`; images anywhere else stay ignored by git.
 - No behavior change.
 
 ## 1.5.3
 
 - Default reasoning effort is `low` when neither `auxiliary.prompt_studio` nor the Settings pick sets one (Opus 5.5 docs).
 - A small `max_tokens` is raised at medium/high+ effort, since thinking and text share it.
-- GI-4: gitleaks scan of the full history.
-- OP-8: normal-case wording in the suggest/compose system prompts (less aggressive emphasis).
-- AS-10: Astra plain-language line also for implementation, review and workflow requests.
-- `_default_llm` kept under C901 complexity 10.
+- A gitleaks scan of the full git history was run.
+- Normal-case wording in the suggest and compose system prompts (less aggressive emphasis).
+- Astra's plain-language line now also applies to implementation, review and workflow requests.
+- `_default_llm` was simplified to stay under the project's complexity limit (10).
 
 ## 1.5.2
 
-- OP-6: documented that escaping `&` and `<` is the mitigation for imitable `<pasted_content>` tags.
-- CT-09: read-only installer tests share one default install.
-- CT-03: `_json_object`, `build_messages` and `parse_yaml_mapping` brought under C901 10, with characterization tests.
-- OP-7 checked, no change.
+- Documented that escaping `&` and `<` is the protection against pasted text that imitates the `<pasted_content>` tags.
+- The read-only installer tests share one default install.
+- `_json_object`, `build_messages` and `parse_yaml_mapping` were simplified to stay under the complexity limit (10), with characterization tests.
+- One more prompt-wording point was reviewed and left unchanged.
 
 ## 1.5.1
 
-- CT-05, SP-3, AS-9, RD-2, GI-2 (audit P3 batch 1).
-- CT-10: UI tests fail loudly on missing dependencies under CI and wait for outcomes.
-- CT-02: hand-written `desktop/plugin.js` split into `desktop/src`; the build generates the whole `plugin.js` (no behavior change).
+- Import fallbacks re-raise with `from None` (clean under ruff's B904 rule).
+- An empty reply that ended because of `finish_reason: length` is no longer retried (the same cap would end the same way); a `content_filter` empty reply is still retried once.
+- The Astra writer no longer says "merge them" next to "keep doc lines word for word"; a test proves the Astra prompt repeats no sentence.
+- README and `docs/DESKTOP-DEV.md` say what the UI flow tests need and that `CI=1` fails without it.
+- The `*secret*` and `*credential*` ignore patterns keep hiding data files but no longer hide `.py`, `.js` and `.mjs` code.
+- UI tests fail loudly on missing dependencies under CI and wait for outcomes.
+- The hand-written `desktop/plugin.js` was split into `desktop/src`; the build generates the whole `plugin.js` (no behavior change).
 
 ## 1.5.0
 
-- CX-1: Settings dialog (F3) with helper and context model pickers, read-context switch and Studio language.
-- CX-1: session-context read on F4 feeding Auto suggestions; new `POST /context` (read-only session summary).
+- Settings dialog (F3) with helper and context model pickers, read-context switch and Studio language.
+- Session-context read on F4 feeding Auto suggestions; new `POST /context` (read-only session summary).
 - Per-task `model_choice`; `session_context` on `/suggest`.
 - `model_not_found` error code; `/suggest` and `/compose` carry the Studio language.
 
 ## 1.4.0
 
-- CT-01, SE-5, SP-2, RG-1: error codes with localized tooltips, no provider text, forged third-party spans stripped, debounced auto suggestions, AI-off drops late replies.
-- SE-3: keep tags and headers the user wrote; strip only framing the model invented.
-- CT-07, CT-08: coverage for `docs_sources` and `llm_adapter` provider branches.
+- Error codes with localized tooltips, no provider text, forged third-party spans stripped, debounced auto suggestions, AI-off drops late replies.
+- Keep tags and headers the user wrote; strip only framing the model invented.
+- More tests for `docs_sources` and the `llm_adapter` provider branches.
 
 ## 1.3.0
 
-- Astra: subagent default auto, full doc paragraphs, guided order, lighter answer/text, JSON without prose lines, honest review rows (AS-3 to AS-8, AS-11).
-- AS-8: Astra auto delegation rule for the same hands-on deliverables as Opus (not plan).
-- OP-4: explore line only for workflow/data; OP-5: TIME_LINE caveat documented; compose keeps SUBAGENTS lines as-is.
+- Astra: subagent default auto, full doc paragraphs, guided order, lighter answer/text, JSON without prose lines, honest review rows.
+- Astra auto delegation rule for the same hands-on deliverables as Opus (not plan).
+- Opus: explore line only for workflow/data requests; the TIME_LINE caveat is documented; compose keeps SUBAGENTS lines as-is.
 
 ## 1.2.0
 
-- Compose keeps its 45 s provider budget; installer timeout 20 and argument validation; tagged suggest blocks with robust escaping; request size limits; broader secret ignores (SP-1, RD-1, SE-1, SE-2, SE-4, SE-9, GI-1).
-- OP-1/OP-3: Opus subagents default to auto with the guide's delegation rule; design line only for new interface work.
-- AS-1/AS-2: Astra frontend guidance and full approval paragraph; frontend lines only for building or changing an interface.
+- Compose keeps its 45 s provider budget; installer timeout 20 and argument validation; tagged suggest blocks with robust escaping; request size limits; broader secret ignores.
+- Opus subagents default to auto with the guide's delegation rule; design line only for new interface work.
+- Astra frontend guidance and full approval paragraph; frontend lines only for building or changing an interface.
 
 ## 1.1.1
 
