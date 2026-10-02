@@ -127,7 +127,11 @@ def _drop_stale_bytecode(name: str) -> None:
 # Siblings a module imports. They are refreshed before the module itself, or a reload would keep the old copy:
 # as a package `from . import llm_adapter` returns the module already in sys.modules; loaded by path the fallback
 # re-executes llm_adapter.py but would pick up its stale bytecode.
-_DEPENDENCIES = {"suggest_engine": ("llm_adapter",), "session_context": ("llm_adapter",)}
+_DEPENDENCIES = {
+    "llm_adapter": ("hermes_host",),
+    "suggest_engine": ("hermes_host", "llm_adapter"),
+    "session_context": ("hermes_host", "llm_adapter"),
+}
 
 
 def _refresh_dependencies(name: str) -> None:

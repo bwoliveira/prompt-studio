@@ -12,6 +12,18 @@ import re
 import time
 from typing import Any, Callable, Mapping
 
+try:  # package import inside `hermes serve`
+    from . import hermes_host as host
+except ImportError:  # loaded by path (tests / plugin_api fallback)
+    import importlib.util
+    from pathlib import Path
+
+    _spec = importlib.util.spec_from_file_location("prompt_studio_hermes_host", Path(__file__).with_name("hermes_host.py"))
+    if _spec is None or _spec.loader is None:
+        raise ImportError("hermes_host.py not found beside llm_adapter.py") from None
+    host = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(host)
+
 logger = logging.getLogger(__name__)
 
 # Auxiliary task registered by __init__.register(); its block is ``auxiliary.prompt_studio``.
@@ -189,18 +201,10 @@ def _default_llm(
     model_choice: Mapping[str, Any] | None = None,
 ) -> tuple[str, str]:
     """Universal Hermes adapter handling reasoning controls and token headroom across all providers."""
-    from agent.auxiliary_client import (
-        call_llm,
-        extract_content_or_reasoning,
-        _get_auxiliary_task_config,
-        _resolve_task_provider_model,
-    )
-    from hermes_constants import parse_reasoning_effort
-
     route: dict[str, str] = {}
     task = _AUX_TASK
-    task_config = _get_auxiliary_task_config(task)
-    provider, model, _, _, _ = _resolve_task_provider_model(task)
+    task_config = host.auxiliary_task_config(task)
+    provider, model, _, _, _ = host.resolve_route(task)
     effort = task_config.get("reasoning_effort")
     explicit: dict[str, Any] = {}
     chosen = _choice(model_choice)
@@ -218,7 +222,7 @@ def _default_llm(
     provider_norm = (provider or "").strip().lower()
     effort, max_tokens = _effort_and_cap(effort, provider_norm, max_tokens)
 
-    reasoning_config = parse_reasoning_effort(effort) if effort else None
+    reasoning_config = host.parse_reasoning_effort(effort) if effort else None
 
     extra_body: dict[str, Any] = {}
     configured_extra = task_config.get("extra_body")
@@ -248,7 +252,7 @@ def _default_llm(
     deadline = time.monotonic() + timeout
 
     def _call(body: dict[str, Any], budget: float) -> Any:
-        return call_llm(
+        return host.call_llm(
             task=task,
             messages=messages,
             max_tokens=max_tokens,
@@ -277,7 +281,7 @@ def _default_llm(
         response = _call(retry_body, remaining)
     resolved_provider = route.get("provider", provider or "auto")
     resolved_model = route.get("model", model or "default")
-    return Reply(extract_content_or_reasoning({"content": _answer_content(response)}), f"{resolved_provider}/{resolved_model}", _finish_reason(response))
+    return Reply(host.extract_content_or_reasoning({"content": _answer_content(response)}), f"{resolved_provider}/{resolved_model}", _finish_reason(response))
 
 
 _JSON_MODE_TEXT = ("response_format", "json_object", "structured output", "json_schema", "json mode")
@@ -296,8 +300,10 @@ def is_model_not_found(exc: BaseException) -> bool:
     if getattr(exc, "status_code", None) == 404 or type(exc).__name__ == "NotFoundError":
         return True
     try:
-        from agent.auxiliary_client import _is_model_not_found_error
-        return bool(_is_model_not_found_error(exc))
+        return host.is_model_not_found_error(exc)
+    except host.HostIncompatible:
+        logger.warning("Prompt Studio: Hermes changed, cannot tell a missing model from other errors", exc_info=True)
+        return False
     except Exception:
         return False
 
@@ -339,8 +345,23 @@ def is_provider_bad_request(exc: BaseException) -> bool:
     return _status(exc) == 400 or type(exc).__name__ == "BadRequestError"
 
 
+HOST_INCOMPATIBLE_ERROR = "Hermes changed in a way this Prompt Studio version does not support; update the plugin (details in the Hermes log)"
+
+
+def is_host_incompatible(exc: BaseException) -> bool:
+    """Hermes changed a signature the plugin relies on (by code, so any loaded copy of the host module counts)."""
+    return getattr(exc, "code", None) == host.CODE
+
+
+def check_host() -> None:
+    """Raise ``host.HostIncompatible`` when the installed Hermes no longer matches (a missing Hermes is not an error)."""
+    host.verify(_AUX_TASK)
+
+
 def provider_error_code(exc: BaseException) -> str:
     """Error code for a failed provider call, most specific first; the provider text is never returned."""
+    if is_host_incompatible(exc):
+        return host.CODE
     if is_model_not_found(exc):
         return "model_not_found"
     if is_provider_refused(exc):
@@ -358,8 +379,7 @@ def get_model_label(model_choice: Mapping[str, Any] | None = None) -> str:
     if chosen:
         return f"{chosen[0] or 'auto'}/{chosen[1]}"
     try:
-        from agent.auxiliary_client import _resolve_task_provider_model
-        provider, model, _, _, _ = _resolve_task_provider_model(_AUX_TASK)
+        provider, model, _, _, _ = host.resolve_route(_AUX_TASK)
         return f"{provider or 'auto'}/{model or 'default'}"
     except Exception:
         return "auto/default"
