@@ -719,6 +719,15 @@ const TABLE = [
   ['Me diga os passos para configurar o nginx', 'answer', 'near miss: me diga os passos'],
   ['Me diga a diferença entre o nginx e o apache', 'answer', 'near miss: me diga a diferenca'],
   ['Me diga se o plano está pronto', 'answer', 'near miss: me diga se'],
+  // #49: "code review" is a review (the Opus and Sonnet class), not the verb "code"
+  ['Do a code review of the API', 'review', '#49 do a code review'],
+  ['Please do a code review', 'review', '#49 please do a code review'],
+  ['I need a code review of the API', 'review', '#49 need a code review'],
+  ['Do a code audit of the API', 'review', '#49 code audit'],
+  ['Code a login page', 'implementation', 'near miss: code is the verb'],
+  ['Code the API', 'implementation', 'near miss: code the api'],
+  ['Fix the code review bot', 'implementation', 'near miss: fix comes first'],
+  ['Review the code of the API', 'review', 'near miss: review comes first'],
 ]
 
 for (const [draft, expected, why] of TABLE) {

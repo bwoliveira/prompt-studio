@@ -967,7 +967,8 @@ const DETECTOR = DETECTION.createDetector({
     ['text', /\b(escreva|escrever|redija|redigir|rascunhe|reescreva|traduza|write|draft|rewrite|translate|compose)\b/],
     ['workflow', /\b(automatize|automatizar|automate|agende|agendar|schedule|execute|executar|rode|rodar|deploy|publique|migre|migrate|configure|configurar|instale|instalar)\b/],
     ['data', /\b(planilhas?|csv|datasets?|spreadsheets?|limpe os dados|clean the data|extraia|extract)\b/],
-    ['implementation', /\b(build|create|implement|develop|fix|make|add|refactor|code|programe|implemente|implementar|crie|criar|desenvolva|desenvolver|construa|construir|corrija|corrigir|conserte|adicione|refatore|gere|gerar|monte|montar)\b/],
+    // "code review" and "code audit" name a review, not the verb "code" (Opus and Sonnet have no such verb).
+    ['implementation', /\b(build|create|implement|develop|fix|make|add|refactor|code(?!\s+(?:reviews?|audits?|critiques?)\b)|programe|implemente|implementar|crie|criar|desenvolva|desenvolver|construa|construir|corrija|corrigir|conserte|adicione|refatore|gere|gerar|monte|montar)\b/],
     ['answer', /(^|\s)(explique|explain)\b|\s(o que|qual|quais|como|por que|porque|what|which|how|why|who|quem)\b/]
   ],
   // Languages: Portuguese (unaccented) + English.
