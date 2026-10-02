@@ -28,6 +28,12 @@ class FakeEngine:
     def get_model_label(self):
         return "fake/model"
 
+    def check_host(self):  # the adapter's Hermes compatibility check (#31): nothing to report
+        return None
+
+    def is_host_incompatible(self, exc):
+        return False
+
 
 def client(monkeypatch):
     fake = FakeSuggest()

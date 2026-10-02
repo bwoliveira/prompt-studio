@@ -230,8 +230,14 @@ async def context(request: ContextRequest):
 
 @router.get("/health")
 async def health():
+    adapter = None
     try:
-        return {"ok": True, "model": _load("llm_adapter", "get_model_label").get_model_label()}
-    except Exception:
+        adapter = _load("llm_adapter", "get_model_label")
+        adapter.check_host()
+        return {"ok": True, "model": adapter.get_model_label()}
+    except Exception as exc:
+        if adapter is not None and adapter.is_host_incompatible(exc):
+            logger.warning("Prompt Studio health: Hermes changed: %s", exc)
+            return {"ok": False, "code": "host_incompatible", "error": adapter.HOST_INCOMPATIBLE_ERROR}
         logger.exception("Prompt Studio health error:")
         return {"ok": False, "error": "llm adapter unavailable"}
