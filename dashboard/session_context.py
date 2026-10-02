@@ -136,6 +136,55 @@ def build_messages(transcript: str, locale: str) -> list[dict[str, str]]:
     ]
 
 
+def _build_prompt(turns: list[tuple[str, str]], summary: str, locale: str) -> list[dict[str, str]] | dict[str, Any]:
+    """The model messages, or the host_incompatible answer when the redaction helper of this Hermes changed."""
+    try:
+        return build_messages(build_transcript(turns, summary), locale)
+    except Exception as exc:
+        if _llm.is_host_incompatible(exc):
+            return _host_incompatible(exc)
+        raise
+
+
+def _model_failure(exc: Exception, label: str) -> dict[str, Any]:
+    if _llm.is_host_incompatible(exc):
+        return _host_incompatible(exc, model=label)
+    # Provider text can carry request fragments: log it, return only a fixed sentence.
+    logger.warning("Prompt Studio context model call failed: %s", type(exc).__name__, exc_info=exc)
+    code = _llm.provider_error_code(exc)
+    if code == _host.CODE:
+        return _error(code, _llm.HOST_INCOMPATIBLE_ERROR, model=label)
+    return _error(code, _llm.provider_error_sentence(code), model=label)
+
+
+def _summarize(messages: list[dict[str, str]], llm: Callable[..., Any] | None, limit: float,
+               choice: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Ask the model for the summary: {"ok": True, "summary", "model"} or the error answer."""
+    label = _llm.get_model_label(choice)
+    # copy_context: the worker keeps the request's Hermes profile scope (see suggest_engine._run_with_deadline).
+    future = _EXECUTOR.submit(contextvars.copy_context().run, _llm._invoke, llm, messages, max_tokens=CONTEXT_MAX_TOKENS,
+                              timeout=limit, is_json=True, hard_timeout=True, model_choice=choice)
+    finished, _ = concurrent.futures.wait([future], timeout=limit)
+    if not finished:
+        future.cancel()
+        return _error("timeout", f"no summary within {limit:g} s", model=label)
+    try:
+        text, model = future.result()
+    except Exception as exc:
+        return _model_failure(exc, label)
+    data = _llm._json_object(text)
+    result = data.get("summary") if isinstance(data, dict) else None
+    if not isinstance(result, str) or not result.strip():
+        return _error("invalid_summary", "model reply is not a valid summary", model=model)
+    try:
+        clean = redact(result.strip())
+    except Exception as exc:
+        if _llm.is_host_incompatible(exc):
+            return _host_incompatible(exc, model=model)
+        raise
+    return {"ok": True, "summary": clean[:SUMMARY_LIMIT], "model": model}
+
+
 def context(payload: Mapping[str, Any], llm: Callable[..., Any] | None = None, deadline: float | None = None,
             opener: Callable[[str], Any] | None = None) -> dict[str, Any]:
     session_id = payload.get("session_id") if isinstance(payload.get("session_id"), str) else ""
@@ -156,41 +205,10 @@ def context(payload: Mapping[str, Any], llm: Callable[..., Any] | None = None, d
     turns, summary = found
     if not turns and not summary:
         return _error("empty_session", "session has no conversation yet")
-    try:
-        messages = build_messages(build_transcript(turns, summary), str(payload.get("locale") or "en"))
-    except Exception as exc:
-        if _llm.is_host_incompatible(exc):
-            return _host_incompatible(exc)
-        raise
-    limit = deadline if deadline is not None else CONTEXT_DEADLINE
-    label = _llm.get_model_label(choice)
-    # copy_context: the worker keeps the request's Hermes profile scope (see suggest_engine._run_with_deadline).
-    future = _EXECUTOR.submit(contextvars.copy_context().run, _llm._invoke, llm, messages, max_tokens=CONTEXT_MAX_TOKENS,
-                              timeout=limit, is_json=True, hard_timeout=True, model_choice=choice)
-    finished, _ = concurrent.futures.wait([future], timeout=limit)
-    if not finished:
-        future.cancel()
-        return _error("timeout", f"no summary within {limit:g} s", model=label)
-    try:
-        text, model = future.result()
-    except Exception as exc:
-        if _llm.is_host_incompatible(exc):
-            return _host_incompatible(exc, model=label)
-        # Provider text can carry request fragments: log it, return only a fixed sentence.
-        logger.warning("Prompt Studio context model call failed: %s", type(exc).__name__, exc_info=exc)
-        code = _llm.provider_error_code(exc)
-        if code == _host.CODE:
-            return _error(code, _llm.HOST_INCOMPATIBLE_ERROR, model=label)
-        return _error(code, _llm.provider_error_sentence(code), model=label)
-    data = _llm._json_object(text)
-    result = data.get("summary") if isinstance(data, dict) else None
-    if not isinstance(result, str) or not result.strip():
-        return _error("invalid_summary", "model reply is not a valid summary", model=model)
-    try:
-        clean = redact(result.strip())
-    except Exception as exc:
-        if _llm.is_host_incompatible(exc):
-            return _host_incompatible(exc, model=model)
-        raise
-    return {"ok": True, "summary": clean[:SUMMARY_LIMIT], "model": model, "turns": len(turns),
-            "ms": int((time.monotonic() - started) * 1000)}
+    messages = _build_prompt(turns, summary, str(payload.get("locale") or "en"))
+    if isinstance(messages, dict):
+        return messages
+    answer = _summarize(messages, llm, deadline if deadline is not None else CONTEXT_DEADLINE, choice)
+    if not answer.get("ok"):
+        return answer
+    return {**answer, "turns": len(turns), "ms": int((time.monotonic() - started) * 1000)}

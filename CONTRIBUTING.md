@@ -52,6 +52,9 @@ python3 scripts/docs_sources.py check --docs-dir <snapshot dir>   # every doc qu
   interpreter. After a Hermes update, run it: a failure there is what `host_incompatible` reports to users.
 - `.gitattributes` keeps every text file with LF line endings, also on Windows checkouts, so
   `node scripts/build.mjs --check` compares the same bytes on every system.
+- Python functions stay at McCabe complexity 10 or less. Check with
+  `uvx ruff check --select C901 --config 'lint.mccabe.max-complexity=10' .` (it must print "All checks passed!").
+  CI does not run it: the repo has no ruff configuration and no lint job, so run it before a pull request.
 
 ## Continuous integration and secrets
 

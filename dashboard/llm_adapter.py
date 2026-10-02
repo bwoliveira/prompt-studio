@@ -190,6 +190,63 @@ def _effort_and_cap(effort: Any, provider_norm: str, max_tokens: int) -> tuple[A
     return effort, max(max_tokens, EFFORT_MIN_TOKENS.get(str(effort or "").strip().lower(), 0))
 
 
+def _apply_choice(task_config: dict[str, Any], provider: str, model: str, effort: Any,
+                  model_choice: Mapping[str, Any] | None) -> tuple[str | None, dict[str, Any], str, str, Any, dict[str, Any]]:
+    """The user's explicit provider/model/effort over the task's: (task, task_config, provider, model, effort, explicit)."""
+    task: str | None = _AUX_TASK
+    chosen = _choice(model_choice)
+    if not chosen:
+        return task, task_config, provider, model, effort, {}
+    provider, model, chosen_effort = chosen
+    explicit = {"provider": provider or None, "model": model}
+    if chosen_effort:
+        effort = chosen_effort
+    cfg_provider = _clean_text(task_config.get("provider")).lower()
+    if not provider or cfg_provider != provider.lower():
+        # call_llm lends auxiliary.<task>.base_url/api_key to an explicit provider when the task
+        # has no provider or the same one; another provider must never receive them.
+        task = None
+        task_config = {k: v for k, v in task_config.items() if k == "timeout"}
+    return task, task_config, provider, model, effort, explicit
+
+
+def _provider_body(task_config: Mapping[str, Any], provider_norm: str, effort: Any, reasoning_config: Any, is_json: bool) -> dict[str, Any]:
+    """The extra_body for the provider: the task's own, then thinking for Gemini and JSON mode where it will not 400."""
+    extra_body: dict[str, Any] = {}
+    configured_extra = task_config.get("extra_body")
+    if isinstance(configured_extra, dict):
+        extra_body.update(configured_extra)
+    if provider_norm == "gemini":
+        # If effort is 'none' or not configured, disable thinking tokens for fast per-step answers
+        if reasoning_config is None or reasoning_config.get("enabled") is False or effort == "none":
+            extra_body.setdefault("thinking_config", {"thinkingBudget": 0, "includeThoughts": False})
+        elif effort in ("minimal", "low"):
+            extra_body.setdefault("thinking_config", {"thinkingLevel": "low", "includeThoughts": True})
+    # JSON mode: only send response_format on OpenAI-compatible providers that won't 400 on it
+    if is_json and provider_norm not in ("gemini", "anthropic"):
+        extra_body.setdefault("response_format", {"type": "json_object"})
+    return extra_body
+
+
+def _call_timeout(timeout: float, cfg_timeout: Any, *, hard_timeout: bool, use_config_timeout: bool) -> float:
+    """Combine with the configured task timeout: the larger wins, unless the caller imposes a hard cap."""
+    # use_config_timeout=False (final polish): the caller's own budget is the timeout, as given.
+    if use_config_timeout and isinstance(cfg_timeout, (int, float)) and cfg_timeout > 0:
+        # A caller-imposed hard cap (Prompt Studio deadlines) wins over a larger config value, so the
+        # provider call ends on its own instead of pinning a worker thread past the deadline.
+        return min(timeout, float(cfg_timeout)) if hard_timeout else max(timeout, float(cfg_timeout))
+    return timeout
+
+
+def _body_without_json_mode(extra_body: Mapping[str, Any], configured_extra: Any) -> dict[str, Any]:
+    retry_body = {k: v for k, v in extra_body.items() if k != "response_format"}
+    if isinstance(configured_extra, dict) and "response_format" in configured_extra:
+        # Hermes merges auxiliary.<task>.extra_body back into every request, so dropping the key would
+        # bring the configured format back; an explicit plain-text format overrides it instead.
+        retry_body["response_format"] = {"type": "text"}
+    return retry_body
+
+
 def _default_llm(
     *,
     messages: list[dict[str, str]],
@@ -202,54 +259,17 @@ def _default_llm(
 ) -> tuple[str, str]:
     """Universal Hermes adapter handling reasoning controls and token headroom across all providers."""
     route: dict[str, str] = {}
-    task = _AUX_TASK
-    task_config = host.auxiliary_task_config(task)
-    provider, model, _, _, _ = host.resolve_route(task)
-    effort = task_config.get("reasoning_effort")
-    explicit: dict[str, Any] = {}
-    chosen = _choice(model_choice)
-    if chosen:
-        provider, model, chosen_effort = chosen
-        explicit = {"provider": provider or None, "model": model}
-        if chosen_effort:
-            effort = chosen_effort
-        cfg_provider = _clean_text(task_config.get("provider")).lower()
-        if not provider or cfg_provider != provider.lower():
-            # call_llm lends auxiliary.<task>.base_url/api_key to an explicit provider when the task
-            # has no provider or the same one; another provider must never receive them.
-            task = None
-            task_config = {k: v for k, v in task_config.items() if k == "timeout"}
+    task_config = host.auxiliary_task_config(_AUX_TASK)
+    provider, model, _, _, _ = host.resolve_route(_AUX_TASK)
+    task, task_config, provider, model, effort, explicit = _apply_choice(task_config, provider, model, task_config.get("reasoning_effort"), model_choice)
     provider_norm = (provider or "").strip().lower()
     effort, max_tokens = _effort_and_cap(effort, provider_norm, max_tokens)
 
     reasoning_config = host.parse_reasoning_effort(effort) if effort else None
     host.check_after_call_helpers()  # a changed helper must not be found after the provider call has been paid for
 
-    extra_body: dict[str, Any] = {}
-    configured_extra = task_config.get("extra_body")
-    if isinstance(configured_extra, dict):
-        extra_body.update(configured_extra)
-
-    # Provider-specific thinking / reasoning adaptation
-    if provider_norm == "gemini":
-        # If effort is 'none' or not configured, disable thinking tokens for fast per-step answers
-        if reasoning_config is None or reasoning_config.get("enabled") is False or effort == "none":
-            extra_body.setdefault("thinking_config", {"thinkingBudget": 0, "includeThoughts": False})
-        elif effort in ("minimal", "low"):
-            extra_body.setdefault("thinking_config", {"thinkingLevel": "low", "includeThoughts": True})
-
-    # JSON mode: only send response_format on OpenAI-compatible providers that won't 400 on it
-    if is_json and provider_norm not in ("gemini", "anthropic"):
-        extra_body.setdefault("response_format", {"type": "json_object"})
-
-    # Combine with the configured task timeout: the larger wins, unless the caller imposes a hard cap.
-    cfg_timeout = task_config.get("timeout")
-    # use_config_timeout=False (final polish): the caller's own budget is the timeout, as given.
-    if use_config_timeout and isinstance(cfg_timeout, (int, float)) and cfg_timeout > 0:
-        # A caller-imposed hard cap (Prompt Studio deadlines) wins over a larger config value, so the
-        # provider call ends on its own instead of pinning a worker thread past the deadline.
-        timeout = min(timeout, float(cfg_timeout)) if hard_timeout else max(timeout, float(cfg_timeout))
-
+    extra_body = _provider_body(task_config, provider_norm, effort, reasoning_config, is_json)
+    timeout = _call_timeout(timeout, task_config.get("timeout"), hard_timeout=hard_timeout, use_config_timeout=use_config_timeout)
     deadline = time.monotonic() + timeout
 
     def _call(body: dict[str, Any], budget: float) -> Any:
@@ -274,12 +294,7 @@ def _default_llm(
         if "response_format" not in extra_body or not _rejects_json_mode(exc) or remaining < RETRY_MIN_SECONDS:
             raise
         logger.info("Prompt Studio: route refused JSON mode, retrying without it")
-        retry_body = {k: v for k, v in extra_body.items() if k != "response_format"}
-        if isinstance(configured_extra, dict) and "response_format" in configured_extra:
-            # Hermes merges auxiliary.<task>.extra_body back into every request, so dropping the key would
-            # bring the configured format back; an explicit plain-text format overrides it instead.
-            retry_body["response_format"] = {"type": "text"}
-        response = _call(retry_body, remaining)
+        response = _call(_body_without_json_mode(extra_body, task_config.get("extra_body")), remaining)
     resolved_provider = route.get("provider", provider or "auto")
     resolved_model = route.get("model", model or "default")
     return Reply(host.extract_content_or_reasoning({"content": _answer_content(response)}), f"{resolved_provider}/{resolved_model}", _finish_reason(response))
