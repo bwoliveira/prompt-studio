@@ -16,6 +16,8 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   the plugin it was installing. It now sees that source and destination are the same, skips the copy with a message
   and keeps every file. Any other install is staged in a sibling folder and swapped in with `mv`, so a copy that
   fails leaves the previous install intact.
+  If an earlier run was killed between the two `mv`, the next run restores the previous install from
+  `plugins/prompt-studio.old` before doing anything else, so a retry that fails no longer loses it.
 - New target: **Claude Sonnet 5.5** (Alt+T, or pick **Sonnet**), next to Opus and Astra. It has its own prompt engine,
   question help and AI writer rules from Anthropic's Sonnet 5.5 prompting guide, and is the default when the
   session's model is a Sonnet. Opus and Astra prompts do not change.

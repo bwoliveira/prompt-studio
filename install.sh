@@ -75,6 +75,12 @@ if [[ -n "$PROFILE" ]]; then TARGET_HOME="$BASE_HOME/profiles/$PROFILE"; fi
 # and writes its own .hermes-package.json marker, so this script never touches desktop-plugins/.
 PLUGIN_DIR="$TARGET_HOME/plugins/prompt-studio"
 LEGACY_DESKTOP_DIR="$TARGET_HOME/desktop-plugins/prompt-studio"
+# A SIGTERM between the two mv of an earlier swap leaves only "$PLUGIN_DIR.old": that is the previous
+# install, so put it back before anything else; a .old is deleted only while PLUGIN_DIR exists.
+if [[ ! -e "$PLUGIN_DIR" && ! -L "$PLUGIN_DIR" ]] && [[ -e "$PLUGIN_DIR.old" || -L "$PLUGIN_DIR.old" ]]; then
+  echo "[WARN] an earlier install was interrupted; restoring the previous install from $PLUGIN_DIR.old" >&2
+  mv "$PLUGIN_DIR.old" "$PLUGIN_DIR"
+fi
 # Running this script from inside the installed plugin (the layout `hermes plugins install` leaves)
 # means source and destination are the same folder: copying would delete the source first.
 INSTALLED_REAL=""

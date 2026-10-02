@@ -224,6 +224,48 @@ class InstallerTests(unittest.TestCase):
             self.assertEqual(self.snapshot(previous), before)
             self.assertEqual(sorted(p.name for p in previous.parent.iterdir()), ["prompt-studio"], "no staging leftovers")
 
+    def make_interrupted_swap(self, root: Path, home: Path) -> Path:
+        """State a SIGTERM between the two mv calls leaves: only plugins/prompt-studio.old exists."""
+        interrupted = home / "plugins/prompt-studio.old"
+        (interrupted / "dashboard").mkdir(parents=True)
+        (interrupted / "plugin.yaml").write_text("name: old\n", encoding="utf-8")
+        (interrupted / "dashboard/old.py").write_text("OLD = 1\n", encoding="utf-8")
+        return interrupted
+
+    def test_failed_copy_after_interrupted_swap_restores_the_previous_install(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            home = root / "tmp_home"
+            source = copy_repo(root)
+            before = self.snapshot(self.make_interrupted_swap(root, home))
+            shim = root / "shim"
+            shim.mkdir()
+            cp = shim / "cp"
+            cp.write_text(
+                f'#!/usr/bin/env bash\ncase "$*" in *desktop/plugin.js*) echo "simulated cp failure" >&2; exit 1;; esac\n'
+                f'exec {shutil.which("cp")} "$@"\n', encoding="utf-8")
+            cp.chmod(0o755)
+            environment = os.environ.copy()
+            environment.update({"PYTHON_BIN": str(PYTHON), "HERMES_BIN": str(REAL_HERMES), "HERMES_HOME": str(home),
+                                "PATH": f"{shim}{os.pathsep}{environment['PATH']}"})
+            result = subprocess.run(["bash", "install.sh", "--home", str(home)], cwd=source, env=environment,
+                                    text=True, capture_output=True, check=False)
+            self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+            restored = home / "plugins/prompt-studio"
+            self.assertEqual(self.snapshot(restored), before)
+            self.assertEqual(sorted(p.name for p in restored.parent.iterdir()), ["prompt-studio"], "no staging leftovers")
+
+    def test_install_after_interrupted_swap_ends_with_the_new_install_and_no_leftovers(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            home = root / "tmp_home"
+            source = copy_repo(root)
+            self.make_interrupted_swap(root, home)
+            self.assert_ok(self.run_install(source, home, REAL_HERMES))
+            self.assertTrue((home / "plugins/prompt-studio/desktop/plugin.js").is_file())
+            self.assertFalse((home / "plugins/prompt-studio/dashboard/old.py").exists())
+            self.assertEqual(sorted(p.name for p in (home / "plugins").iterdir()), ["prompt-studio"])
+
     def test_reinstall_replaces_files_and_leaves_no_staging_directory(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
