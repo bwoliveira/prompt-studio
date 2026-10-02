@@ -48,7 +48,7 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
 - Internal/fix: every Hermes call of the backend (model call, task resolution, reasoning effort, secret redactor, session
   store) now goes through one module, `dashboard/hermes_host.py`, which checks the signature it relies on right before
   using it. When a Hermes update changes one, /suggest, /compose and /context answer the new code `host_incompatible`
-  (with a short sentence telling you to update the plugin) and /health reports it, instead of failing with a generic
+  (the Studio shows a short sentence, in English or Portuguese, telling you to update the plugin) and /health reports it, instead of failing with a generic
   "unavailable" or a `TypeError` in the log. That includes a Hermes module that no longer imports (moved, removed, a
   missing dependency) and a session store whose `close` now needs an argument. No Hermes installed at all keeps its old behavior. A test module checks
   the same signatures against the installed Hermes (skipped only where there is none; an installed Hermes that fails to import fails it), and a scan test keeps every other
