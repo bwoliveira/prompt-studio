@@ -368,3 +368,11 @@ test('speed: 1000 varied briefs under 300 ms', () => {
   const ms = performance.now() - start
   assert.ok(ms < 300, `${ms} ms`)
 })
+
+test('#38: the team paragraph is one rule per line, like Astra (Sonnet)', () => {
+  const body = ENGINE.build({ goal: 'Crie um app', subagents: 'team' }).sections.find(s => s.id === 'subagents').body
+  const lines = body.split('\n')
+  assert.equal(lines.length, 4, body)
+  assert.deepEqual(lines.map(line => line.split(' ').slice(0, 3).join(' ')), ['Use subagents. Split', 'Work directly on', 'The user asks', 'Only report delegation'])
+  assert.ok(lines[0].endsWith('with the lead agent.') && lines[2].endsWith('treats the rest as optional.'))
+})

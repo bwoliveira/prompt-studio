@@ -311,7 +311,7 @@ function buildNormalized(b) {
   // Delegation only when chosen: the default is 'auto', which still states the vendor rule for hands-on work.
   const mode = b.subagents || 'auto'
   if (mode === 'auto' && ['implementation', 'workflow', 'data', 'review', 'analysis'].includes(deliverable)) add('subagents', 'SUBAGENTS', [SUBAGENT_AUTO])
-  if (mode === 'team') add('subagents', 'SUBAGENTS', [[SUBAGENT_SPLIT, SUBAGENT_SIZE, SUBAGENT_REVIEWER, SUBAGENT_REAL].join(' ')])
+  if (mode === 'team') add('subagents', 'SUBAGENTS', [SUBAGENT_SPLIT, SUBAGENT_SIZE, SUBAGENT_REVIEWER, SUBAGENT_REAL])
   if (mode === 'direct') add('subagents', 'SUBAGENTS', [SUBAGENT_DIRECT])
 
   if (b.examples) {

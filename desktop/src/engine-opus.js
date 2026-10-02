@@ -274,7 +274,7 @@ function buildNormalized(b) {
   // [opus5] delegation only when chosen: the default is 'auto', which still states the guide's delegation rule for hands-on work.
   const mode = b.subagents || 'auto'
   if (mode === 'auto' && ['implementation', 'workflow', 'data', 'review', 'analysis'].includes(deliverable)) add('subagents', 'SUBAGENTS', [SUBAGENT_AUTO])
-  if (mode === 'team') add('subagents', 'SUBAGENTS', [[SUBAGENT_SPLIT, SUBAGENT_SIZE, SUBAGENT_REVIEWER, SUBAGENT_REAL, TIME_LINE].join(' ')])
+  if (mode === 'team') add('subagents', 'SUBAGENTS', [SUBAGENT_SPLIT, SUBAGENT_SIZE, SUBAGENT_REVIEWER, SUBAGENT_REAL, TIME_LINE])
   if (mode === 'direct') add('subagents', 'SUBAGENTS', [SUBAGENT_DIRECT])
 
   if (b.examples) {
