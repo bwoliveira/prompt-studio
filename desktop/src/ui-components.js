@@ -37,7 +37,7 @@ export const SHORTCUTS = {
   discard: 'Alt+D',
   improve: 'Alt+M',
   paste: 'Alt+C',
-  model: { opus: 'Alt+O', astra: 'Alt+A', sonnet: 'Alt+T' },
+  model: Object.fromEntries(TARGETS.map(target => [target.id, target.key])),
   mode: 'Alt+I',
   version: 'Alt+V',
   editPrompt: 'Alt+E'
@@ -1054,7 +1054,7 @@ export default {
           action: `${ID}.start`,
           detail: () => tr('palette.detailDraft'),
           id: `${ID}.start`,
-          keywords: ['prompt', 'studio', 'opus', 'astra', 'sonnet'],
+          keywords: ['prompt', 'studio', ...TARGETS.map(target => target.id)],
           label: tr('palette.label'),
           run: startFromComposer
         }

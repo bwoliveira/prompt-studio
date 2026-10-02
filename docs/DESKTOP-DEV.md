@@ -7,7 +7,7 @@
 | `desktop/src/engine-opus.js` | Claude Opus 5.5 prompt engine. Pure ESM, no imports, no DOM, deterministic. |
 | `desktop/src/engine-astra.js` | GPT-6 Astra prompt engine. Same shape and rules. |
 | `desktop/src/engine-sonnet.js` | Claude Sonnet 5.5 prompt engine. Same shape and rules. |
-| `desktop/src/studio-core.js` | Step flow (questions, recommendations, answers to brief). Imports only the three engines. |
+| `desktop/src/studio-core.js` | Step flow (questions, recommendations, answers to brief). Holds the target registry (`TARGETS`: id, label, model, key, default-target pattern, engine, capabilities); imports only the engines and `i18n-core.js`. The build reads its engine list from those imports. |
 | `desktop/src/i18n-core.js` | Questions, help and option labels, `en` and `pt`. |
 | `desktop/src/i18n-ui.js` | Every string `plugin.js` shows (buttons, notes, errors, shortcut help), `en` and `pt`. |
 | `desktop/src/plugin-head.js` | The plugin's imports and `ID`; the only hand-written file allowed to import. |

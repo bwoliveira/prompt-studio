@@ -5,13 +5,22 @@ import { ENGINE as ASTRA_ENGINE } from './engine-astra.js'
 import { ENGINE as SONNET_ENGINE } from './engine-sonnet.js'
 import { CORE_MESSAGES } from './i18n-core.js'
 
-const STUDIO_ENGINES = { opus: OPUS_ENGINE, astra: ASTRA_ENGINE, sonnet: SONNET_ENGINE }
+// The target registry: one entry per target model. The core, the UI target switch, the default-target rule, the
+// design-avoid step and the build's engine list (the imports above) all read it. Adding a model is one engine
+// file, one import above and one entry here, plus its help and guide in i18n-core.js (a test checks that).
+//   key           the Alt chord that selects the target in the UI
+//   pattern       default-target rule: a session model name matching it picks this target; the target without a
+//                 pattern (null) is the fallback. `priority` orders the patterns (lowest first): a gateway name
+//                 such as 'openai/claude-sonnet-5-5' must reach Sonnet before the broader GPT pattern sees it.
+//   capabilities  designAvoid: the engine takes the design-avoid line (interface work)
 export const TARGETS = [
-  { id: 'opus', label: 'Opus', model: OPUS_ENGINE.model },
-  { id: 'astra', label: 'Astra', model: ASTRA_ENGINE.model },
-  { id: 'sonnet', label: 'Sonnet', model: SONNET_ENGINE.model }
+  { id: 'opus', label: 'Opus', model: OPUS_ENGINE.model, key: 'Alt+O', pattern: null, priority: 0, engine: OPUS_ENGINE, capabilities: { designAvoid: true } },
+  { id: 'astra', label: 'Astra', model: ASTRA_ENGINE.model, key: 'Alt+A', pattern: /gpt|openai|astra|codex|\bo[1-9]\b/i, priority: 2, engine: ASTRA_ENGINE, capabilities: { designAvoid: false } },
+  { id: 'sonnet', label: 'Sonnet', model: SONNET_ENGINE.model, key: 'Alt+T', pattern: /sonnet/i, priority: 1, engine: SONNET_ENGINE, capabilities: { designAvoid: true } }
 ]
-const TARGET_NAME = { opus: 'Opus', astra: 'Astra', sonnet: 'Sonnet' }
+const FALLBACK_TARGET = TARGETS.find(target => target.pattern === null)
+const targetOf = id => TARGETS.find(target => target.id === id)
+const targetLabel = id => (targetOf(id) || FALLBACK_TARGET).label
 export const MESSAGES = CORE_MESSAGES
 // Skipped text answer. '(pulado)' is the marker saved before v1 and is still understood.
 export const SKIPPED = '(skipped)'
@@ -38,14 +47,14 @@ export function coreText(locale, key, ...args) {
 }
 
 function engineOf(target) {
-  return STUDIO_ENGINES[target] || STUDIO_ENGINES.opus
+  return (targetOf(target) || FALLBACK_TARGET).engine
 }
 
 // Steps in impact order. `when(analysis, brief)` gates optional steps; enum options come from the engine.
 //   thirdPartyText before context: AI suggestions for later steps already see the pasted text.
 //   Only the user knows whether they have something to paste, so it gets no AI suggestion (collapsed paste).
 //   thirdPartySource only after a paste ("Tell Claude what the content is and where it came from").
-//   designAvoid only for Opus and Sonnet interface work (the engine drops it otherwise); examples not for code or agents; subagents is always asked.
+//   designAvoid only for interface work and the targets with that capability (the engine drops it otherwise); examples not for code or agents; subagents is always asked.
 const STEPS = [
   { id: 'deliverable', kind: 'enum' },
   { id: 'thirdPartyText', kind: 'text', paste: true, autoSuggest: false },
@@ -53,7 +62,7 @@ const STEPS = [
   { id: 'context', kind: 'text' },
   { id: 'requirements', kind: 'text' },
   { id: 'success', kind: 'text' },
-  { id: 'designAvoid', kind: 'design', targets: ['opus', 'sonnet'], when: a => Boolean(a.interface) },
+  { id: 'designAvoid', kind: 'design', capability: 'designAvoid', when: a => Boolean(a.interface) },
   { id: 'autonomy', kind: 'enum' },
   { id: 'subagents', kind: 'enum' },
   { id: 'examples', kind: 'text', when: a => !['code', 'agent'].includes(a.category) },
@@ -63,14 +72,14 @@ const STEPS = [
 const stepById = id => STEPS.find(step => step.id === id)
 
 function stepApplies(step, target) {
-  if (step.targets && !step.targets.includes(target)) return false
+  if (step.capability && !targetOf(target)?.capabilities[step.capability]) return false
   return step.kind !== 'enum' || (engineOf(target).options[step.id] || []).length > 0
 }
 
 export function defaultTarget(model) {
   const name = String(model || '')
-  if (/sonnet/i.test(name)) return 'sonnet'
-  return /gpt|openai|astra|codex|\bo[1-9]\b/i.test(name) ? 'astra' : 'opus'
+  const match = TARGETS.filter(target => target.pattern).sort((a, b) => a.priority - b.priority).find(target => target.pattern.test(name))
+  return (match || FALLBACK_TARGET).id
 }
 
 export function fieldForTarget(fieldId, target) {
@@ -171,7 +180,7 @@ function questionObject(step, target, intent, ladder, locale) {
   const engine = engineOf(target)
   const brief = briefFromLadder(target, intent, ladder)
   const analysis = engine.analyze(brief)
-  let question = text.question(TARGET_NAME[target] || TARGET_NAME.opus)
+  let question = text.question(targetLabel(target))
   const help = perTarget(text.help, target)
   const guide = perTarget(text.guide, target)
   if (step.kind === 'enum') {
@@ -232,7 +241,7 @@ export function studioWarnings(target, intent, ladder, locale = 'en') {
   for (const [fieldId, values] of Object.entries(conflicts)) {
     const step = stepById(fieldId)
     if (!step || brief[fieldId] === undefined || !(values || []).includes(brief[fieldId])) continue
-    const question = msg.fields[fieldId]?.question(TARGET_NAME[target] || TARGET_NAME.opus) || fieldId
+    const question = msg.fields[fieldId]?.question(targetLabel(target)) || fieldId
     out.push(msg.conflict(optionLabel(fieldId, brief[fieldId], locale), question))
   }
   return out
@@ -255,7 +264,7 @@ export function studioAnswers(target, intent, ladder, locale = 'en') {
     if (!rung) continue
     const answer = String(rung.answer || '').trim()
     if (!answer || isNoneAnswer(answer)) continue
-    const question = coreMessages(locale).fields[step.id].question(TARGET_NAME[target] || TARGET_NAME.opus)
+    const question = coreMessages(locale).fields[step.id].question(targetLabel(target))
     if (step.kind === 'design') {
       const isDefault = DESIGN_DEFAULT_WORDS.includes(foldText(answer))
       out.push({ id: step.id, kind: 'design', question, answer: isDefault ? engine.DEFAULT_DESIGN_AVOID || '' : answer, isDefault })
