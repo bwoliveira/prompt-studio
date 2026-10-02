@@ -803,6 +803,11 @@ const TABLE = [
   ['Você pode me mostrar a função no arquivo principal?', 'answer', 'Codex R5 F1: pt arquivo principal'],
   ['Can you show me a function in a file that parses dates?', 'answer', 'Codex R5 F1: a file, then what the function does'],
   ['Can you show me a script in Python for files?', 'implementation', 'Codex R5 F1 near miss: a language, then a purpose'],
+  ['Can you show me a script that extracts data? Can you help me understand it?', 'answer', 'Codex R5 F2: help me understand'],
+  ['Can you show me a script that extracts data and help me figure out how to run it', 'answer', 'Codex R5 F2: and help me figure out'],
+  ['Você pode me mostrar um script? Você pode me ajudar a entender?', 'answer', 'Codex R5 F2: pt me ajudar a entender'],
+  ['Você pode me mostrar um script que extrai dados e me ajude a entender como funciona', 'answer', 'Codex R5 F2: pt me ajude a entender'],
+  ['Can you show me a script that extracts data? Help me add unit tests for it.', 'implementation', 'Codex R5 F2 near miss: help me add is an order'],
   // #49 review F2: an explanation asked for in a later clause or sentence makes the draft a question
   ['Can you show me a script? Why does it fail?', 'answer', 'F2 a later question'],
   ['Can you show me a script that extracts data and tell me how it works?', 'answer', 'F2 tell me how, same sentence'],
