@@ -198,6 +198,24 @@ const TABLE = [
   ['Do not forget: review the API before Friday', 'review', 'reminder with a colon'],
   ['Never ever deploy from this machine. Write a policy email', 'text', 'near miss: adverb between negation and verb'],
   ['Do not run any commands; plan the steps instead', 'plan', 'near miss: the prohibited verb is skipped, the order stays'],
+  // an explanation request stays an answer, whatever it is about (Codex P1)
+  ['Explain how to configure nginx', 'answer', 'explain + configure'],
+  ['Explique como instalar o Docker', 'answer', 'pt explique + instalar'],
+  ['Explain the deploy pipeline to a new hire', 'answer', 'explain + workflow nouns'],
+  ['Build the dashboard and explain your choices', 'implementation', 'near miss: the order comes first'],
+  ['Write a post explaining the API', 'text', 'near miss: explaining is a clause, not the request'],
+  // an infinitive or modal marker keeps the planning verb (Codex P1)
+  ['We need to plan before we configure nginx', 'plan', 'need to plan'],
+  ["Let's plan the migration, then configure the proxy", 'plan', "let's plan"],
+  ['We should plan first and only then automate the deploy', 'plan', 'we should plan'],
+  ['Precisamos planejar antes de configurar o nginx', 'plan', 'pt infinitive'],
+  ['We need you to plan the rollout before we configure anything', 'plan', 'we need you to plan'],
+  ['We need to configure nginx according to plan', 'workflow', 'near miss: plan is a noun after the order'],
+  // a question may wrap onto the next line (Codex P2)
+  ['How do I configure nginx\nwith TLS?', 'answer', 'question across two lines'],
+  ['Como configurar o nginx\ncom TLS', 'answer', 'pt, two lines, no mark'],
+  ['What is Docker?\nFix the login bug.', 'implementation', 'near miss: the mark closes the question, then an order'],
+  ['How do I install Docker?\n\nThen configure nginx.', 'workflow', 'near miss: an order after a blank line'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
@@ -278,7 +296,7 @@ test('parity: Opus and Sonnet carry the identical detection block', async () => 
   const [opus, sonnet] = await Promise.all([src('engine-opus.js'), src('engine-sonnet.js')])
   const a = detection(opus)
   const b = detection(sonnet)
-  for (const needle of ['CATEGORY_RULES', 'DELIVERABLE_RULES', 'MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'QUESTION_START', 'NOUN_SIGNAL', 'SENTENCE_START', 'VERB_OBJECT', 'NEGATED', 'CONTEXT_WINDOW', 'MODIFIER_GAP', 'INTERFACE', 'function firstSignal', 'function detect', 'function analyzeNormalized']) {
+  for (const needle of ['CATEGORY_RULES', 'DELIVERABLE_RULES', 'MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'QUESTION_START', 'NOUN_SIGNAL', 'SENTENCE_START', 'VERB_OBJECT', 'INFINITIVE_MARK', 'NEGATED', 'CONTEXT_WINDOW', 'MODIFIER_GAP', 'INTERFACE', 'function firstSignal', 'function detect', 'function analyzeNormalized']) {
     assert.ok(a.includes(needle), `opus block has ${needle}`)
   }
   assert.equal(a, b, 'Opus and Sonnet detection blocks drifted apart: change both engines identically')
@@ -286,7 +304,7 @@ test('parity: Opus and Sonnet carry the identical detection block', async () => 
 
 test('parity: the artifact constants are the same text on all three engines', async () => {
   const sources = await Promise.all(['engine-opus.js', 'engine-sonnet.js', 'engine-astra.js'].map(src))
-  for (const name of ['MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'NOUN_SIGNAL', 'SENTENCE_START', 'VERB_OBJECT', 'NEGATED', 'CONTEXT_WINDOW', 'MODIFIER_GAP', 'REVIEW_OBJECT', 'PLAN_OBJECT', 'DATA_OBJECT', 'WORKFLOW_OBJECT']) {
+  for (const name of ['MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'NOUN_SIGNAL', 'SENTENCE_START', 'VERB_OBJECT', 'INFINITIVE_MARK', 'NEGATED', 'CONTEXT_WINDOW', 'MODIFIER_GAP', 'REVIEW_OBJECT', 'PLAN_OBJECT', 'DATA_OBJECT', 'WORKFLOW_OBJECT']) {
     const lines = sources.map(source => source.split('\n').find(line => line.startsWith(`const ${name} =`)))
     assert.ok(lines.every(Boolean), `${name} exists in every engine`)
     assert.equal(new Set(lines).size, 1, `${name} differs between engines:\n${lines.join('\n')}`)

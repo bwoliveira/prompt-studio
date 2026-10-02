@@ -249,7 +249,9 @@ const DELIVERABLE_RULES = [
   ['implementation', /\b(crie|criar|implemente|implementar|implement|build|construa|desenvolva|develop|corrija|corrigir|fix|refatore|refactor|programe|create|make|adicione|add|gere|gerar|monte|montar)\b/],
   ['text', /\b(escreva|escrever|redija|write|draft|reescreva|rewrite|traduza|translate)\b/],
   ['analysis', /\b(pesquise|pesquisar|research|compare|comparar|analise|analisar|analyze|analyse|investigue|investigate|avalie|evaluate|resuma|resumir)\b/],
-  ['plan', /\b(plano|planeje|planejar|plan|roadmap|cronograma|estrategia|strategy)\b/]
+  ['plan', /\b(plano|planeje|planejar|plan|roadmap|cronograma|estrategia|strategy)\b/],
+  // "Explain how to configure nginx": an explanation is asked for, whatever the verbs it is about.
+  ['answer', /\b(explique|explicar|explain|esclareca|esclarecer|clarify)\b/]
 ]
 // Languages: Portuguese (unaccented) + English.
 const MAKE_VERB = /\b(crie|criar|escreva|escrever|write|create|build|construa|desenvolva|develop|implemente|implement|programe|gere|gerar|monte|montar)\b/
@@ -263,8 +265,9 @@ const GENERATE_VERB = /^(gere|gerar|monte|montar)\b/
 // Languages: Portuguese (unaccented) + English.
 // A question: the draft opens with a question word and its first sentence is a question (or one phrase without
 // punctuation, a plain period included; a period inside a name or version, "Node.js", "3.12", is not an end). The verbs
-// inside it ("Como instalar o Docker?") are what is asked about, not an order.
-const QUESTION_FORM = /^(?:como|o que|qual|quais|por que|porque|quando|onde|quem|quanto|how|what|why|which|who|when|where)\b(?:(?:[^.!?\n]|\.(?=\S))*\?|(?:[^.!?,\n]|\.(?=\S))*\.?\s*$)/
+// inside it ("Como instalar o Docker?") are what is asked about, not an order. A question may wrap onto the next
+// line ("How do I configure nginx\nwith TLS?"); a blank line ends it.
+const QUESTION_FORM = /^(?:como|o que|qual|quais|por que|porque|quando|onde|quem|quanto|how|what|why|which|who|when|where)\b(?:(?:[^.!?\n]|\.(?=\S)|\n(?!\s*\n))*\?|(?:[^.!?,\n]|\.(?=\S)|\n(?!\s*\n))*\.?\s*$)/
 // Languages: Portuguese (unaccented) + English.
 // "Analise a planilha" stays a data task: the analysis verb with a data file as its subject.
 const DATA_NOUN = /\b(planilhas?|csv|datasets?|spreadsheets?)\b/
@@ -292,7 +295,9 @@ const NOUN_SIGNAL = /^(plano|planos|plan|roadmap|cronograma|estrategia|strategy|
 // one-word opener and its comma ("First, plan ..."), a polite prefix ("Please plan ...", "Por favor, planeje") or a
 // request prefix ("Can you plan ...", "I need you to plan ...", "Preciso que voce planeje ...").
 // A noun-signal word there names the request ("Plan the steps ...", "Plano de acao para ..."), not context.
-const SENTENCE_START = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:can|could|would|will) you|i need you to|i want you to|voce pode|preciso que voce|quero que voce)\s+(?:please\s+)?)?$/
+const SENTENCE_START = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:can|could|would|will) you|(?:i|we) (?:need|want) you to|voce pode|preciso que voce|precisamos que voce|quero que voce|queremos que voce)\s+(?:please\s+)?)?$/
+// A noun-signal word after an infinitive or modal marker is the verb ("we need to plan before ...", "let's plan").
+const INFINITIVE_MARK = /\b(?:(?:need|needs|needed|want|wants|wanted|have|has|had|going|ought|able|like|try|trying|time|ready|how)\s+to|let'?s|let us|(?:we|you|i|they)\s+(?:should|must|will|can|could|shall|may|might)(?:\s+(?:also|first|then|now|just))?|precisamos|devemos|vamos|queremos|preciso|quero|devo|vou)\s*$/
 // A noun-signal word followed by a determiner is the verb wherever it sits ("... so plan the steps", "review our API").
 // Portuguese este/esta are left out: folded, "esta" is also "esta" ("Nosso plano esta pronto").
 const VERB_OBJECT = /^\s+(?:the|a|an|our|my|your|this|these|those|all|each|every|o|os|as|um|uma|uns|umas|nosso|nossa|nossos|nossas|meu|minha|seu|sua|esse|essa|esses|essas|todos|todas|cada)\b/
@@ -324,7 +329,7 @@ function firstSignal(text) {
       const before = m.index > CONTEXT_WINDOW ? '\u0000' + text.slice(m.index - CONTEXT_WINDOW, m.index) : text.slice(0, m.index)
       if (NEGATED.test(before)) continue
       const end = m.index + m[0].length
-      const isNoun = NOUN_SIGNAL.test(word) && !SENTENCE_START.test(before) && !VERB_OBJECT.test(text.slice(end, end + CONTEXT_WINDOW))
+      const isNoun = NOUN_SIGNAL.test(word) && !SENTENCE_START.test(before) && !INFINITIVE_MARK.test(before) && !VERB_OBJECT.test(text.slice(end, end + CONTEXT_WINDOW))
       if (isNoun) { if (m.index < nounAt) { noun = id; nounAt = m.index }; continue }
       if (m.index < at) { signal = id; at = m.index }
       break
@@ -746,8 +751,9 @@ const GENERATE_VERB = /^(gere|gerar|monte|montar)\b/
 // Languages: Portuguese (unaccented) + English.
 // A question: the draft opens with a question word and its first sentence is a question (or one phrase without
 // punctuation, a plain period included; a period inside a name or version, "Node.js", "3.12", is not an end). The verbs
-// inside it ("Como instalar o Docker?") are what is asked about, not an order.
-const QUESTION_FORM = /^(?:como|o que|qual|quais|por que|porque|quando|onde|quem|quanto|how|what|why|which|who|when|where)\b(?:(?:[^.!?\n]|\.(?=\S))*\?|(?:[^.!?,\n]|\.(?=\S))*\.?\s*$)/
+// inside it ("Como instalar o Docker?") are what is asked about, not an order. A question may wrap onto the next
+// line ("How do I configure nginx\nwith TLS?"); a blank line ends it.
+const QUESTION_FORM = /^(?:como|o que|qual|quais|por que|porque|quando|onde|quem|quanto|how|what|why|which|who|when|where)\b(?:(?:[^.!?\n]|\.(?=\S)|\n(?!\s*\n))*\?|(?:[^.!?,\n]|\.(?=\S)|\n(?!\s*\n))*\.?\s*$)/
 // Languages: Portuguese (unaccented) + English.
 const DATA_NOUN = /\b(planilha|csv|xlsx|spreadsheet|dataset|dados|data|sql|tabela de vendas|metricas|metrics)\b/
 // Languages: Portuguese (unaccented) + English.
@@ -769,7 +775,9 @@ const NOUN_SIGNAL = /^(plano|planos|plan|roadmap|cronograma|estrategia|strategy|
 // one-word opener and its comma ("First, plan ..."), a polite prefix ("Please plan ...", "Por favor, planeje") or a
 // request prefix ("Can you plan ...", "I need you to plan ...", "Preciso que voce planeje ...").
 // A noun-signal word there names the request ("Plan the steps ...", "Plano de acao para ..."), not context.
-const SENTENCE_START = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:can|could|would|will) you|i need you to|i want you to|voce pode|preciso que voce|quero que voce)\s+(?:please\s+)?)?$/
+const SENTENCE_START = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:can|could|would|will) you|(?:i|we) (?:need|want) you to|voce pode|preciso que voce|precisamos que voce|quero que voce|queremos que voce)\s+(?:please\s+)?)?$/
+// A noun-signal word after an infinitive or modal marker is the verb ("we need to plan before ...", "let's plan").
+const INFINITIVE_MARK = /\b(?:(?:need|needs|needed|want|wants|wanted|have|has|had|going|ought|able|like|try|trying|time|ready|how)\s+to|let'?s|let us|(?:we|you|i|they)\s+(?:should|must|will|can|could|shall|may|might)(?:\s+(?:also|first|then|now|just))?|precisamos|devemos|vamos|queremos|preciso|quero|devo|vou)\s*$/
 // A noun-signal word followed by a determiner is the verb wherever it sits ("... so plan the steps", "review our API").
 // Portuguese este/esta are left out: folded, "esta" is also "esta" ("Nosso plano esta pronto").
 const VERB_OBJECT = /^\s+(?:the|a|an|our|my|your|this|these|those|all|each|every|o|os|as|um|uma|uns|umas|nosso|nossa|nossos|nossas|meu|minha|seu|sua|esse|essa|esses|essas|todos|todas|cada)\b/
@@ -801,7 +809,7 @@ function firstSignal(text) {
       const before = m.index > CONTEXT_WINDOW ? '\u0000' + text.slice(m.index - CONTEXT_WINDOW, m.index) : text.slice(0, m.index)
       if (NEGATED.test(before)) continue
       const end = m.index + m[0].length
-      const isNoun = NOUN_SIGNAL.test(word) && !SENTENCE_START.test(before) && !VERB_OBJECT.test(text.slice(end, end + CONTEXT_WINDOW))
+      const isNoun = NOUN_SIGNAL.test(word) && !SENTENCE_START.test(before) && !INFINITIVE_MARK.test(before) && !VERB_OBJECT.test(text.slice(end, end + CONTEXT_WINDOW))
       if (isNoun) { if (m.index < nounAt) { noun = id; nounAt = m.index }; continue }
       if (m.index < at) { signal = id; at = m.index }
       break
@@ -1265,7 +1273,9 @@ const DELIVERABLE_RULES = [
   ['implementation', /\b(crie|criar|implemente|implementar|implement|build|construa|desenvolva|develop|corrija|corrigir|fix|refatore|refactor|programe|create|make|adicione|add|gere|gerar|monte|montar)\b/],
   ['text', /\b(escreva|escrever|redija|write|draft|reescreva|rewrite|traduza|translate)\b/],
   ['analysis', /\b(pesquise|pesquisar|research|compare|comparar|analise|analisar|analyze|analyse|investigue|investigate|avalie|evaluate|resuma|resumir)\b/],
-  ['plan', /\b(plano|planeje|planejar|plan|roadmap|cronograma|estrategia|strategy)\b/]
+  ['plan', /\b(plano|planeje|planejar|plan|roadmap|cronograma|estrategia|strategy)\b/],
+  // "Explain how to configure nginx": an explanation is asked for, whatever the verbs it is about.
+  ['answer', /\b(explique|explicar|explain|esclareca|esclarecer|clarify)\b/]
 ]
 // Languages: Portuguese (unaccented) + English.
 const MAKE_VERB = /\b(crie|criar|escreva|escrever|write|create|build|construa|desenvolva|develop|implemente|implement|programe|gere|gerar|monte|montar)\b/
@@ -1279,8 +1289,9 @@ const GENERATE_VERB = /^(gere|gerar|monte|montar)\b/
 // Languages: Portuguese (unaccented) + English.
 // A question: the draft opens with a question word and its first sentence is a question (or one phrase without
 // punctuation, a plain period included; a period inside a name or version, "Node.js", "3.12", is not an end). The verbs
-// inside it ("Como instalar o Docker?") are what is asked about, not an order.
-const QUESTION_FORM = /^(?:como|o que|qual|quais|por que|porque|quando|onde|quem|quanto|how|what|why|which|who|when|where)\b(?:(?:[^.!?\n]|\.(?=\S))*\?|(?:[^.!?,\n]|\.(?=\S))*\.?\s*$)/
+// inside it ("Como instalar o Docker?") are what is asked about, not an order. A question may wrap onto the next
+// line ("How do I configure nginx\nwith TLS?"); a blank line ends it.
+const QUESTION_FORM = /^(?:como|o que|qual|quais|por que|porque|quando|onde|quem|quanto|how|what|why|which|who|when|where)\b(?:(?:[^.!?\n]|\.(?=\S)|\n(?!\s*\n))*\?|(?:[^.!?,\n]|\.(?=\S)|\n(?!\s*\n))*\.?\s*$)/
 // Languages: Portuguese (unaccented) + English.
 // "Analise a planilha" stays a data task: the analysis verb with a data file as its subject.
 const DATA_NOUN = /\b(planilhas?|csv|datasets?|spreadsheets?)\b/
@@ -1308,7 +1319,9 @@ const NOUN_SIGNAL = /^(plano|planos|plan|roadmap|cronograma|estrategia|strategy|
 // one-word opener and its comma ("First, plan ..."), a polite prefix ("Please plan ...", "Por favor, planeje") or a
 // request prefix ("Can you plan ...", "I need you to plan ...", "Preciso que voce planeje ...").
 // A noun-signal word there names the request ("Plan the steps ...", "Plano de acao para ..."), not context.
-const SENTENCE_START = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:can|could|would|will) you|i need you to|i want you to|voce pode|preciso que voce|quero que voce)\s+(?:please\s+)?)?$/
+const SENTENCE_START = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:can|could|would|will) you|(?:i|we) (?:need|want) you to|voce pode|preciso que voce|precisamos que voce|quero que voce|queremos que voce)\s+(?:please\s+)?)?$/
+// A noun-signal word after an infinitive or modal marker is the verb ("we need to plan before ...", "let's plan").
+const INFINITIVE_MARK = /\b(?:(?:need|needs|needed|want|wants|wanted|have|has|had|going|ought|able|like|try|trying|time|ready|how)\s+to|let'?s|let us|(?:we|you|i|they)\s+(?:should|must|will|can|could|shall|may|might)(?:\s+(?:also|first|then|now|just))?|precisamos|devemos|vamos|queremos|preciso|quero|devo|vou)\s*$/
 // A noun-signal word followed by a determiner is the verb wherever it sits ("... so plan the steps", "review our API").
 // Portuguese este/esta are left out: folded, "esta" is also "esta" ("Nosso plano esta pronto").
 const VERB_OBJECT = /^\s+(?:the|a|an|our|my|your|this|these|those|all|each|every|o|os|as|um|uma|uns|umas|nosso|nossa|nossos|nossas|meu|minha|seu|sua|esse|essa|esses|essas|todos|todas|cada)\b/
@@ -1340,7 +1353,7 @@ function firstSignal(text) {
       const before = m.index > CONTEXT_WINDOW ? '\u0000' + text.slice(m.index - CONTEXT_WINDOW, m.index) : text.slice(0, m.index)
       if (NEGATED.test(before)) continue
       const end = m.index + m[0].length
-      const isNoun = NOUN_SIGNAL.test(word) && !SENTENCE_START.test(before) && !VERB_OBJECT.test(text.slice(end, end + CONTEXT_WINDOW))
+      const isNoun = NOUN_SIGNAL.test(word) && !SENTENCE_START.test(before) && !INFINITIVE_MARK.test(before) && !VERB_OBJECT.test(text.slice(end, end + CONTEXT_WINDOW))
       if (isNoun) { if (m.index < nounAt) { noun = id; nounAt = m.index }; continue }
       if (m.index < at) { signal = id; at = m.index }
       break
