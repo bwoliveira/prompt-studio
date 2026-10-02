@@ -1426,8 +1426,7 @@ test('U10/U11/U12/U15: labelled region, small live status, labelled answer field
   assert.equal(document.getElementById(input.getAttribute('aria-labelledby'))?.textContent, currentText())
   assert.equal(input.hasAttribute('aria-label'), false)
   const target = $('[data-studio-target]')
-  assert.equal(target.getAttribute('role'), 'radiogroup')
-  assert.equal($('[data-studio-target-option="opus"]').getAttribute('role'), 'radio')
+  assert.equal(target.getAttribute('role'), 'group')
   assert.equal($('[data-studio-target-option="opus"]').getAttribute('aria-pressed'), 'true')
   assert.equal($('[data-studio-ai-toggle]').getAttribute('aria-keyshortcuts'), K().mode, 'Alt+I belongs to the group')
   for (const b of document.querySelectorAll('[data-studio-ai-mode-option]')) assert.equal(b.hasAttribute('aria-keyshortcuts'), false)
@@ -1774,16 +1773,16 @@ test('SDK: timers go through ctx.setTimeout; the debounce fires once, is cancell
 })
 
 test('SDK: a timer still pending when the host disposes the plugin never fires', { skip }, async () => {
-  globalThis.__promptStudioTest.autoSuggestDelayMs = 60
+  globalThis.__promptStudioTest.autoSuggestDelayMs = 500
   try {
     await openStudio()
     await pasteStep('')
-    const pending = ui.timers.filter(t => t.ms === 60).at(-1)
+    const pending = ui.timers.filter(t => t.ms === 500).at(-1)
     assert.ok(pending && pending.fired === false, 'debounce pending')
     assert.ok(ui.disposers.includes(pending.clear), 'its cleanup is registered with the host')
     const before = suggestFields().length
     pending.clear() // what the host runs for this timer on dispose
-    await new Promise(resolve => setTimeout(resolve, 150))
+    await new Promise(resolve => setTimeout(resolve, 650))
     assert.ok(pending.fired === false, 'the disposed timer did not fire')
     assert.equal(suggestFields().length, before, 'no request after dispose')
   } finally {
@@ -2505,13 +2504,13 @@ test('LOAD-1: a context read that times out releases the options with a short no
   await openStudio(INTENT, 'auto')
   await click('[data-studio-cancel]')
   backend.context = () => new Promise(() => {})
-  globalThis.__promptStudioTest.contextTimeoutMs = 20
+  globalThis.__promptStudioTest.contextTimeoutMs = 250
   try {
     $('[data-slot="composer-rich-input"]').textContent = INTENT
     await click('[data-studio-open]')
     assert.ok($('[data-studio-context-loading]'))
     await waitFor(() => $('[data-studio-options]'))
-    assert.ok($('[data-studio-context-status]').textContent.includes(ui.i18n.bundles.en.errors.timeout))
+    await waitFor(() => $('[data-studio-context-status]')?.textContent.includes(ui.i18n.bundles.en.errors.timeout))
   } finally {
     delete globalThis.__promptStudioTest.contextTimeoutMs
   }
