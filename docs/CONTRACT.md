@@ -117,6 +117,7 @@ part of a long text; the effective limits are below, and the user's text is neve
 | `answer` (mode `improve`) | /suggest | 1 200 | `ok: false`, `code: too_long`, `limit: 1200`; nothing is sent to the model |
 | `intent` (draft) | both | 6 000 | the tail is dropped; response carries `truncated: true` |
 | `answers[].answer` | /compose | 3 000 (12 000 when `id` is `thirdPartyText`) | the tail is dropped; `truncated: true` |
+| `thirdPartyText` preview shown to the model | /compose | 1 500 | the model reads only the first 1 500 characters plus ` […]` as untrusted reference; the pasted block itself is put back whole in the final prompt, so this is not a cut and `truncated` stays absent |
 | `baseline` | /compose | 30 000, not counting the pasted third-party block (which is kept whole and put back) | the tail is dropped; `truncated: true` |
 | `ladder[].answer`, `field.hint` | /suggest | 600 (context shown to the model) | the tail is dropped; `truncated: true` |
 | model `value` (text field) | /suggest | 1 200 | the tail is dropped; `truncated: true` |

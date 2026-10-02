@@ -1104,3 +1104,21 @@ def test_compose_reports_a_model_prompt_cut_to_the_limit():
     llm, _ = _llm(json.dumps({"prompt": "p" * se.COMPOSE_LIMIT, "notes": ""}))
     out = se.compose(COMPOSE, llm=llm)
     assert out["ok"] and not out.get("truncated")
+
+
+def test_third_party_preview_is_not_a_cut_and_the_contract_documents_it():
+    # Codex P2: the model sees only a preview of the pasted text; the whole block is put back in the final prompt,
+    # so nothing of the user's text is lost and `truncated` must stay absent. The contract has to say so.
+    from pathlib import Path
+    se = _load()
+    pasted = "t" * (se.THIRD_PARTY_PREVIEW + 500)
+    payload = {**COMPOSE, "answers": [{"id": "thirdPartyText", "question": "T", "answer": pasted}]}
+    llm, calls = _llm(OK_COMPOSE)
+    out = se.compose(payload, llm=llm)
+    sent = calls[0]["messages"][1]["content"]
+    assert "t" * se.THIRD_PARTY_PREVIEW + " […]" in sent and "t" * (se.THIRD_PARTY_PREVIEW + 1) not in sent
+    assert out["ok"] and not out.get("truncated")
+    contract = Path(__file__).resolve().parents[1].joinpath("docs", "CONTRACT.md").read_text(encoding="utf-8")
+    preview_row = next((line for line in contract.splitlines() if line.startswith("|") and "preview" in line.lower()), None)
+    assert preview_row, "CONTRACT.md has no limits-table row for the third-party preview"
+    assert f"{se.THIRD_PARTY_PREVIEW:,}".replace(",", " ") in preview_row and "truncated" in preview_row
