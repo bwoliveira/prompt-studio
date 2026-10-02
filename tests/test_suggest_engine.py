@@ -1062,3 +1062,45 @@ def test_compose_reports_a_cut_baseline_that_carries_a_pasted_block():
     assert short["ok"] and not short.get("truncated")
     long = se.compose({**COMPOSE, "answers": [], "baseline": "x" * (se.COMPOSE_LIMIT + 10) + "\n\n" + shape}, llm=llm)
     assert long["ok"] and long["truncated"] is True and block in long["prompt"]
+
+
+def test_suggest_reports_a_cut_ladder_answer_or_hint_and_only_then():
+    se = _load()
+    llm, calls = _llm(OK_SUGGEST)
+    limit = se.ANSWER_PREVIEW_LIMIT
+    for name, payload in {
+        "ladder answer": {"field": ENUM, "ladder": [{"question": "Q?", "answer": "a" * (limit + 1)}]},
+        "third-party ladder answer": {"field": ENUM, "ladder": [{"question": "Q?", "category": "thirdPartyText", "answer": "t" * (limit + 1)}]},
+        "field hint": {"field": {**TEXT, "hint": "h" * (limit + 1)}},
+    }.items():
+        out = se.suggest({**BASE, **payload}, llm=llm)
+        assert out["ok"] and out["truncated"] is True, name
+    for name, payload in {
+        "ladder answer": {"field": ENUM, "ladder": [{"question": "Q?", "answer": "  " + "a" * limit + "  "}]},
+        "field hint": {"field": {**TEXT, "hint": "h" * limit}},
+    }.items():
+        out = se.suggest({**BASE, **payload}, llm=llm)
+        assert out["ok"] and not out.get("truncated"), name
+    assert "a" * limit in calls[-2]["messages"][1]["content"]
+
+
+def test_improve_reports_a_model_answer_cut_to_the_limit():
+    se = _load()
+    long_value = json.dumps({"value": "v" * (se.TEXT_LIMIT + 50), "reason": "r"})
+    llm, _ = _llm(long_value)
+    out = se.suggest({**BASE, "field": TEXT, "mode": "improve", "answer": "casa"}, llm=llm)
+    assert out["ok"] and out["truncated"] is True and out["value"] == "v" * se.TEXT_LIMIT
+    exact = json.dumps({"value": "v" * se.TEXT_LIMIT, "reason": "r"})
+    llm, _ = _llm(exact)
+    out = se.suggest({**BASE, "field": TEXT, "mode": "improve", "answer": "casa"}, llm=llm)
+    assert out["ok"] and not out.get("truncated")
+
+
+def test_compose_reports_a_model_prompt_cut_to_the_limit():
+    se = _load()
+    llm, _ = _llm(json.dumps({"prompt": "p" * (se.COMPOSE_LIMIT + 100), "notes": ""}))
+    out = se.compose(COMPOSE, llm=llm)
+    assert out["ok"] and out["truncated"] is True and len(out["prompt"]) <= se.COMPOSE_LIMIT + 200
+    llm, _ = _llm(json.dumps({"prompt": "p" * se.COMPOSE_LIMIT, "notes": ""}))
+    out = se.compose(COMPOSE, llm=llm)
+    assert out["ok"] and not out.get("truncated")

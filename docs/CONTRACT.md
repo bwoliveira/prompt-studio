@@ -118,11 +118,14 @@ part of a long text; the effective limits are below, and the user's text is neve
 | `intent` (draft) | both | 6 000 | the tail is dropped; response carries `truncated: true` |
 | `answers[].answer` | /compose | 3 000 (12 000 when `id` is `thirdPartyText`) | the tail is dropped; `truncated: true` |
 | `baseline` | /compose | 30 000, not counting the pasted third-party block (which is kept whole and put back) | the tail is dropped; `truncated: true` |
-| `ladder[].answer`, `field.hint` | /suggest | 600 (a preview for the model, not the user's text to rewrite) | cut without a flag |
+| `ladder[].answer`, `field.hint` | /suggest | 600 (context shown to the model) | the tail is dropped; `truncated: true` |
+| model `value` (text field) | /suggest | 1 200 | the tail is dropped; `truncated: true` |
+| model `prompt` | /compose | 30 000 | the tail is dropped; `truncated: true` |
 | `session_context` | /suggest | 3 000 | 422 over 3 000 |
 
-`truncated: true` is present on a successful /suggest or /compose response only when `intent`, an `answer` or the
-`baseline` was cut; otherwise the key is absent. The desktop engines already cap their own fields (for example the
+`truncated: true` is present on a successful /suggest or /compose response whenever any cut above happens (the draft,
+an answer, a ladder answer, a hint or the baseline sent to the model, or the model's own `value`/`prompt` cut to its
+limit); otherwise the key is absent. The desktop engines already cap their own fields (for example the
 pasted text at 12 000), so the flag is for other clients and for oversized drafts. The configured `auxiliary.prompt_studio.timeout` can lower the /suggest
 provider timeout; /compose always gets its full 45 s.
 
