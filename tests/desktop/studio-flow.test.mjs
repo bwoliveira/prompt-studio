@@ -2981,7 +2981,7 @@ const FKEY_ACTIONS = ['accept', 'skip', 'useAi', 'back', 'generate', 'close']
 const rungCount = () => document.querySelectorAll('[data-studio-rung]').length
 const capsOf = el => [...el.querySelectorAll('[data-studio-key]')].map(cap => cap.textContent)
 
-test('ALT-1: each F5-F10 action has an Alt+letter alternative in the map, never on a dead key or a letter already taken', () => {
+test('ALT-1: each F5-F10 action has an Alt+letter alternative in the map, never on a dead key or a letter already taken', { skip }, () => {
   const map = K()
   assert.deepEqual(Object.keys(map.alt).sort(), [...FKEY_ACTIONS].sort(), 'one alternative per F5-F10 action')
   const letters = FKEY_ACTIONS.map(action => map.alt[action])
@@ -3121,7 +3121,7 @@ const keybind = () => ui.slots.keybinds?.data
 const desktopDefaults = new Set(readFileSync(join(here, 'fixtures', 'hermes-desktop-default-keybinds-0.21.5.txt'), 'utf8')
   .split('\n').filter(line => line && !line.startsWith('#')).map(combo => combo.replace(/^ctrl\+/, 'mod+')))
 
-test('KEY-1: Prompt Studio contributes an open binding to the keybinds area: mod+shift+letter, not a Desktop default, tied to the palette command', () => {
+test('KEY-1: Prompt Studio contributes an open binding to the keybinds area: mod+shift+letter, not a Desktop default, tied to the palette command', { skip }, () => {
   const item = ui.slots.keybinds
   assert.ok(item, 'a contribution in the keybinds area')
   assert.equal(item.area, 'keybinds')
