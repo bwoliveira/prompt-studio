@@ -153,8 +153,10 @@ Deliberately absent on Astra:
 
 ## 3. Subagents (all targets)
 
-The studio asks "Use subagents?" with three choices: **team** (recommended except for a short text or answer),
-**model decides** (no line) and **no subagents**. User preference: prioritize subagents even at a higher cost.
+The studio asks "Use subagents?" with three choices: **model decides** (recommended, and the default of every
+engine: Opus, Sonnet and Astra each carry their own conditional delegation line for hands-on work, and nothing for a
+text or answer), **team** (only when the user picks it) and **no subagents**. The AI suggestion follows the same
+default and departs from it only when the draft itself asks for subagents or a team, or says not to delegate.
 
 - **Team split.** Parts that run in parallel without shared state go to their own subagent with goal, context
   and expected result; integration and the final answer stay with the lead (O16, A28).
@@ -165,8 +167,8 @@ The studio asks "Use subagents?" with three choices: **team** (recommended excep
   *"use subagents to verify or double-check your own work"* [opus5-prompting]. Hence the reviewer is a
   different agent, reviews once, and no writer reviews its own work.
 - **Sonnet 5.5.** Its pages have no delegation section, so the lines are the vendor-wide ones (S17-S22). The reviewer line opens with the fact that the user asked for the review, which is the condition of the Sonnet 5.5 reviewer-subagent snippet (S19).
-- **Cost.** Anthropic suggests *"keep spawn counts low"* [opus5-prompting] for cost-sensitive workloads. Not
-  applied: the user prioritizes subagents over cost.
+- **Cost.** Anthropic suggests *"keep spawn counts low"* [opus5-prompting] for cost-sensitive workloads. It is in
+  the default line (O21a) and not in a team the user picks: choosing a team accepts the cost.
 
 ## 4. Which vendor pages matter for prompt text (round-2 triage)
 

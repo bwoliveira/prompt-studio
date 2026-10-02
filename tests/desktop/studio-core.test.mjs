@@ -352,3 +352,22 @@ test('auth_failed points to the key and provider_refused to the plan, rate_limit
   assert.match(text('en', 'provider_timeout'), /did not answer in time/)
   assert.match(text('pt', 'provider_timeout'), /não respondeu a tempo/)
 })
+
+test('#38: the subagents recommendation is the engines\' default (the model decides), in the step and in the AI guide', () => {
+  const labels = { en: CORE_MESSAGES.en.core.fields.subagents.options, pt: CORE_MESSAGES.pt.core.fields.subagents.options }
+  for (const target of Object.keys(ENGINES)) {
+    for (const intent of [CODE, WRITE, 'Como funciona o cron do Linux?']) {
+      for (const locale of ['en', 'pt']) {
+        const q = questionFor(target, intent, [], 'subagents', locale)
+        assert.equal(q.recommended, labels[locale].auto, `${target} / ${locale} / ${intent}`)
+        assert.equal(ENGINES[target].recommend({ goal: intent }), 'auto')
+      }
+    }
+  }
+  for (const locale of ['en', 'pt']) {
+    const guide = CORE_MESSAGES[locale].core.fields.subagents.guide
+    assert.ok(guide.includes(`Recommend "${labels[locale].auto}"`), guide)
+    assert.ok(!/prefers? subagent teams|even at higher cost/.test(guide), 'the guide no longer pushes teams')
+    assert.ok(guide.includes(`"${labels[locale].team}"`) && guide.includes(`"${labels[locale].direct}"`), 'team and direct are named as the explicit-draft cases')
+  }
+})
