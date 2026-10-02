@@ -750,6 +750,21 @@ const errorText = (code, locale = 'en') => {
   return typeof message === 'function' ? message(K().settings) : message
 }
 const digit = (action, n) => K()[action].replace('1…9', String(n))
+// Runs `fn` with navigator.platform (and userAgentData.platform) stubbed, then puts both back.
+async function withPlatform(platform, fn) {
+  const nav = ui.dom.window.navigator
+  const saved = ['platform', 'userAgentData'].map(name => [name, Object.getOwnPropertyDescriptor(nav, name)])
+  if (platform) {
+    Object.defineProperty(nav, 'platform', { configurable: true, value: platform })
+    Object.defineProperty(nav, 'userAgentData', { configurable: true, value: undefined })
+  }
+  try { return await fn() } finally {
+    for (const [name, descriptor] of saved) {
+      if (descriptor) Object.defineProperty(nav, name, descriptor)
+      else delete nav[name]
+    }
+  }
+}
 async function press(combo, target = document.activeElement || document.body, extra = {}) {
   const parts = combo.split('+')
   const key = parts.pop()
@@ -1896,6 +1911,111 @@ test('KEYS-MAC: Option+E on macOS (dead key in e.key) still works as Alt+E via e
   assert.equal(composer().submits.length, 0, 'not sent')
   assert.equal(draft(), prompt)
   assert.ok($('[data-studio-strip]') === null)
+})
+
+// What macOS sends for an Option chord on a dead key (⌥E, ⌥N, ⌥I, ⌥U, ⌥`): key 'Dead' and the physical code, with
+// keyCode 229 and/or isComposing set because the browser opens an accent composition.
+const DEAD_KEYS = [
+  { key: 'Dead', keyCode: 229 },
+  { key: 'Dead', isComposing: true },
+  { key: 'Dead', keyCode: 229, isComposing: true },
+  { key: 'Process', keyCode: 229, isComposing: true }
+]
+
+test('KEYS-MAC-DEAD: Option+E, Option+N and Option+I as dead keys (keyCode 229 / isComposing) still put in composer, ask again and cycle the AI mode', { skip }, async () => {
+  const dead = (combo, extra) => press(combo, document.activeElement, extra)
+  // Alt+I: the AI mode cycles, once per variant.
+  await openStudio(INTENT, 'manual')
+  for (const extra of DEAD_KEYS) {
+    const mode = aiMode()
+    const event = await dead(K().mode, extra)
+    assert.ok(event.defaultPrevented === true, `Alt+I ${JSON.stringify(extra)} taken, so no accent is typed`)
+    assert.notEqual(aiMode(), mode, `Alt+I ${JSON.stringify(extra)} cycled the mode`)
+  }
+  await setMode('manual')
+  // Alt+N: another suggestion, once per variant.
+  await press(K().skip)
+  await press(K().ask); await waitFor(() => $('[data-studio-ai-use]'))
+  for (const extra of DEAD_KEYS) {
+    const before = backend.calls.filter(c => c.path === '/suggest').length
+    await dead(K().another, extra)
+    await waitFor(() => backend.calls.filter(c => c.path === '/suggest').length > before && $('[data-studio-ai-use]'))
+    assert.equal(backend.calls.filter(c => c.path === '/suggest').length, before + 1, `Alt+N ${JSON.stringify(extra)} asked again`)
+  }
+  await press(K().discard)
+  await click('[data-studio-cancel]')
+  // Alt+E: put in composer, once per variant.
+  for (const extra of DEAD_KEYS) {
+    await toPreview()
+    const prompt = $('[data-studio-preview-text]').textContent
+    const event = await dead(K().editPrompt, extra)
+    assert.ok(event.defaultPrevented === true, `Alt+E ${JSON.stringify(extra)} taken`)
+    assert.equal(composer().submits.length, 0, 'not sent')
+    assert.equal(draft(), prompt, `Alt+E ${JSON.stringify(extra)} put the prompt in the composer`)
+    assert.ok($('[data-studio-strip]') === null)
+  }
+})
+
+test('KEYS-MAC-DEAD: a real IME composition without an Alt chord is still ignored, and so is an Alt chord on a non-letter key', { skip }, async () => {
+  await openStudio(INTENT, 'off')
+  for (const extra of [{ isComposing: true }, { keyCode: 229 }, { key: 'Process', keyCode: 229, isComposing: true }]) {
+    const event = await press(K().generate, document.activeElement, extra)
+    assert.ok(event.defaultPrevented === false, `F9 ${JSON.stringify(extra)} left to the IME`)
+    assert.ok($('[data-studio-preview]') === null && $('[data-studio-strip]'), 'nothing ran')
+  }
+  // Not an Alt chord: the physical code is a letter but Alt is up (the IME is typing a candidate).
+  for (const extra of [{ key: 'Process', keyCode: 229, isComposing: true }, { key: 'Dead', keyCode: 229 }]) {
+    const event = await press('E', document.activeElement, { ...extra, code: 'KeyE' })
+    assert.ok(event.defaultPrevented === false, `bare E ${JSON.stringify(extra)} ignored`)
+  }
+  // Alt held but the code is no letter or digit (Alt+Space with the IME open): still the IME's.
+  const space = new ui.dom.window.KeyboardEvent('keydown', { key: 'Process', code: 'Space', keyCode: 229, isComposing: true, altKey: true, bubbles: true, cancelable: true })
+  await ui.act(async () => { document.activeElement.dispatchEvent(space) })
+  assert.ok(space.defaultPrevented === false)
+  // Control+Option and Command+Option chords stay untouched even on a dead key.
+  for (const mods of [{ ctrlKey: true }, { metaKey: true }]) {
+    for (const extra of DEAD_KEYS) {
+      const event = await press(K().mode, document.activeElement, { ...extra, ...mods })
+      assert.ok(event.defaultPrevented === false, `${Object.keys(mods)[0]}+Alt+I ${JSON.stringify(extra)} untouched`)
+    }
+  }
+})
+
+test('KEYS-NEVER: the listener never handles Enter, Tab, Esc, or Ctrl/Super chords, studio open or closed, Mac or not', { skip }, async () => {
+  const untouched = async (label, combo, target, extra) => {
+    const event = await press(combo, target, extra)
+    assert.ok(event.defaultPrevented === false, `${label} is the app's`)
+    assert.ok(event.cancelBubble === false, `${label} still reaches the app`)
+  }
+  const never = async target => {
+    for (const key of ['Enter', 'Tab', 'Escape']) {
+      for (const extra of [{}, { altKey: true }, { shiftKey: true }, { altKey: true, shiftKey: true }]) {
+        await untouched(`${key} ${JSON.stringify(extra)}`, key, target, { code: key, ...extra })
+      }
+    }
+    for (const mods of [{ ctrlKey: true }, { metaKey: true }, { ctrlKey: true, altKey: true }, { metaKey: true, altKey: true }, { ctrlKey: true, shiftKey: true }, { metaKey: true, shiftKey: true }]) {
+      for (const combo of ['E', 'N', 'I', 'S', '1', 'F4', 'F5', 'F9', 'F10', 'Enter']) {
+        await untouched(`${JSON.stringify(mods)} ${combo}`, combo, target, mods)
+      }
+    }
+  }
+  const platforms = [null, 'MacIntel']
+  for (const platform of platforms) {
+    await withPlatform(platform, async () => {
+      // Closed: the composer is the app's.
+      $('[data-slot="composer-rich-input"]').textContent = INTENT
+      await never(document.activeElement || document.body)
+      assert.ok($('[data-studio-strip]') === null)
+      // Open: with the focus on the recommended button and in the answer field.
+      await openStudio(INTENT, 'manual')
+      await never(document.activeElement)
+      await click('[data-studio-paste-open]')
+      await never($('[data-studio-answer-input]'))
+      for (const extra of DEAD_KEYS) await untouched(`Enter ${JSON.stringify(extra)}`, 'Enter', document.activeElement, { code: 'Enter', ...extra })
+      assert.ok($('[data-studio-strip]'), 'the studio is still open: nothing was pressed for the user')
+      await click('[data-studio-cancel]')
+    })
+  }
 })
 
 test('LOAD-1: while the session context is read only a loading state and Cancel (F10) show; options come after', { skip }, async () => {

@@ -61,6 +61,11 @@ function keyCombo(event) {
   return ''
 }
 
+// An Alt chord on a letter or digit key, by physical code. On macOS ⌥E, ⌥N, ⌥I, ⌥U and ⌥` are dead keys:
+// the event has key 'Dead' and the browser may mark it keyCode 229 / isComposing as an accent starts, so
+// the code is the only thing that says which shortcut it was.
+const isAltCodeChord = event => event.altKey && !event.ctrlKey && !event.metaKey && /^(Key[A-Z]|Digit[1-9])$/.test(event.code || '')
+
 function shortcutTarget(root, combo) {
   for (const el of root.querySelectorAll('[data-studio-shortcut]')) {
     if (el.getAttribute('data-studio-shortcut') === combo && !el.disabled) return el
@@ -75,8 +80,8 @@ function shortcutTarget(root, combo) {
 function installStudioKeys(ctx) {
   if (typeof window === 'undefined' || !ctx?.addEventListener) return
   const onKey = event => {
-    // IME composition (CJK, dead keys) owns the keyboard until it ends.
-    if (event.isComposing || event.keyCode === 229) return
+    // IME composition (CJK) owns the keyboard until it ends; an Alt chord on a letter or digit key is a dead key.
+    if ((event.isComposing || event.keyCode === 229) && !isAltCodeChord(event)) return
     const combo = keyCombo(event)
     if (!combo) return
     const open = $studio.get().status !== 'idle'
