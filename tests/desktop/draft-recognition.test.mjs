@@ -664,6 +664,16 @@ const TABLE = [
   ['Write a strategy memo about optimizing SQL queries', 'text', 'memo about sql queries'],
   ['Write a memo about the API', 'text', 'memo about the api'],
   ['Escreva um memorando sobre otimizar consultas SQL', 'text', 'pt memorando sobre consultas sql'],
+  // a command after a response note is kept (Codex P2)
+  ['How do I build a React app? Add examples; then fix the login bug.', 'implementation', 'note; then fix'],
+  ['How do I build a React app? Add examples, then fix the login bug.', 'implementation', 'note, then fix'],
+  ['Como configuro o nginx? Inclua exemplos; depois configure o nginx.', 'workflow', 'pt note; depois configure'],
+  ['How do I build a React app? Add examples; keep it short.', 'answer', 'near miss: two notes'],
+  // an exclusion clause may follow the review noun (Codex P2)
+  ['Write a review without modifying the API.', 'review', 'review without modifying'],
+  ['Escreva uma revisão sem alterar a API.', 'review', 'pt revisao sem alterar'],
+  ['Write a review except for the API', 'review', 'review except for'],
+  ['Write a review without a script', 'review', 'near miss: the review is first'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
