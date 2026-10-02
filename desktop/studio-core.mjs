@@ -139,6 +139,14 @@ const CONTEXT_WINDOW = 120
 // the artifact, with or without the mark, as "Show me a script that extracts data" does; no verb in it decides otherwise.
 // Languages: Portuguese (unaccented) + English.
 const ARTIFACT_REQUEST = /^(?:(?:please|pls|por favor),?\s+)?(?:(?:can|could|would|will)\s+you\s+(?:(?:please|kindly)\s+)?(?:show|give|send|tell|pass)\s+(?:me|us)|(?:(?:voce|voces)\s+)?(?:pode|poderia|podem|poderiam)\s+(?:por favor\s+)?me\s+(?:mostrar|dizer|passar|enviar|mandar|dar))\s+(?:(?:please\s+)?(?:a|an|the|some|another|my|our|your|um|uma|o|os|as|algum|alguma|alguns|algumas|outro|outra|meu|minha|nosso|nossa|seu|sua)\s+)/
+// "Can you tell me an existing Python module for parsing ISO dates?": a word that picks among things that already exist
+// (existing, available, good, best, recommended ...) asks about an artifact, not for one to be made.
+// Languages: Portuguese (unaccented) + English.
+const LOOKUP_MODIFIER = /\b(?:existing|available|good|better|best|recommended|popular|common|standard|built-in|well-known|open-source|free|existente|existentes|disponivel|disponiveis|bom|boa|melhor|melhores|recomendado|recomendada|populares|conhecido|conhecida|padrao|nativo|nativa)\b/
+// "Can you show me a module for parsing dates?", "Voce pode me mostrar uma API para clima?": a module, library, package or
+// API named for a purpose is a thing to be found, not written.
+const REFERENCE_NOUN_END = /\b(?:modul[oe]s?|apis?|librar(?:y|ies)|packages?|frameworks?|sdks?|bibliotecas?|pacotes?)\s*$/
+const FOR_PURPOSE = /^\s+(?:for|para)\b/
 // The phrase ends with a code artifact: the artifact is the head noun, not a modifier ("the API key").
 const CODE_ARTIFACT_END = new RegExp(`(?:${CODE_ARTIFACT.source})\\s*$`)
 // "I need a script to write log files": the artifact asked for sits before the verb that tells its purpose; with the
@@ -401,7 +409,11 @@ function createDetector(profile = {}) {
     if (shown) {
       const rest = goal.slice(shown[0].length, shown[0].length + 300)
       const head = rest.split(/[.!?\n]|\s+(?:of|to|for|from|in|on|at|about|between|with|without|by|that|which|who|whose|where|when|and|or|but|de|do|da|dos|das|para|em|no|na|nos|nas|sobre|entre|com|sem|por|que|e|ou|mas)\b/, 1)[0]
-      if (CODE_ARTIFACT_END.test(head) && pickArtifact(rest.split(/[.!?\n]/, 1)[0]) === 'code') { signal = 'implementation'; category = 'code' }
+      if (CODE_ARTIFACT_END.test(head) && pickArtifact(rest.split(/[.!?\n]/, 1)[0]) === 'code') {
+        // Asking about an existing artifact, or for a recommendation, is a question; asking for one to be made is a task.
+        if (LOOKUP_MODIFIER.test(head) || (REFERENCE_NOUN_END.test(head) && FOR_PURPOSE.test(rest.slice(head.length)))) signal = 'answer'
+        else { signal = 'implementation'; category = 'code' }
+      }
     }
     return { category, signal, text, goal, asksQuestion: goal.endsWith('?') || QUESTION_START.test(goal) }
   }
