@@ -390,6 +390,23 @@ const TABLE = [
   ['Escreva uma revisão crítica e detalhada do código', 'review', 'pt two modifiers'],
   ['Write a review summary for the API', 'text', 'near miss: a review summary is a summary'],
   ['Escreva um resumo da revisão da API', 'text', 'near miss: pt resumo da revisao'],
+  // the object of a forbidden verb is not the request (Codex P2)
+  ['Do not write a review. Build a React app.', 'implementation', 'forbidden review, then build'],
+  ['Do not write reviews. Build a React app.', 'implementation', 'plural'],
+  ['Não escreva uma revisão. Construa um app React.', 'implementation', 'pt'],
+  ['Review the API', 'review', 'near miss: review as a verb'],
+  ['Write a review of the API', 'review', 'near miss: the requested review'],
+  // a single test is software only with a software cue (Codex P2)
+  ['Write a biology test with ten questions about cell division', 'text', 'biology test'],
+  ['Write a test with questions about chemistry', 'text', 'test with questions'],
+  ['Write a test with ten questions', 'text', 'test with ten questions'],
+  ['Escreva um teste com dez questões sobre biologia', 'text', 'pt teste com questoes'],
+  ['Write a test about the French Revolution', 'text', 'test about a subject'],
+  ['Write a load test for the API', 'implementation', 'near miss: load test'],
+  ['Write a test suite for the parser', 'implementation', 'near miss: test suite'],
+  ['Escreva um teste de integração para o parser', 'implementation', 'near miss: pt teste de integracao'],
+  ['Write tests for the parser', 'implementation', 'near miss: plural tests are software'],
+  ['Write tests with ten questions about chemistry', 'text', 'plural tests with questions'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
