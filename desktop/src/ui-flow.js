@@ -334,6 +334,10 @@ async function generatePrompt() {
   }
   clearSuggestion()
   let prompt = engineResult.prompt
+  // Conflicts between an answer and the draft (e.g. a deliverable picked against the draft's verb) are shown by
+  // the preview in the Studio's current language, for both versions: it keeps the target and the ladder and
+  // renders studioWarnings() from the active locale, so a language switch translates them too.
+  const warnings = { target, ladder }
   let note = ''
   let noteDetail = ''
   if ($aiMode.get() !== 'off' && pluginContext) {
@@ -364,7 +368,7 @@ async function generatePrompt() {
       }
     }
   }
-  update({ type: 'BRIEF_READY', ai: prompt !== engineResult.prompt ? prompt : '', engine: engineResult.prompt, note, noteDetail })
+  update({ type: 'BRIEF_READY', ai: prompt !== engineResult.prompt ? prompt : '', engine: engineResult.prompt, note, noteDetail, warnings })
 }
 
 // Preview accepted: the prompt goes to the composer (not sent). setDraft replaces only the text,

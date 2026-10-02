@@ -352,7 +352,9 @@ const aiMode = () => $('[data-studio-ai-toggle]')?.getAttribute('data-studio-ai-
 async function setMode(mode) {
   if (aiMode() !== mode) await click(`[data-studio-ai-mode-option="${mode}"]`)
 }
-async function openStudio(intent = INTENT, mode = 'auto') {
+// The deliverable step is always asked first (#23). Most tests are about the steps after it, so by default it is
+// answered with its recommendation here and the backend call log is cleared; pass { deliverable: true } to stay on it.
+async function openStudio(intent = INTENT, mode = 'auto', { deliverable = false } = {}) {
   $('[data-slot="composer-rich-input"]').textContent = intent
   // The AI mode is remembered across openings (as in the app); tests pick it with the selector.
   await click('[data-studio-open]')
@@ -364,6 +366,16 @@ async function openStudio(intent = INTENT, mode = 'auto') {
     $('[data-slot="composer-rich-input"]').textContent = intent
     await click('[data-studio-open]')
   }
+  if (!deliverable) await acceptDeliverable()
+}
+async function acceptDeliverable() {
+  if (field() !== 'deliverable') return
+  await waitFor(() => $('[data-studio-recommend]') && notLoading())
+  await click('[data-studio-recommend]')
+  await waitFor(() => field() !== 'deliverable')
+  await settle()
+  // The deliverable step's own /suggest is not part of what the tests count.
+  backend.calls.splice(0, backend.calls.length, ...backend.calls.filter(c => !(c.path === '/suggest' && c.body.field.id === 'deliverable')))
 }
 // Generate, then accept the preview so the prompt lands in the composer.
 async function generateAndUse() {
@@ -374,6 +386,7 @@ async function generateAndUse() {
 }
 // Answer the paste step ("Tem um texto de referência para colar?"): paste `text` or say "Não tenho".
 async function pasteStep(text) {
+  await acceptDeliverable() // the deliverable step comes first when the test did not go through openStudio
   assert.equal(field(), 'thirdPartyText')
   if (!text) return click('[data-studio-skip]')
   await click('[data-studio-paste-open]')
@@ -427,7 +440,7 @@ test('AI recommendation runs by itself on every step (no click), and removed ste
   assert.deepEqual(suggestFields(), seen, 'exactly one automatic /suggest per step, in step order')
   // Something was pasted, so "De onde veio esse texto?" follows; the AI sees the pasted text from here on.
   assert.deepEqual(seen, ['thirdPartySource', 'context', 'requirements', 'success', 'designAvoid', 'autonomy', 'subagents', 'format', 'length'])
-  assert.match(backend.calls.find(c => c.path === '/suggest').body.ladder[0].answer, /E-mail do cliente/)
+  assert.match(backend.calls.find(c => c.path === '/suggest').body.ladder.find(r => r.category === 'thirdPartyText').answer, /E-mail do cliente/)
   for (const removed of REMOVED) assert.ok(!seen.includes(removed), `${removed} must not be asked`)
   assert.equal(new Set(seen).size, seen.length, 'no step asked twice')
   assert.match(currentText(), /All steps answered/)
@@ -450,11 +463,11 @@ test('"Generate prompt with AI" sends every accumulated answer to /compose and p
   assert.equal(compose.length, 1)
   const body = compose[0].body
   assert.equal(body.intent, INTENT)
-  assert.deepEqual(body.answers.map(a => a.id), ['thirdPartyText', 'thirdPartySource', 'context', 'requirements'])
-  assert.match(body.answers[0].answer, /E-mail do cliente/)
-  assert.match(body.answers[2].answer, /sugestão para context/)
+  assert.deepEqual(body.answers.map(a => a.id), ['deliverable', 'thirdPartyText', 'thirdPartySource', 'context', 'requirements'])
+  assert.match(body.answers[1].answer, /E-mail do cliente/)
+  assert.match(body.answers[3].answer, /sugestão para context/)
   assert.ok(body.baseline.length > 100, 'site-engine baseline goes along')
-  assert.equal(draft(), 'PROMPT DA IA (4 respostas)')
+  assert.equal(draft(), 'PROMPT DA IA (5 respostas)')
   assert.ok($('[data-studio-current-text]') === null, 'studio closed after using the prompt')
 })
 
@@ -475,7 +488,7 @@ test('AI failures never block the flow: /suggest error still lets you answer; /c
   assert.ok($('[data-studio-switch-version]') === null, 'only one version to show')
   await click('[data-studio-use-prompt]')
   assert.ok(draft().length > 100, 'engine prompt placed in the composer')
-  assert.notEqual(draft(), 'PROMPT DA IA (1 respostas)')
+  assert.notEqual(draft(), 'PROMPT DA IA (2 respostas)')
 })
 
 test('an empty model reply (e.g. provider safety filter) says the model gave no answer, not that the AI is unreachable', { skip }, async () => {
@@ -526,7 +539,7 @@ test('Voltar keeps answers and reuses the cached suggestion (no second call); of
 })
 
 test('vague draft: the deliverable is asked first, every offered option is safe to pick', { skip }, async () => {
-  await openStudio(VAGUE)
+  await openStudio(VAGUE, 'auto', { deliverable: true })
   await waitFor(() => suggestFields().length > 0 && $('[data-studio-option]'))
   assert.equal(field(), 'deliverable')
   assert.equal(backend.calls.filter(c => c.path === '/suggest').at(-1)?.body.field.id, 'deliverable')
@@ -540,6 +553,78 @@ test('vague draft: the deliverable is asked first, every offered option is safe 
   await generateAndUse()
   assert.ok(draft().length > 100, 'engine prompt placed, no conflict error')
   assert.ok(!ui.notifications.some(n => /contradict/.test(n.message)))
+})
+
+test('a draft the engine misreads still gets the deliverable step with all nine options', { skip }, async () => {
+  for (const draftText of ['Como funciona o cron do Linux?', 'Create a plan for the product launch']) {
+    await openStudio(draftText, 'off', { deliverable: true })
+    assert.equal(field(), 'deliverable', draftText)
+    assert.equal(document.querySelectorAll('[data-studio-option], [data-studio-recommend]').length, 9, `${draftText}: every deliverable offered`)
+    await click('[data-studio-cancel]')
+  }
+})
+
+test('a deliverable that contradicts the draft is kept and its conflict note is shown in the preview (Codex P2)', { skip }, async () => {
+  await openStudio('Create a plan for the product launch', 'off', { deliverable: true })
+  assert.equal(field(), 'deliverable')
+  const plan = [...document.querySelectorAll('[data-studio-option]')].map(el => el.getAttribute('data-studio-option')).find(label => /^(Plano|Plan)\b/i.test(label))
+  assert.ok(plan, 'the plan option is offered although the engine read the draft as an implementation')
+  await click(`[data-studio-option="${plan}"]`)
+  assert.equal(field(), 'thirdPartyText')
+  await click('[data-studio-generate]')
+  await waitFor(() => $('[data-studio-preview-warning]'))
+  assert.match($('[data-studio-preview-warning]').textContent, /contradicts what the draft asks for/, 'the conflict reaches the preview with the AI off')
+  await click('[data-studio-use-prompt]')
+  assert.ok(draft().length > 100, 'the prompt built for the chosen deliverable is placed')
+})
+
+test('the conflict note is in the Studio language and stays when switching preview versions (Codex P2 round 2)', { skip }, async () => {
+  ui.i18n.locale = 'pt'
+  await ui.act(async () => { ui.$locale.set('pt') })
+  try {
+    await openStudio('Create a plan for the product launch', 'auto', { deliverable: true })
+    await waitFor(() => $('[data-studio-option]') && notLoading())
+    const plan = [...document.querySelectorAll('[data-studio-option]')].map(el => el.getAttribute('data-studio-option')).find(label => /^Plano\b/.test(label))
+    assert.ok(plan, 'the Portuguese plan option is offered')
+    await click(`[data-studio-option="${plan}"]`)
+    await pasteStep('')
+    await click('[data-studio-generate]')
+    await waitFor(() => $('[data-studio-preview-text]') && $('[data-studio-switch-version]'))
+    assert.match($('[data-studio-preview-text]').textContent, /PROMPT DA IA/, 'AI version shown first')
+    const warning = () => $('[data-studio-preview-warning]')?.textContent || ''
+    assert.match(warning(), /contradiz o que o rascunho pede/, 'warning in Portuguese on the AI version')
+    assert.doesNotMatch(warning(), /reads as|contradicts what/, 'no hard-coded English engine note')
+    assert.match(warning(), /Plano \/ roteiro/, 'the option label is translated too')
+    await click('[data-studio-switch-version]')
+    assert.match($('[data-studio-preview-title]').textContent, /sem IA/, 'engine version shown')
+    assert.match(warning(), /contradiz o que o rascunho pede/, 'warning still shown on the version without AI')
+    await click('[data-studio-cancel]')
+  } finally {
+    ui.i18n.locale = 'en'
+    await ui.act(async () => { ui.$locale.set('en') })
+  }
+})
+
+test('a preview warning follows a Studio language switch (Codex P3)', { skip }, async () => {
+  await openStudio('Create a plan for the product launch', 'off', { deliverable: true })
+  const plan = [...document.querySelectorAll('[data-studio-option]')].map(el => el.getAttribute('data-studio-option')).find(label => /^Plan\b/.test(label))
+  await click(`[data-studio-option="${plan}"]`)
+  await pasteStep('')
+  await click('[data-studio-generate]')
+  await waitFor(() => $('[data-studio-preview-warning]'))
+  const warning = () => $('[data-studio-preview-warning]')?.textContent || ''
+  assert.match(warning(), /contradicts what the draft asks for/)
+  try {
+    ui.i18n.locale = 'pt'
+    await ui.act(async () => { ui.$locale.set('pt') })
+    assert.match($('[data-studio-preview-title]').textContent, /sem IA/, 'the preview itself switched to Portuguese')
+    assert.match(warning(), /contradiz o que o rascunho pede/, 'the warning is re-rendered in the new language')
+    assert.match(warning(), /Plano \/ roteiro/, 'with the option label translated too')
+    await click('[data-studio-cancel]')
+  } finally {
+    ui.i18n.locale = 'en'
+    await ui.act(async () => { ui.$locale.set('en') })
+  }
 })
 
 test('an empty AI suggestion on a step with a default offers "Use the recommended"; with no default only the step’s own Skip remains', { skip }, async () => {
@@ -618,22 +703,22 @@ test('clicking an answered step edits it in place; later answers stay; "Undo edi
   for (let i = 0; i < 3; i += 1) { await waitFor(aiReady); await answerStep() } // context, requirements, success
   await waitFor(aiReady)
   const before = [...document.querySelectorAll('[data-studio-rung]')].map(el => el.textContent)
-  assert.equal(before.length, 4)
-  await click('[data-studio-rung-edit="1"]') // context
+  assert.equal(before.length, 5) // deliverable, paste, context, requirements, success
+  await click('[data-studio-rung-edit="2"]') // context
   assert.equal(field(), 'context')
-  assert.match(stepLabel(), /^Step 2$/)
+  assert.match(stepLabel(), /^Step 3$/)
   assert.ok($('[data-studio-rung-editing]'), 'marker kept in place')
   assert.match($('[data-studio-answer-input]').value, /sugestão para context/, 'previous answer loaded')
   await typeAnswer('Contexto novo')
   await click('[data-studio-confirm]')
   const after = [...document.querySelectorAll('[data-studio-rung]')].map(el => el.textContent)
-  assert.equal(after.length, 4, 'no answer lost')
-  assert.match(after[1], /Contexto novo/)
-  assert.equal(after[2], before[2])
+  assert.equal(after.length, 5, 'no answer lost')
+  assert.match(after[2], /Contexto novo/)
   assert.equal(after[3], before[3])
+  assert.equal(after[4], before[4])
   assert.equal(field(), 'designAvoid', 'continues at the first unanswered step, not at the edited one')
   // Undo path
-  await click('[data-studio-rung-edit="2"]')
+  await click('[data-studio-rung-edit="3"]')
   assert.match($('[data-studio-back]').textContent, /Undo edit/)
   await click('[data-studio-back]')
   assert.deepEqual([...document.querySelectorAll('[data-studio-rung]')].map(el => el.textContent), after)
@@ -648,10 +733,10 @@ test('preview: "Back to steps" keeps every answer and generating again works', {
   await waitFor(() => $('[data-studio-back-to-steps]'))
   await click('[data-studio-back-to-steps]')
   assert.ok($('[data-studio-preview]') === null)
-  assert.equal(document.querySelectorAll('[data-studio-rung]').length, 2, 'answers kept')
+  assert.equal(document.querySelectorAll('[data-studio-rung]').length, 3, 'answers kept')
   assert.ok(/All steps answered/.test(currentText()) || ['requirements', 'context'].includes(field()), currentText())
   await generateAndUse()
-  assert.equal(draft(), 'PROMPT DA IA (1 respostas)')
+  assert.equal(draft(), 'PROMPT DA IA (2 respostas)')
 })
 
 // F5–F9 while the studio is open (window capture listener): the user's chosen map.
@@ -690,12 +775,12 @@ test('keys F5–F9 press the step buttons, also with the cursor in the answer fi
   const typed = await press(K().accept, input)
   assert.equal(typed.defaultPrevented, true, 'works with the cursor in the field')
   let rungs = [...document.querySelectorAll('[data-studio-rung]')].map(el => el.textContent)
-  assert.equal(rungs.length, 2)
-  assert.match(rungs[1], /Uso pessoal/)
+  assert.equal(rungs.length, 3)
+  assert.match(rungs[2], /Uso pessoal/)
   // F8 = Back, F5 on a step with a recommendation = accept it.
   const before = currentText()
   await press(K().back)
-  assert.equal(document.querySelectorAll('[data-studio-rung]').length, 1)
+  assert.equal(document.querySelectorAll('[data-studio-rung]').length, 2)
   await press(K().skip)
   assert.equal(currentText(), before)
   for (let i = 0; i < 8 && !$('[data-studio-recommend]'); i += 1) await press(K().skip)
@@ -965,6 +1050,9 @@ test('U1: focus lands on the first logical target after every step and status ch
   $('[data-slot="composer-rich-input"]').textContent = INTENT
   $('[data-slot="composer-rich-input"]').focus()
   await press(K().open)
+  await waitFor(() => field() === 'deliverable' && $('[data-studio-recommend]') && notLoading())
+  assert.ok(active() === ($('[data-studio-recommend]')), 'deliverable step: recommended option')
+  await acceptDeliverable()
   await waitFor(() => $('[data-studio-paste-open]'))
   assert.ok(active() === ($('[data-studio-paste-open]')), 'paste step: "+ Paste text"')
   await press(K().paste)
@@ -1214,7 +1302,8 @@ test('Auto, choice step: AI failure or Discard brings back the local recommendat
 test('On request: local recommendation only; once asked and ready, the AI pick replaces it (never two stars)', { skip }, async () => {
   const pending = holdSuggest()
   const local = await toEnumStep('manual')
-  assert.equal(pending.length, 0, 'no automatic call')
+  // (the Auto /suggest of the deliverable step, asked while the mode was still Auto, is not an automatic call here)
+  assert.equal(pending.filter(p => p.body.field.id !== 'deliverable').length, 0, 'no automatic call')
   assert.equal(recommends().length, 1)
   assert.match(recommends()[0].textContent, new RegExp(`^★ Recommended: ${local}`))
   await click('[data-studio-ai-suggest]')
@@ -1620,7 +1709,7 @@ test('CX-1: an Auto suggestion waits for a pending context read and then carries
   await settle() // intentional: proves no /suggest before the context read ends
   assert.equal(suggestCalls().length, 0, 'waits for the context read')
   release()
-  await waitFor(() => $('[data-studio-skip]'))
+  await waitFor(() => field() === 'deliverable')
   await pasteStep('')
   await waitFor(() => suggestCalls().length >= 1)
   assert.equal(suggestCalls().length, 1)
@@ -1693,7 +1782,7 @@ test('CX-1: language "pt" with Hermes in English shows Portuguese strings and qu
   assert.match($('[data-studio-cancel]').textContent, /^Cancelar/)
   await openFresh()
   assert.equal(contextCalls()[0].body.locale, 'pt')
-  assert.match(currentText(), /colar|referência/i, 'question in Portuguese')
+  assert.match(currentText(), /receber no final/i, 'question in Portuguese')
   // The suggestion's reason and the polish notes are written in {language}: /suggest and /compose carry the locale too.
   await pasteStep('')
   await waitFor(() => suggestCalls().length >= 1)
@@ -1824,7 +1913,7 @@ test('LOAD-1: while the session context is read only a loading state and Cancel 
   assert.ok($('[data-studio-cancel]'), 'Cancel stays')
   assertEverythingHasAKey()
   release()
-  await waitFor(() => $('[data-studio-paste-open]'))
+  await waitFor(() => $('[data-studio-options]'))
   assert.ok($('[data-studio-context-loading]') === null)
   assert.ok($('[data-studio-actions]'))
 })
@@ -1839,7 +1928,7 @@ test('LOAD-1: a context read that times out releases the options with a short no
     $('[data-slot="composer-rich-input"]').textContent = INTENT
     await click('[data-studio-open]')
     assert.ok($('[data-studio-context-loading]'))
-    await waitFor(() => $('[data-studio-paste-open]'))
+    await waitFor(() => $('[data-studio-options]'))
     assert.ok($('[data-studio-context-status]').textContent.includes(ui.i18n.bundles.en.errors.timeout))
   } finally {
     delete globalThis.__promptStudioContextTimeoutMs
@@ -1871,7 +1960,9 @@ test('LOAD-2: Auto, while the step suggestion loads the choices it changes are h
   // Text step with a default: the recommended/skip row waits for the suggestion too.
   await freshSettings(null)
   pending = holdSuggest()
-  await openStudio(INTENT, 'auto')
+  await openStudio(INTENT, 'auto', { deliverable: true })
+  await waitFor(() => pending.length > 0)
+  pending.at(-1).resolve({ ok: true, value: '', reason: 'x' }) // the deliverable step's suggestion
   await pasteStep('')
   for (let i = 0; i < 12 && !($('[data-studio-answer-input]') && $('[data-studio-ai-loading]') && pending.at(-1)?.body.field.recommended); i += 1) {
     if (pending.length) pending.at(-1).resolve({ ok: true, value: '', reason: 'x' })
@@ -1915,7 +2006,7 @@ test('SET-1: read-context switch off: no /context and no loading state, persiste
   assert.equal(contextCalls().length, 0)
   assert.ok($('[data-studio-context-loading]') === null)
   assert.ok($('[data-studio-context-status]') === null)
-  assert.ok($('[data-studio-paste-open]'), 'options shown at once')
+  assert.ok($('[data-studio-options]'), 'options shown at once')
   await openSettings()
   assert.equal(sw().getAttribute('aria-checked'), 'false', 'reads back off after reopening')
   await click('[data-studio-read-context] [role="switch"]')

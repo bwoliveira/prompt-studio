@@ -129,6 +129,20 @@ const DONE_LINES = {
   workflow: 'Running it again must not repeat side effects; show the output of a real run.'
 }
 
+// What the user chose to get, said once in TASK when it is not what the draft's verb reads as: the DONE WHEN
+// line is replaced by a custom success criterion and plan, text and answer have none, so without this the
+// explicit choice could leave no trace in the prompt.
+const DELIVERABLE_LINES = {
+  implementation: 'Deliverable: the working change itself (code, configuration or files), not a plan or an analysis of it.',
+  analysis: 'Deliverable: an analysis with findings and conclusions; do not implement changes.',
+  review: 'Deliverable: a review with findings and their evidence; do not fix what you find unless asked.',
+  plan: 'Deliverable: a plan or roadmap for the work; do not start building or changing anything.',
+  text: 'Deliverable: the written text itself, ready to use.',
+  data: 'Deliverable: the processed data (extracted, transformed or summarized), with its source accounted for.',
+  workflow: 'Deliverable: the automation or process run end to end, with the result of a real run.',
+  answer: 'Deliverable: a direct answer to the question; do not build or change anything.'
+}
+
 // ---------------------------------------------------------------- helpers
 
 function str(value) {
@@ -233,7 +247,9 @@ function analyzeNormalized(b) {
   const conflicts = {}
   if (b.deliverable !== 'auto' && signal && GROUP[signal] !== GROUP[b.deliverable]) conflicts.deliverable = [b.deliverable]
   if (b.format === 'json' && (deliverable === 'text')) conflicts.format = ['json']
-  return { category, deliverable, conflicts, interface: (category === 'code' || deliverable === 'implementation') && INTERFACE.test(text) && (MAKE_VERB.test(text) || REDESIGN_VERB.test(text)) && !FIX_VERB.test(text) && !OPS_TERM.test(text) }
+  // Interface rules only when an interface is being built or redesigned: the deliverable in effect (explicit
+  // choice first) must be the implementation, not an answer, plan or analysis about a draft that mentions an app.
+  return { category, deliverable, conflicts, interface: deliverable === 'implementation' && INTERFACE.test(text) && (MAKE_VERB.test(text) || REDESIGN_VERB.test(text)) && !FIX_VERB.test(text) && !OPS_TERM.test(text) }
 }
 
 // FNV-1a 32-bit: deterministic, short, random-looking id for the pasted block.
@@ -287,7 +303,9 @@ function buildNormalized(b) {
     if (long) add('material', 'THIRD-PARTY MATERIAL', paste.lines)
   }
 
-  add('task', 'TASK', [b.goal || 'No task was given. Ask the user what they want done.'])
+  const { category, signal } = detect(b)
+  const chosen = b.deliverable !== 'auto' && deliverable !== (signal || CATEGORY_DEFAULT[category])
+  add('task', 'TASK', [b.goal || 'No task was given. Ask the user what they want done.', chosen ? DELIVERABLE_LINES[deliverable] : ''])
 
   const explore = !b.context && b.goal.length < 280 && ['workflow', 'data'].includes(deliverable)
   add('context', 'CONTEXT', [b.context, explore ? (paste ? `${EXPLORE_LINE} ${EXPLORE_UNTRUSTED}` : EXPLORE_LINE) : ''])
@@ -643,9 +661,23 @@ const PLAIN = [...WRITTEN, 'implementation', 'review', 'workflow']
 const EXPLORING = ['analysis', 'data', 'review']
 const READ_ONLY = ['analysis', 'review', 'plan', 'answer', 'data']
 
+// What the user chose to get, said once in TASK when it is not what the draft's verb reads as: a custom success
+// criterion replaces the DONE WHEN line, so without this the explicit choice could leave no trace in the prompt.
+const DELIVERABLE_LINES = {
+  implementation: 'Deliverable: the working change itself (code, configuration or files), not a plan or an analysis of it.',
+  analysis: 'Deliverable: an analysis with findings and conclusions; do not implement changes.',
+  review: 'Deliverable: a review with findings and their evidence; do not fix what you find unless asked.',
+  plan: 'Deliverable: a plan or roadmap for the work; do not start building or changing anything.',
+  text: 'Deliverable: the written text itself, ready to use.',
+  data: 'Deliverable: the processed data (extracted, transformed or summarized), with its source accounted for.',
+  workflow: 'Deliverable: the automation or process run end to end, with the result of a real run.',
+  answer: 'Deliverable: a direct answer to the question; do not build or change anything.'
+}
+
 function buildSafe(brief) {
   const b = read(brief)
   const { deliverable, conflicts } = analyzeSafe(b)
+  const chosen = pick(b.deliverable, DELIVERABLES, 'auto') !== 'auto' && deliverable !== detect(b.goal).resolved
   const autonomy = pick(b.autonomy, AUTONOMIES, 'balanced')
   const format = pick(b.format, FORMATS, 'auto')
   const length = pick(b.length, LENGTHS, 'balanced')
@@ -657,7 +689,7 @@ function buildSafe(brief) {
     if (body) sections.push({ id, title, body })
   }
 
-  add('task', 'TASK', [b.goal.trim() ? b.goal : 'No task was given. Ask the user what they need.'])
+  add('task', 'TASK', [b.goal.trim() ? b.goal : 'No task was given. Ask the user what they need.', chosen ? DELIVERABLE_LINES[deliverable] : ''])
   add('context', 'CONTEXT', [b.context])
   const acts = ACTION.includes(deliverable)
   // Frontend lines are for building or changing an interface (implementation), not for automation work.
@@ -893,6 +925,20 @@ const LENGTH_LINES = {
   detailed: 'Give a complete, detailed response: cover every part of the task with the specifics needed to act on it.'
 }
 
+// What the user chose to get, said once in TASK when it is not what the draft's verb reads as: the DONE WHEN
+// line is replaced by a custom success criterion and plan, text and answer have none, so without this the
+// explicit choice could leave no trace in the prompt.
+const DELIVERABLE_LINES = {
+  implementation: 'Deliverable: the working change itself (code, configuration or files), not a plan or an analysis of it.',
+  analysis: 'Deliverable: an analysis with findings and conclusions; do not implement changes.',
+  review: 'Deliverable: a review with findings and their evidence; do not fix what you find unless asked.',
+  plan: 'Deliverable: a plan or roadmap for the work; do not start building or changing anything.',
+  text: 'Deliverable: the written text itself, ready to use.',
+  data: 'Deliverable: the processed data (extracted, transformed or summarized), with its source accounted for.',
+  workflow: 'Deliverable: the automation or process run end to end, with the result of a real run.',
+  answer: 'Deliverable: a direct answer to the question; do not build or change anything.'
+}
+
 // DONE WHEN lines. [review] E1. Plan, text and answer get no line.
 const DONE_LINES = {
   // [sonnet55] "Verification on coding tasks": the doc's paragraph, verbatim ("If you see changes reported as complete
@@ -1014,7 +1060,9 @@ function analyzeNormalized(b) {
   const conflicts = {}
   if (b.deliverable !== 'auto' && signal && GROUP[signal] !== GROUP[b.deliverable]) conflicts.deliverable = [b.deliverable]
   if (b.format === 'json' && (deliverable === 'text')) conflicts.format = ['json']
-  return { category, deliverable, conflicts, interface: (category === 'code' || deliverable === 'implementation') && INTERFACE.test(text) && (MAKE_VERB.test(text) || REDESIGN_VERB.test(text)) && !FIX_VERB.test(text) && !OPS_TERM.test(text) }
+  // Interface rules only when an interface is being built or redesigned: the deliverable in effect (explicit
+  // choice first) must be the implementation, not an answer, plan or analysis about a draft that mentions an app.
+  return { category, deliverable, conflicts, interface: deliverable === 'implementation' && INTERFACE.test(text) && (MAKE_VERB.test(text) || REDESIGN_VERB.test(text)) && !FIX_VERB.test(text) && !OPS_TERM.test(text) }
 }
 
 const escapePasted = text => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;')
@@ -1069,7 +1117,9 @@ function buildNormalized(b) {
     if (long) add('material', 'THIRD-PARTY MATERIAL', paste.lines)
   }
 
-  add('task', 'TASK', [b.goal || 'No task was given. Ask the user what they want done.'])
+  const { category, signal } = detect(b)
+  const chosen = b.deliverable !== 'auto' && deliverable !== (signal || CATEGORY_DEFAULT[category])
+  add('task', 'TASK', [b.goal || 'No task was given. Ask the user what they want done.', chosen ? DELIVERABLE_LINES[deliverable] : ''])
 
   const explore = !b.context && b.goal.length < 280 && ['workflow', 'data'].includes(deliverable)
   add('context', 'CONTEXT', [b.context, explore ? (paste ? `${EXPLORE_LINE} ${EXPLORE_UNTRUSTED}` : EXPLORE_LINE) : ''])
@@ -1168,6 +1218,7 @@ export const CORE_MESSAGES = {
   en: {
     core: {
       detected: detected => ` (detected: ${detected})`,
+      conflict: (option, question) => `Your choice "${option}" for "${question}" contradicts what the draft asks for; the prompt was built for your choice anyway.`,
       optional: question => `${question} (optional)`,
       done: 'Every step has been answered.',
       designDefault: 'recommended list',
@@ -1252,6 +1303,7 @@ export const CORE_MESSAGES = {
   pt: {
     core: {
       detected: detected => ` (detectado: ${detected})`,
+      conflict: (option, question) => `A escolha "${option}" em "${question}" contradiz o que o rascunho pede; o prompt foi montado com a sua escolha mesmo assim.`,
       optional: question => `${question} (opcional)`,
       done: 'Todas as etapas foram respondidas.',
       designDefault: 'lista recomendada',
@@ -1457,22 +1509,23 @@ export function briefFromLadder(target, intent, ladder) {
   return brief
 }
 
-// Options of an enum step the engine does not flag as a conflict for this draft + other answers.
-// A conflicting choice is never offered, so neither the user nor the AI can pick it.
+// Options offered for an enum step. The deliverable step always lists every option: the engine's guess from
+// the draft can be wrong, and a choice that contradicts it is kept and noted by the engine (never hidden here).
+// The other enum steps do not offer an option the engine flags as a conflict for this draft + other answers.
 function acceptedValues(step, target, intent, ladder) {
   const engine = engineOf(target)
+  const options = engine.options[step.id] || []
+  if (step.id === 'deliverable') return options
   const base = briefFromLadder(target, intent, (ladder || []).filter(rung => rung.category !== step.id))
-  return (engine.options[step.id] || []).filter(value => {
+  return options.filter(value => {
     const conflicts = engine.analyze({ ...base, [step.id]: value }).conflicts?.[step.id] || []
     return !conflicts.includes(value)
   })
 }
 
-// Subagent recommendation: the engine's own (Opus: always 'auto'), else a team except for a single text or answer.
+// Subagent recommendation: every engine owns it (Opus, Sonnet and Astra: 'auto').
 function recommendSubagents(target, brief) {
-  const engine = engineOf(target)
-  if (typeof engine.recommend === 'function') return engine.recommend(brief)
-  return ['text', 'answer'].includes(engine.analyze(brief).deliverable) ? 'auto' : 'team'
+  return engineOf(target).recommend(brief)
 }
 
 function recommendedValue(step, target, brief, accepted) {
@@ -1482,13 +1535,9 @@ function recommendedValue(step, target, brief, accepted) {
 
 // An enum step is asked only when it offers a real choice: more than one accepted option besides
 // the default (for subagents, which has no fixed default, more than one accepted option).
-// The deliverable step is also skipped when the draft already names the deliverable (the engine flags
-// some options as conflicts): the remaining options are close variants of what the draft asks, so the
-// step could only confirm the detected value ("detected: …" is still shown if the step is reopened).
 function hasRealChoice(step, target, intent, ladder) {
   if (step.kind !== 'enum') return true
   const accepted = acceptedValues(step, target, intent, ladder)
-  if (step.id === 'deliverable' && accepted.length < (engineOf(target).options.deliverable || []).length) return false
   const fallback = engineOf(target).defaults[step.id]
   return (fallback == null ? accepted : accepted.filter(value => value !== fallback)).length > 1
 }
@@ -1558,14 +1607,36 @@ export function studioPrompt(target, intent, ladder) {
   return { prompt, notes: notes || [] }
 }
 
+// Warnings for the preview, in the Studio's language: one per answer the engine flags as a conflict with the
+// draft (e.g. a deliverable picked against the draft's verb). The engine's own notes stay in English for the
+// prompt; these are what the user reads, with the option and question labels of the active locale.
+export function studioWarnings(target, intent, ladder, locale = 'en') {
+  const msg = coreMessages(locale)
+  const brief = briefFromLadder(target, intent, ladder)
+  const conflicts = engineOf(target).analyze(brief).conflicts || {}
+  const out = []
+  for (const [fieldId, values] of Object.entries(conflicts)) {
+    const step = stepById(fieldId)
+    if (!step || brief[fieldId] === undefined || !(values || []).includes(brief[fieldId])) continue
+    const question = msg.fields[fieldId]?.question(TARGET_NAME[target] || TARGET_NAME.opus) || fieldId
+    out.push(msg.conflict(optionLabel(fieldId, brief[fieldId], locale), question))
+  }
+  return out
+}
+
 // Question/answer pairs the AI writer gets: only steps really answered (skipped/empty/"none" left
 // out; the engine baseline carries the defaults). The design default is sent as its real text.
+// A step whose gate no longer holds for the final brief (e.g. the design answer after the deliverable was
+// edited to a plan) is left out: the engine drops it from the baseline, and the AI writer must not get it.
 export function studioAnswers(target, intent, ladder, locale = 'en') {
   const byId = new Map((ladder || []).map(rung => [rung.category, rung]))
   const engine = engineOf(target)
+  const brief = briefFromLadder(target, intent, ladder)
+  const analysis = engine.analyze(brief)
   const out = []
   for (const step of STEPS) {
     if (!stepApplies(step, target)) continue
+    if (step.when && !step.when(analysis, brief)) continue
     const rung = byId.get(step.id)
     if (!rung) continue
     const answer = String(rung.answer || '').trim()

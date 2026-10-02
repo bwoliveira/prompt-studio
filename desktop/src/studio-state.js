@@ -110,7 +110,7 @@ export function reduceStudio(state, action) {
       // Preview before anything reaches the composer. `ai` is empty when the AI was off or failed;
       // `engine` is the prompt built without AI from the same answers.
       return state.status === 'briefing'
-        ? { ...state, preview: { ai: action.ai || '', engine: action.engine || '', showing: action.ai ? 'ai' : 'engine', note: action.note || '', noteDetail: action.noteDetail || '' }, status: 'preview' }
+        ? { ...state, preview: { ai: action.ai || '', engine: action.engine || '', showing: action.ai ? 'ai' : 'engine', note: action.note || '', noteDetail: action.noteDetail || '', warnings: action.warnings || null }, status: 'preview' }
         : state
     case 'SHOW_VERSION':
       return state.status === 'preview' && state.preview?.[action.version]

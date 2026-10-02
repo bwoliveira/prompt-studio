@@ -568,11 +568,15 @@ function PreviewPanel({ state }) {
   const { ai, engine, showing, note, noteDetail } = state.preview
   const prompt = state.preview[showing]
   const failed = !ai && Boolean(note)
+  // Resolved at render time from the active locale, so a language switch (F3) translates them too.
+  const warnings = state.preview.warnings ? studioWarnings(state.preview.warnings.target, state.intent, state.preview.warnings.ladder, localeOf(t)) : []
   return jsxs('div', {
     'data-studio-preview': true,
     style: { display: 'grid', marginTop: '14px', rowGap: '8px' },
     children: [
       jsx('span', { 'data-studio-preview-title': true, style: { color: 'var(--ui-text-primary, inherit)', fontFamily: 'var(--dt-font-sans, inherit)', fontSize: '14px', fontWeight: 500 }, children: showing === 'ai' ? t('preview.ai') : t('preview.engine') }),
+      // Answer/draft conflicts apply to both versions, so they stay whichever one is shown.
+      ...warnings.map(text => jsx('span', { role: 'note', 'data-studio-preview-warning': true, style: { color: 'var(--ui-text-primary)', fontSize: '12px', lineHeight: '16px' }, children: text })),
       note && (showing === 'ai' || failed)
         ? jsx('span', { 'aria-live': 'polite', 'data-studio-preview-note': true, style: { color: failed ? 'var(--ui-text-primary)' : 'var(--ui-text-secondary)', fontSize: '12px', lineHeight: '16px' }, title: noteDetail || undefined, children: note })
         : null,

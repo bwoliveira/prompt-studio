@@ -12,6 +12,7 @@ export const CORE_MESSAGES = {
   en: {
     core: {
       detected: detected => ` (detected: ${detected})`,
+      conflict: (option, question) => `Your choice "${option}" for "${question}" contradicts what the draft asks for; the prompt was built for your choice anyway.`,
       optional: question => `${question} (optional)`,
       done: 'Every step has been answered.',
       designDefault: 'recommended list',
@@ -96,6 +97,7 @@ export const CORE_MESSAGES = {
   pt: {
     core: {
       detected: detected => ` (detectado: ${detected})`,
+      conflict: (option, question) => `A escolha "${option}" em "${question}" contradiz o que o rascunho pede; o prompt foi montado com a sua escolha mesmo assim.`,
       optional: question => `${question} (opcional)`,
       done: 'Todas as etapas foram respondidas.',
       designDefault: 'lista recomendada',

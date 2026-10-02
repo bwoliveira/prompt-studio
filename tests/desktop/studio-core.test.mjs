@@ -10,7 +10,7 @@ import { ENGINE as SONNET } from '../../desktop/src/engine-sonnet.js'
 import { CORE_MESSAGES } from '../../desktop/src/i18n-core.js'
 import { UI_MESSAGES } from '../../desktop/src/i18n-ui.js'
 
-const { SKIPPED, TARGETS, answerLabel, answerToValue, briefFromLadder, defaultTarget, fieldForTarget, nextQuestion, questionFor, stepCount, studioAnswers, studioPrompt } = core
+const { SKIPPED, TARGETS, answerLabel, answerToValue, briefFromLadder, defaultTarget, fieldForTarget, nextQuestion, questionFor, stepCount, studioAnswers, studioPrompt, studioWarnings } = core
 const ENGINES = { opus: OPUS, astra: ASTRA, sonnet: SONNET }
 const repo = fileURLToPath(new URL('../../', import.meta.url))
 const CODE = 'Crie um dashboard web em React para acompanhar gastos mensais da casa'
@@ -42,8 +42,8 @@ test('targets, default target, SKIPPED', () => {
 
 test('step order and conditions, both targets', () => {
   const pasted = q => (q.paste ? 'Some pasted mail' : q.recommended || SKIPPED)
-  assert.deepEqual(walk('opus', CODE, 'en', pasted).order, ['thirdPartyText', 'thirdPartySource', 'context', 'requirements', 'success', 'designAvoid', 'autonomy', 'subagents', 'format', 'length'])
-  assert.deepEqual(walk('astra', CODE, 'en', pasted).order, ['thirdPartyText', 'thirdPartySource', 'context', 'requirements', 'success', 'autonomy', 'subagents', 'format', 'length'], 'no design step on Astra')
+  assert.deepEqual(walk('opus', CODE, 'en', pasted).order, ['deliverable', 'thirdPartyText', 'thirdPartySource', 'context', 'requirements', 'success', 'designAvoid', 'autonomy', 'subagents', 'format', 'length'])
+  assert.deepEqual(walk('astra', CODE, 'en', pasted).order, ['deliverable', 'thirdPartyText', 'thirdPartySource', 'context', 'requirements', 'success', 'autonomy', 'subagents', 'format', 'length'], 'no design step on Astra')
   for (const target of ['opus', 'astra']) assert.equal(walk(target, VAGUE).order[0], 'deliverable', 'vague draft: deliverable asked first')
   const opusWrite = walk('opus', WRITE).order
   assert.ok(!opusWrite.includes('thirdPartySource'), 'no source step without a paste')
@@ -102,23 +102,84 @@ test('question object shape, locale text and detected deliverable', () => {
   assert.equal(nextQuestion('opus', CODE, walk('opus', CODE).ladder, 'en').done, true)
 })
 
-test('an enum step with no real choice is skipped', () => {
-  // A draft that names its deliverable (some options conflict) skips the step; a vague one asks it.
-  for (const target of ['opus', 'astra']) {
-    assert.ok(!walk(target, WRITE).order.includes('deliverable'), target)
-    assert.ok(!walk(target, CODE).order.includes('deliverable'), target)
+test('an enum step with no real choice is skipped; the deliverable step is always asked', () => {
+  // The deliverable is asked even when the draft names it, so a wrong guess can be corrected (#23).
+  for (const target of ['opus', 'astra', 'sonnet']) {
+    assert.equal(walk(target, WRITE).order[0], 'deliverable', target)
+    assert.equal(walk(target, CODE).order[0], 'deliverable', target)
   }
   // Opus on a writing draft: JSON conflicts, the other formats remain a real choice.
   assert.ok(walk('opus', WRITE).order.includes('format'))
   assert.equal(stepCount('opus', WRITE, []), walk('opus', WRITE).order.length)
 })
 
-test('options analyze() reports as a conflict are never offered', () => {
+// Drafts an engine may read as the wrong deliverable (what it detects depends on the heuristics, so the tests below
+// never hard-code it): the user must still see every deliverable and be able to correct it.
+const CRON = 'Como funciona o cron do Linux?'
+const PLAN = 'Create a plan for the product launch'
+
+test('deliverable step lists every deliverable for every target, even for a misread draft', () => {
+  for (const target of ['opus', 'astra', 'sonnet']) {
+    for (const intent of [CRON, PLAN, CODE, WRITE, VAGUE]) {
+      for (const locale of ['en', 'pt']) {
+        const q = nextQuestion(target, intent, [], locale)
+        assert.equal(q.category, 'deliverable', `${target} ${intent}`)
+        const values = q.options.map(label => answerToValue('deliverable', label, target))
+        assert.deepEqual(values, ENGINES[target].options.deliverable, `${target} ${locale} ${intent}`)
+        assert.equal(new Set(q.options).size, 9)
+        assert.ok(q.options.includes(q.recommended), 'recommended is one of the options')
+        assert.deepEqual(questionFor(target, intent, [], 'deliverable', locale).options, q.options)
+      }
+    }
+  }
+})
+
+test('picking a deliverable that contradicts the draft keeps the choice and notes the conflict', () => {
+  // Whatever deliverable each engine detects, picking another one that conflicts with the draft must reach the prompt.
+  for (const target of ['opus', 'astra', 'sonnet']) {
+    const engine = ENGINES[target]
+    for (const intent of [CRON, PLAN]) {
+      const detectedValue = engine.analyze({ goal: intent }).deliverable
+      const picked = ENGINES[target].options.deliverable.find(value => value !== detectedValue && (engine.analyze({ goal: intent, deliverable: value }).conflicts.deliverable || []).includes(value))
+      assert.ok(picked, `${target}: some deliverable other than the detected "${detectedValue}" contradicts "${intent}"`)
+      const label = nextQuestion(target, intent, [], 'en').options.find(l => answerToValue('deliverable', l, target) === picked)
+      assert.ok(label, `${target}: ${picked} is offered`)
+      const ladder = [{ category: 'deliverable', question: 'q', answer: label }]
+      assert.equal(briefFromLadder(target, intent, ladder).deliverable, picked)
+      const chosen = studioPrompt(target, intent, ladder)
+      assert.equal(chosen.prompt, engine.build({ goal: intent, deliverable: picked }).prompt, `${target}: prompt built for ${picked}`)
+      assert.ok(chosen.notes.some(n => /deliverable/i.test(n) && /conflict|reads as|contradict/i.test(n)), `${target} ${picked}: ${chosen.notes.join(' | ')}`)
+      const detected = studioPrompt(target, intent, [])
+      assert.ok(!detected.notes.some(n => /deliverable/i.test(n)), `${target}: no conflict note for the detected value`)
+    }
+  }
+})
+
+test('studioWarnings: a conflicting answer gives one warning in the asked locale, with the option and question labels', () => {
+  for (const target of ['opus', 'astra', 'sonnet']) {
+    const engine = ENGINES[target]
+    const detectedValue = engine.analyze({ goal: PLAN }).deliverable
+    const picked = engine.options.deliverable.find(value => value !== detectedValue && (engine.analyze({ goal: PLAN, deliverable: value }).conflicts.deliverable || []).includes(value))
+    assert.ok(picked, `${target}: a conflicting deliverable exists for "${PLAN}"`)
+    for (const locale of ['en', 'pt']) {
+      const label = CORE_MESSAGES[locale].core.fields.deliverable.options[picked]
+      const ladder = [{ category: 'deliverable', question: 'q', answer: label }]
+      const warnings = studioWarnings(target, PLAN, ladder, locale)
+      assert.equal(warnings.length, 1, `${target} ${locale}: ${warnings.join(' | ')}`)
+      assert.ok(warnings[0].includes(`"${label}"`), `${target} ${locale}: option label "${label}" in "${warnings[0]}"`)
+      assert.ok(warnings[0].includes(CORE_MESSAGES[locale].core.fields.deliverable.question()), `${target} ${locale}: question label`)
+      assert.doesNotMatch(warnings[0], /reads as|Conflict:/, `${target} ${locale}: not the engine's English note`)
+    }
+    assert.deepEqual(studioWarnings(target, PLAN, [], 'en'), [], `${target}: no warning for the detected value`)
+  }
+})
+
+test('options analyze() reports as a conflict are never offered, except for the deliverable', () => {
   const cases = [['opus', WRITE], ['opus', CODE], ['astra', CODE], ['astra', 'Revise este código antes do merge, pergunte antes de mudar algo, sem subagentes, em tabela']]
   for (const [target, intent] of cases) {
     const engine = ENGINES[target]
     const { ladder } = walk(target, intent)
-    for (const fieldId of ['deliverable', 'autonomy', 'subagents', 'format', 'length']) {
+    for (const fieldId of ['autonomy', 'subagents', 'format', 'length']) {
       const rest = ladder.filter(r => r.category !== fieldId)
       const q = questionFor(target, intent, rest, fieldId, 'en')
       const base = briefFromLadder(target, intent, rest)
@@ -171,6 +232,20 @@ test('studioPrompt is exactly ENGINE.build(brief), both targets', () => {
       const built = ENGINES[target].build(briefFromLadder(target, intent, ladder))
       assert.deepEqual(studioPrompt(target, intent, ladder), { prompt: built.prompt, notes: built.notes })
     }
+  }
+})
+
+test('studioAnswers: an answer whose step no longer applies to the final brief is not sent to the AI writer (Codex P2)', () => {
+  const goal = 'Create a React app to manage product launches'
+  for (const target of ['opus', 'sonnet']) {
+    const design = { category: 'designAvoid', answer: 'purple gradients' }
+    const built = studioAnswers(target, goal, [{ category: 'deliverable', answer: 'Working implementation' }, design])
+    assert.ok(built.some(a => a.id === 'designAvoid' && a.answer === 'purple gradients'), `${target}: kept while the app is built`)
+    // The deliverable was edited to a plan after the design step had been answered: the engine drops the
+    // design rules from the baseline, so the AI writer must not get them either.
+    const planned = studioAnswers(target, goal, [{ category: 'deliverable', answer: 'Plan / roadmap' }, design])
+    assert.ok(!planned.some(a => a.id === 'designAvoid'), `${target}: ${JSON.stringify(planned)}`)
+    assert.ok(!studioPrompt(target, goal, [{ category: 'deliverable', answer: 'Plan / roadmap' }, design]).prompt.includes('purple gradients'))
   }
 })
 
@@ -245,6 +320,19 @@ test('OP-3: designAvoid step not asked for an interface bugfix, asked for new in
   assert.ok(!ids('Corrija o bug de login no app React').includes('designAvoid'))
   assert.ok(ids('Crie uma landing page para minha padaria').includes('designAvoid'))
   assert.ok(ids('Corrija o bug de login no app React').includes('subagents'), 'OP-1: subagents step still asked')
+})
+
+test('the design step follows the chosen deliverable: not asked for an answer or plan about an app (Codex P2)', () => {
+  const goal = 'Create a React app to manage product launches'
+  for (const target of ['opus', 'sonnet']) {
+    const ids = value => {
+      const seen = []
+      walk(target, goal, 'en', q => { seen.push(q.category); return q.category === 'deliverable' ? CORE_MESSAGES.en.core.fields.deliverable.options[value] : (q.recommended || SKIPPED) })
+      return seen
+    }
+    assert.ok(ids('implementation').includes('designAvoid'), `${target}: asked when the app is built`)
+    for (const value of ['answer', 'plan']) assert.ok(!ids(value).includes('designAvoid'), `${target}: not asked for ${value}`)
+  }
 })
 
 

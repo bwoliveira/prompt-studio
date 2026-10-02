@@ -123,22 +123,23 @@ export function briefFromLadder(target, intent, ladder) {
   return brief
 }
 
-// Options of an enum step the engine does not flag as a conflict for this draft + other answers.
-// A conflicting choice is never offered, so neither the user nor the AI can pick it.
+// Options offered for an enum step. The deliverable step always lists every option: the engine's guess from
+// the draft can be wrong, and a choice that contradicts it is kept and noted by the engine (never hidden here).
+// The other enum steps do not offer an option the engine flags as a conflict for this draft + other answers.
 function acceptedValues(step, target, intent, ladder) {
   const engine = engineOf(target)
+  const options = engine.options[step.id] || []
+  if (step.id === 'deliverable') return options
   const base = briefFromLadder(target, intent, (ladder || []).filter(rung => rung.category !== step.id))
-  return (engine.options[step.id] || []).filter(value => {
+  return options.filter(value => {
     const conflicts = engine.analyze({ ...base, [step.id]: value }).conflicts?.[step.id] || []
     return !conflicts.includes(value)
   })
 }
 
-// Subagent recommendation: the engine's own (Opus: always 'auto'), else a team except for a single text or answer.
+// Subagent recommendation: every engine owns it (Opus, Sonnet and Astra: 'auto').
 function recommendSubagents(target, brief) {
-  const engine = engineOf(target)
-  if (typeof engine.recommend === 'function') return engine.recommend(brief)
-  return ['text', 'answer'].includes(engine.analyze(brief).deliverable) ? 'auto' : 'team'
+  return engineOf(target).recommend(brief)
 }
 
 function recommendedValue(step, target, brief, accepted) {
@@ -148,13 +149,9 @@ function recommendedValue(step, target, brief, accepted) {
 
 // An enum step is asked only when it offers a real choice: more than one accepted option besides
 // the default (for subagents, which has no fixed default, more than one accepted option).
-// The deliverable step is also skipped when the draft already names the deliverable (the engine flags
-// some options as conflicts): the remaining options are close variants of what the draft asks, so the
-// step could only confirm the detected value ("detected: …" is still shown if the step is reopened).
 function hasRealChoice(step, target, intent, ladder) {
   if (step.kind !== 'enum') return true
   const accepted = acceptedValues(step, target, intent, ladder)
-  if (step.id === 'deliverable' && accepted.length < (engineOf(target).options.deliverable || []).length) return false
   const fallback = engineOf(target).defaults[step.id]
   return (fallback == null ? accepted : accepted.filter(value => value !== fallback)).length > 1
 }
@@ -224,14 +221,36 @@ export function studioPrompt(target, intent, ladder) {
   return { prompt, notes: notes || [] }
 }
 
+// Warnings for the preview, in the Studio's language: one per answer the engine flags as a conflict with the
+// draft (e.g. a deliverable picked against the draft's verb). The engine's own notes stay in English for the
+// prompt; these are what the user reads, with the option and question labels of the active locale.
+export function studioWarnings(target, intent, ladder, locale = 'en') {
+  const msg = coreMessages(locale)
+  const brief = briefFromLadder(target, intent, ladder)
+  const conflicts = engineOf(target).analyze(brief).conflicts || {}
+  const out = []
+  for (const [fieldId, values] of Object.entries(conflicts)) {
+    const step = stepById(fieldId)
+    if (!step || brief[fieldId] === undefined || !(values || []).includes(brief[fieldId])) continue
+    const question = msg.fields[fieldId]?.question(TARGET_NAME[target] || TARGET_NAME.opus) || fieldId
+    out.push(msg.conflict(optionLabel(fieldId, brief[fieldId], locale), question))
+  }
+  return out
+}
+
 // Question/answer pairs the AI writer gets: only steps really answered (skipped/empty/"none" left
 // out; the engine baseline carries the defaults). The design default is sent as its real text.
+// A step whose gate no longer holds for the final brief (e.g. the design answer after the deliverable was
+// edited to a plan) is left out: the engine drops it from the baseline, and the AI writer must not get it.
 export function studioAnswers(target, intent, ladder, locale = 'en') {
   const byId = new Map((ladder || []).map(rung => [rung.category, rung]))
   const engine = engineOf(target)
+  const brief = briefFromLadder(target, intent, ladder)
+  const analysis = engine.analyze(brief)
   const out = []
   for (const step of STEPS) {
     if (!stepApplies(step, target)) continue
+    if (step.when && !step.when(analysis, brief)) continue
     const rung = byId.get(step.id)
     if (!rung) continue
     const answer = String(rung.answer || '').trim()

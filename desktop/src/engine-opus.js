@@ -125,6 +125,20 @@ const DONE_LINES = {
   workflow: 'Running it again must not repeat side effects; show the output of a real run.'
 }
 
+// What the user chose to get, said once in TASK when it is not what the draft's verb reads as: the DONE WHEN
+// line is replaced by a custom success criterion and plan, text and answer have none, so without this the
+// explicit choice could leave no trace in the prompt.
+const DELIVERABLE_LINES = {
+  implementation: 'Deliverable: the working change itself (code, configuration or files), not a plan or an analysis of it.',
+  analysis: 'Deliverable: an analysis with findings and conclusions; do not implement changes.',
+  review: 'Deliverable: a review with findings and their evidence; do not fix what you find unless asked.',
+  plan: 'Deliverable: a plan or roadmap for the work; do not start building or changing anything.',
+  text: 'Deliverable: the written text itself, ready to use.',
+  data: 'Deliverable: the processed data (extracted, transformed or summarized), with its source accounted for.',
+  workflow: 'Deliverable: the automation or process run end to end, with the result of a real run.',
+  answer: 'Deliverable: a direct answer to the question; do not build or change anything.'
+}
+
 // ---------------------------------------------------------------- helpers
 
 function str(value) {
@@ -229,7 +243,9 @@ function analyzeNormalized(b) {
   const conflicts = {}
   if (b.deliverable !== 'auto' && signal && GROUP[signal] !== GROUP[b.deliverable]) conflicts.deliverable = [b.deliverable]
   if (b.format === 'json' && (deliverable === 'text')) conflicts.format = ['json']
-  return { category, deliverable, conflicts, interface: (category === 'code' || deliverable === 'implementation') && INTERFACE.test(text) && (MAKE_VERB.test(text) || REDESIGN_VERB.test(text)) && !FIX_VERB.test(text) && !OPS_TERM.test(text) }
+  // Interface rules only when an interface is being built or redesigned: the deliverable in effect (explicit
+  // choice first) must be the implementation, not an answer, plan or analysis about a draft that mentions an app.
+  return { category, deliverable, conflicts, interface: deliverable === 'implementation' && INTERFACE.test(text) && (MAKE_VERB.test(text) || REDESIGN_VERB.test(text)) && !FIX_VERB.test(text) && !OPS_TERM.test(text) }
 }
 
 // FNV-1a 32-bit: deterministic, short, random-looking id for the pasted block.
@@ -283,7 +299,9 @@ function buildNormalized(b) {
     if (long) add('material', 'THIRD-PARTY MATERIAL', paste.lines)
   }
 
-  add('task', 'TASK', [b.goal || 'No task was given. Ask the user what they want done.'])
+  const { category, signal } = detect(b)
+  const chosen = b.deliverable !== 'auto' && deliverable !== (signal || CATEGORY_DEFAULT[category])
+  add('task', 'TASK', [b.goal || 'No task was given. Ask the user what they want done.', chosen ? DELIVERABLE_LINES[deliverable] : ''])
 
   const explore = !b.context && b.goal.length < 280 && ['workflow', 'data'].includes(deliverable)
   add('context', 'CONTEXT', [b.context, explore ? (paste ? `${EXPLORE_LINE} ${EXPLORE_UNTRUSTED}` : EXPLORE_LINE) : ''])
