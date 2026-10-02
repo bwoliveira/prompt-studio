@@ -155,10 +155,13 @@ Keys and scope:
 - **Never captured:** the studio's key listener never takes Tab, Enter, Esc or chords with Ctrl or Super.
   Inside the studio's own answer field, keys stay in that field (Enter makes a new line), so typing an
   answer never triggers the app's composer.
-- **Alt:** use the left Alt. Alt+digits follow the physical number row, whatever the keyboard layout.
+- **Alt:** either Alt key works, except where the right Alt is AltGr (some layouts), which does not trigger the
+  shortcuts. Alt+digits follow the physical number row, whatever the keyboard layout.
 - **Apple keyboards:** press fn with the F-keys (F4 is fn+F4) unless *Use F1, F2, etc. keys as standard
-  function keys* is on in macOS Keyboard settings. Alt is the Option (⌥) key. Alt shortcuts follow the
-  physical key, so ⌥E still means Alt+E even though macOS would type a dead key there.
+  function keys* is on in macOS Keyboard settings. Alt is the Option (⌥) key. On a Mac the key caps and the F1
+  list show ⌥E, ⇧ and "fn F4" instead of Alt+E, Shift and F4. Alt shortcuts follow the physical key, so ⌥E,
+  ⌥N and ⌥I still work although macOS would start an accent (a dead key) there; a real input-method
+  composition, with no Alt chord, is still left alone.
 - **Conflicts checked:** these keys were checked against Hermes Desktop's own bindings and the Linux Mint
   (Cinnamon) desktop, which uses only Alt with the F-keys.
 
