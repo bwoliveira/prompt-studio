@@ -565,7 +565,9 @@ test('a draft the engine misreads still gets the deliverable step with all nine 
 })
 
 test('a deliverable that contradicts the draft is kept and its conflict note is shown in the preview (Codex P2)', { skip }, async () => {
-  await openStudio('Create a plan for the product launch', 'off', { deliverable: true })
+  // A draft every engine reads as an implementation, so choosing a plan is a conflict (the draft-recognition fix
+  // now reads "Create a plan ..." as a plan, which no longer conflicts).
+  await openStudio('Create a React app to manage product launches', 'off', { deliverable: true })
   assert.equal(field(), 'deliverable')
   const plan = [...document.querySelectorAll('[data-studio-option]')].map(el => el.getAttribute('data-studio-option')).find(label => /^(Plano|Plan)\b/i.test(label))
   assert.ok(plan, 'the plan option is offered although the engine read the draft as an implementation')
@@ -582,7 +584,7 @@ test('the conflict note is in the Studio language and stays when switching previ
   ui.i18n.locale = 'pt'
   await ui.act(async () => { ui.$locale.set('pt') })
   try {
-    await openStudio('Create a plan for the product launch', 'auto', { deliverable: true })
+    await openStudio('Create a React app to manage product launches', 'auto', { deliverable: true })
     await waitFor(() => $('[data-studio-option]') && notLoading())
     const plan = [...document.querySelectorAll('[data-studio-option]')].map(el => el.getAttribute('data-studio-option')).find(label => /^Plano\b/.test(label))
     assert.ok(plan, 'the Portuguese plan option is offered')
@@ -606,7 +608,7 @@ test('the conflict note is in the Studio language and stays when switching previ
 })
 
 test('a preview warning follows a Studio language switch (Codex P3)', { skip }, async () => {
-  await openStudio('Create a plan for the product launch', 'off', { deliverable: true })
+  await openStudio('Create a React app to manage product launches', 'off', { deliverable: true })
   const plan = [...document.querySelectorAll('[data-studio-option]')].map(el => el.getAttribute('data-studio-option')).find(label => /^Plan\b/.test(label))
   await click(`[data-studio-option="${plan}"]`)
   await pasteStep('')
