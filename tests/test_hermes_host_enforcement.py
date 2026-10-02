@@ -45,3 +45,14 @@ def test_the_scan_catches_a_hermes_import_and_a_dynamic_one(tmp_path):
     sample.write_text("import json\nfrom agent.redact import x\nimport importlib\nimportlib.import_module('hermes_cli.config')\n"
                       "importlib.import_module(f'.{1}', __package__)\nfrom . import llm_adapter\n")
     assert sorted(module for _, module in _top_level_imports(sample)) == ["agent.redact", "hermes_cli.config", "importlib", "json"]
+
+
+def test_the_contract_lists_the_code_and_every_keyword_the_adapter_sends():
+    contract = (ROOT / "docs" / "CONTRACT.md").read_text(encoding="utf-8")
+    sys.path.insert(0, str(DASHBOARD))
+    import hermes_host
+
+    assert "`host_incompatible`" in contract and hermes_host.CODE == "host_incompatible"
+    assert "## Hermes host" in contract
+    for keyword in hermes_host.CALL_LLM_KWARGS:
+        assert f"`{keyword}`" in contract, keyword

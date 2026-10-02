@@ -99,13 +99,16 @@ Response (HTTP 200): `{ "ok": true, "summary": "…", "model": "provider/model",
 | `provider_payment` | billing refusal: 402, "insufficient_quota", "insufficient credits", "payment required", "billing_hard_limit", "credit balance is too low" (also `model`) | `provider payment` |
 | `provider_bad_request` | the provider rejects the request: 400 / BadRequestError not matched above (also `model`) | `provider bad request` |
 | `invalid_summary` | reply is not JSON with a non-empty string `summary` (also `model`) | fixed sentence |
+| `host_incompatible` | the installed Hermes changed a signature the plugin relies on (session store, redactor or model call; see "Hermes host" below); nothing is sent to the model | fixed sentence |
 
 The transcript text is never logged and never returned: only the summary, the route label and counts leave the backend.
 Provider and store exceptions are logged with `logger.warning(exc_info=…)`; the response carries a fixed sentence only.
 
 ## GET /health
 `{ "ok": true, "model": "provider/model resolved for task prompt_studio" }`; if the model adapter cannot load:
-`{ "ok": false, "error": "llm adapter unavailable" }` (logged server-side).
+`{ "ok": false, "error": "llm adapter unavailable" }` (logged server-side). When the installed Hermes no longer matches the
+signatures the plugin relies on: `{ "ok": false, "code": "host_incompatible", "error": "<fixed sentence>" }` (details
+logged). Hermes not being importable at all (standalone checkout) is not reported there.
 
 Size limits on both routes (request validation): draft, answers and `baseline` up to 250 000 characters each,
 questions/hints/guidance 20 000, ids/kinds/target/mode/locale 200; `ladder`, `answers` and `options` at most 50 items.
@@ -151,9 +154,10 @@ back to `error` when the code is unknown or absent.
 | `provider_refused` | both | the provider denies the model to the account/key/plan (401/403, "MODEL_NOT_IN_PLAN" / "not in plan"; 404 stays `model_not_found`) | `provider refused: <ExceptionClassName>` |
 | `provider_payment` | both | billing refusal (402, "insufficient_quota", "insufficient credits", "payment required", "billing_hard_limit", "credit balance is too low") | `provider payment: <ExceptionClassName>` |
 | `provider_bad_request` | both | the provider rejects the request (400 / BadRequestError) and no code above matched | `provider bad request: <ExceptionClassName>` |
+| `host_incompatible` | both | the installed Hermes changed a signature the plugin relies on (see "Hermes host" below); no provider call was made. The desktop falls back to `error` (no localized text yet) | `Hermes changed in a way this Prompt Studio version does not support; update the plugin (details in the Hermes log)` |
 | `empty_reply` | both | empty reply twice, or once when it ended on `finish_reason: length` (no retry: the same cap ends the same way) (also `empty: true`) | fixed sentence |
 
-`timeout`, `unavailable`, `model_not_found`, `provider_refused`, `provider_payment`, `provider_bad_request` and `empty_reply` also carry `model`. The route-level errors (400 for a blank draft, 500
+`timeout`, `unavailable`, `model_not_found`, `provider_refused`, `provider_payment`, `provider_bad_request`, `host_incompatible` and `empty_reply` also carry `model`. The route-level errors (400 for a blank draft, 500
 `{ "ok": false, "error": "suggest engine unavailable" }` / `"compose engine unavailable"` when the engine cannot load
 or crashes, 422 over the size limits) have no `code`.
 
@@ -162,3 +166,25 @@ or `<document>` spans) is removed; the final prompt carries only the Studio's ow
 user wrote in their own text (draft, answers or the baseline outside the pasted block; never the pasted text) is
 content, not framing, and stays: "Convert the `<document>` tags in my XML" survives the rewrite. The v1 routes
 `/interrogate` and `/brief` no longer exist.
+
+## Hermes host
+
+The backend reaches Hermes through one module, `dashboard/hermes_host.py`; no other file under `dashboard/` imports a
+Hermes module (`tests/test_hermes_host_enforcement.py` scans for it). The module imports at call time and checks the
+signature it is about to use, so a Hermes update fails in one place with a stable code instead of deep in a request:
+
+| What the plugin relies on | Checked |
+|---|---|
+| `agent.auxiliary_client.call_llm` takes `task`, `messages`, `max_tokens`, `timeout`, `route_info`, `extra_body`, `reasoning_config` (and `provider`, `model` for a chosen model), with no other required argument; no sampling parameter is ever sent | before each call |
+| `_resolve_task_provider_model(task)` returns a tuple of 5; `_get_auxiliary_task_config(task)` returns a dict; `extract_content_or_reasoning(response)`, `_is_model_not_found_error(exc)` | before each call |
+| `hermes_constants.parse_reasoning_effort(effort)` | before each call |
+| `agent.redact.redact_sensitive_text(text, force=True)` | before each call |
+| `hermes_cli.web_server_sessions._open_session_db_for_profile(profile, read_only=True)` (else `hermes_state.SessionDB(read_only=True)` for the default profile) and the store methods `resolve_session_id`, `resolve_resume_session_id` (optional), `get_messages(session_id, limit=, latest=)`, `close` | when a store is opened |
+
+A symbol that is gone, a keyword that is no longer accepted, a new required argument, a resolution of another length or
+a Hermes module that fails to import all raise `HostIncompatible` (`code: "host_incompatible"`): /suggest and /compose
+answer `code: host_incompatible` (HTTP 200, `ok: false`), /context answers the same code, /health reports it. Hermes
+not being importable at all is a different case (`HostUnavailable`, an `ImportError`): the model routes answer
+`unavailable` as before and the session reader keeps its local redaction fallback. `host.verify()` runs every check
+without calling a provider or opening a database; `tests/test_hermes_host_contract.py` runs it against the installed
+Hermes (skipped when Hermes is not importable; the docstring has the command).
