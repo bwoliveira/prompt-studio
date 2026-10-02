@@ -370,7 +370,8 @@ class PushDesktopTests(unittest.TestCase):
 
     def test_help_and_readme_say_to_close_desktop_for_replace_managed(self) -> None:
         self.assertIn("close Hermes Desktop", self.run_script("--help").stdout)
-        self.assertIn("close Hermes Desktop", (REPO / "README.md").read_text(encoding="utf-8"))
+        for doc in ("README.md", "docs/REMOTE-INSTALL.md"):
+            self.assertIn("close Hermes Desktop", " ".join((REPO / doc).read_text(encoding="utf-8").split()), doc)
 
     def test_replace_managed_on_an_unmarked_folder_is_a_plain_push(self) -> None:
         result = self.run_script("me@laptop", "--replace-managed", mode="run")
