@@ -376,3 +376,16 @@ test('#38: a plain answer carries no style, plain-language or empty DONE WHEN li
     assert.ok(full.includes(STYLE) && full.includes(PLAIN) && full.includes('DONE WHEN\nDone when'), deliverable)
   }
 })
+
+test('#38 (astra): pasted text with < or & carries one line saying &lt; and &amp; stand for them; clean text has none', () => {
+  const NOTE = 'Inside the pasted material, "&lt;" stands for "<" and "&amp;" for "&"; read and quote them as those characters.'
+  const goal = 'Resuma o chamado'
+  const withMarks = ENGINE.build({ goal, thirdPartyText: 'a < b & c', thirdPartySource: 'chamado' })
+  const lines = withMarks.sections.find(s => s.id === 'third_party').body.split('\n')
+  assert.equal(lines.filter(line => line === NOTE).length, 1, withMarks.prompt)
+  assert.ok(!withMarks.prompt.split('\n\n').some(block => block === NOTE), 'the note stays inside the pasted-material section')
+  assert.ok(withMarks.prompt.includes('a &lt; b &amp; c'))
+  assert.ok(!ENGINE.build({ goal, thirdPartyText: 'plain text only' }).prompt.includes('&lt;" stands for'))
+  const long = ENGINE.build({ goal, thirdPartyText: 'linha < '.repeat(400) }).prompt
+  assert.equal(long.split(NOTE).length - 1, 1, 'a long paste carries it once too')
+})

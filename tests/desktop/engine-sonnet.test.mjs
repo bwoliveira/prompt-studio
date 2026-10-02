@@ -385,3 +385,16 @@ test('#38: after a user done-criterion Sonnet adds the verification paragraph on
   assert.ok(lines[1].startsWith('When you change code that can be run, built, or type-checked, run a real check'))
   assert.ok(!/behaviou?r works/i.test(body))
 })
+
+test('#38 (sonnet): pasted text with < or & carries one line saying &lt; and &amp; stand for them; clean text has none', () => {
+  const NOTE = 'Inside the pasted material, "&lt;" stands for "<" and "&amp;" for "&"; read and quote them as those characters.'
+  const goal = 'Resuma o chamado'
+  const withMarks = ENGINE.build({ goal, thirdPartyText: 'a < b & c', thirdPartySource: 'chamado' })
+  const lines = withMarks.sections.find(s => s.id === 'material').body.split('\n')
+  assert.equal(lines.filter(line => line === NOTE).length, 1, withMarks.prompt)
+  assert.ok(!withMarks.prompt.split('\n\n').some(block => block === NOTE), 'the note stays inside the pasted-material section')
+  assert.ok(withMarks.prompt.includes('a &lt; b &amp; c'))
+  assert.ok(!ENGINE.build({ goal, thirdPartyText: 'plain text only' }).prompt.includes('&lt;" stands for'))
+  const long = ENGINE.build({ goal, thirdPartyText: 'linha < '.repeat(400) }).prompt
+  assert.equal(long.split(NOTE).length - 1, 1, 'a long paste carries it once too')
+})
