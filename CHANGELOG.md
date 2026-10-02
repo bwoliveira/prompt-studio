@@ -66,8 +66,10 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   running the unit tests") is text, and a yes/no question ("Can I configure nginx?") is a question, while "Can you
   configure nginx?" stays a request. A question closed by a period and followed by a note ("How do I configure
   nginx. Be brief.") is still a question, and a draft with a long run of spaces no longer freezes the Studio. "A plan
-  to configure nginx" asks for the plan, and "Do not access production. Can you build the app?" is a request, not
-  a question.
+  to configure nginx" (or "a migration plan", "outline a plan") asks for the plan, "Do not access production. Can
+  you build the app?" is a request, not a question, an indirect prohibition ("I do not want you to configure") is
+  still one, "Can you tell me how to configure nginx?" asks for an explanation, and "Include a code example" after
+  a question is not an order.
 - Fix: *Gere um e-mail*, *Monte uma mensagem* and the like stay text, reports and summaries are text even when they
   mention tests ("Write a summary of the test results", "Escreva um relatório dos testes"), and a question such as
   "Como instalar o Docker?" or "Como resumir um livro?" stays an answer on Opus, Sonnet and Astra.

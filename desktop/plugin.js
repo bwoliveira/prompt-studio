@@ -293,7 +293,7 @@ const INTERFACE = /\b(dashboards?|sites?|website|landing|pages?|pagina|telas?|sc
 
 // Languages: Portuguese (unaccented) + English.
 // A signal that is a noun, not an order ("Our plan is ready. Build ..."): it decides only when no verb does.
-const NOUN_SIGNAL = /^(plano|planos|plan|roadmap|cronograma|estrategia|strategy|workflows?|pipelines?|planilhas?|csv|datasets?|spreadsheets?|revisao|reviews|pesquisa)$/
+const NOUN_SIGNAL = /^(plano|planos|plan|roadmap|cronograma|estrategia|strategy|workflows?|pipelines?|planilhas?|csv|datasets?|spreadsheets?|revisao|reviews|pesquisa|code|codigo)$/
 // The match opens the draft or a sentence (only punctuation or a line break and spaces before it), or follows a
 // one-word opener and its comma ("First, plan ..."), a polite prefix ("Please plan ...", "Por favor, planeje") or a
 // request prefix ("Can you plan ...", "I need you to plan ...", "Preciso que voce planeje ...").
@@ -302,16 +302,18 @@ const SENTENCE_START = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor
 // A noun-signal word after an infinitive or modal marker is the verb ("we need to plan before ...", "let's plan").
 const INFINITIVE_MARK = /\b(?:(?:need|needs|needed|want|wants|wanted|have|has|had|going|ought|able|like|try|trying|time|ready|how)\s+to|let'?s|let us|(?:we|you|i|they)\s+(?:should|must|will|can|could|shall|may|might)(?:\s+(?:also|first|then|now|just))?|precisamos|devemos|vamos|queremos|preciso|quero|devo|vou)\s*$/
 // A noun-signal word that heads a requested noun phrase ("A plan to configure nginx", "Preciso de um plano para ...")
-// names the request: a determiner (after an optional request opener) opens its sentence, and no copula follows it
-// ("The plan is ready. Build ..." is context).
-const REQUESTED_NOUN = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:i|we) (?:need|want|would like)|i'd like|we'd like|give me|send me|preciso de|precisamos de|quero|queremos|gostaria de|gostariamos de|me de|me passe|me envie|me mande)\s+)?(?:a|an|the|um|uma|o|os|as|some|algum|alguma|alguns|algumas)\s+(?:(?:new|novo|nova|detailed|detalhado|detalhada|simple|simples|quick|rapido|rapida|good|bom|boa|short|curto|curta)\s+)?$/
+// names the request: a determiner (after an optional request opener or verb) opens its sentence, up to two plain
+// modifiers may sit between them ("a migration plan"), and no copula follows ("The plan is ready. Build ..." is context).
+const REQUESTED_NOUN = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:i|we) (?:need|want|would like)|i'd like|we'd like|give me|send me|preciso de|precisamos de|quero|queremos|gostaria de|gostariamos de|me de|me passe|me envie|me mande|outline|draft|prepare|propose|sketch|produce|provide|esboce|elabore|prepare|proponha|produza|forneca|apresente)\s+(?:me\s+)?)?(?:a|an|the|um|uma|o|os|as|some|algum|alguma|alguns|algumas)\s+(?:(?!(?:to|for|of|and|or|that|which|para|de|do|da|que|e|ou)\s)[\w-]+\s+){0,2}$/
 const COPULA = /^\s+(?:is|are|was|were|will|would|has|have|had|e|esta|estao|era|eram|foi|foram|sera|serao|ja|fica|ficou|seems|looks|parece)\b/
 // A noun-signal word followed by a determiner is the verb wherever it sits ("... so plan the steps", "review our API").
 // Portuguese este/esta are left out: folded, "esta" is also "esta" ("Nosso plano esta pronto").
 const VERB_OBJECT = /^\s+(?:the|a|an|our|my|your|this|these|those|all|each|every|o|os|as|um|uma|uns|umas|nosso|nossa|nossos|nossas|meu|minha|seu|sua|esse|essa|esses|essas|todos|todas|cada)\b/
 // A verb right after a negation (an adverb at most in between) is a prohibition, not the order ("do not run any
 // commands", "never ever deploy", "nao execute"). A reminder ("don't forget to review") still asks for the review.
-const NEGATED = /(?:^|[\s,;:(])(?:(?:do not|don't|dont|does not|doesn't|never|not|nao|nunca|jamais)(?:\s+(?:ever|even|just|simply|actually|really|ainda|mesmo|sequer|simplesmente))?|without|sem)\s*$/
+const NEGATED = /(?:^|[\s,;:(])(?:(?:do not|don't|dont|does not|doesn't|never|not|nao|nunca|jamais)(?:\s+(?:ever|even|just|simply|actually|really|ainda|mesmo|sequer|simplesmente))?(?:\s+(?:want|wants|try|tries|need|needs|attempt|expect|intend|wish|dare|like|allow|let|ask|tell)(?:\s+(?:you|me|us|them|him|her|anyone))?\s+to|\s+(?:quero|queremos|tente|tentem|tentar|precisa|precisamos|espero|esperamos|permito|deixe|peca|peço)(?:\s+que\s+(?:voce|voces|ele|ela|eles|elas|ninguem|alguem))?)?|without|sem)\s*$/
+// A prohibition may be indirect ("I do not want you to configure", "do not try to configure", "nao quero que voce
+// configure"); a reminder ("don't forget to review") is not one.
 // The prohibition covers the verbs coordinated with the negated one ("do not build or deploy anything", "never
 // install, configure or deploy"): a coordinator or a list comma leads back to the previous word.
 const COORDINATED = /\b(\w+)\s*(?:,|,?\s+(?:or|nor|and|ou|nem|e))\s*$/
@@ -340,9 +342,9 @@ function prohibited(text, at, hops = 0) {
 }
 // Languages: Portuguese (unaccented) + English.
 // A yes/no question, closed by its mark ("Can I configure nginx?", "Posso reiniciar o servidor?"). "Can you ..." and
-// "Voce pode ..." are requests, not questions, unless they ask what the reader thinks or knows; "Do not ..." is a
+// "Voce pode ..." are requests, not questions, unless they ask what the reader thinks, knows or can tell; "Do not ..." is a
 // prohibition, and the question ends at its own sentence, so a later request is read on its own.
-const YESNO_FORM = /^(?:(?:can|could|should|would|will|may|might|shall|must|do|does|did|is|are|was|were|am|have|has|posso|podemos|devo|devemos|consigo|conseguimos|preciso|precisamos|existe|existem|ha|tem como|da para|e possivel|e preciso|e necessario|e seguro|e melhor|sera que|vale)(?!\s+(?:you|voce|voces)\b(?!\s+(?:think|know|believe|recommend|suggest|mean|see|acha|sabe|recomenda|sugere|conhece)\b))(?!\s+not\b|n't\b))\b(?:[^.?!\n]|\.(?=\S)|\n(?![ \t]*\n))*\?/
+const YESNO_FORM = /^(?:(?:voce|voces)\s+(?:pode|podem|poderia|poderiam|consegue|conseguem|sabe|sabem)\s+(?:me\s+)?(?:dizer|explicar|mostrar|contar|descrever|esclarecer|ajudar|orientar|indicar)|(?:can|could|should|would|will|may|might|shall|must|do|does|did|is|are|was|were|am|have|has|posso|podemos|devo|devemos|consigo|conseguimos|preciso|precisamos|existe|existem|ha|tem como|da para|e possivel|e preciso|e necessario|e seguro|e melhor|sera que|vale)(?!\s+(?:you|voce|voces)\b(?!\s+(?:think|know|believe|recommend|suggest|mean|see|tell|say|explain|describe|clarify|show|walk|help|acha|sabe|recomenda|sugere|conhece|me dizer|me explicar|me mostrar|me contar|me descrever|me esclarecer|me ajudar|me orientar|dizer|explicar|mostrar|contar|descrever|esclarecer)\b))(?!\s+not\b|n't\b))\b(?:[^.?!\n]|\.(?=\S)|\n(?![ \t]*\n))*\?/
 // The question form, unless its comma follows something that is not a question ("Como especialista, escreva").
 function isQuestion(goal) {
   const yesNo = YESNO_FORM.exec(goal)
@@ -814,7 +816,7 @@ const COMPATIBLE = {
 
 // Languages: Portuguese (unaccented) + English.
 // A signal that is a noun, not an order ("Our plan is ready. Build ..."): it decides only when no verb does.
-const NOUN_SIGNAL = /^(plano|planos|plan|roadmap|cronograma|estrategia|strategy|workflows?|pipelines?|planilhas?|csv|datasets?|spreadsheets?|revisao|reviews|pesquisa)$/
+const NOUN_SIGNAL = /^(plano|planos|plan|roadmap|cronograma|estrategia|strategy|workflows?|pipelines?|planilhas?|csv|datasets?|spreadsheets?|revisao|reviews|pesquisa|code|codigo)$/
 // The match opens the draft or a sentence (only punctuation or a line break and spaces before it), or follows a
 // one-word opener and its comma ("First, plan ..."), a polite prefix ("Please plan ...", "Por favor, planeje") or a
 // request prefix ("Can you plan ...", "I need you to plan ...", "Preciso que voce planeje ...").
@@ -823,16 +825,18 @@ const SENTENCE_START = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor
 // A noun-signal word after an infinitive or modal marker is the verb ("we need to plan before ...", "let's plan").
 const INFINITIVE_MARK = /\b(?:(?:need|needs|needed|want|wants|wanted|have|has|had|going|ought|able|like|try|trying|time|ready|how)\s+to|let'?s|let us|(?:we|you|i|they)\s+(?:should|must|will|can|could|shall|may|might)(?:\s+(?:also|first|then|now|just))?|precisamos|devemos|vamos|queremos|preciso|quero|devo|vou)\s*$/
 // A noun-signal word that heads a requested noun phrase ("A plan to configure nginx", "Preciso de um plano para ...")
-// names the request: a determiner (after an optional request opener) opens its sentence, and no copula follows it
-// ("The plan is ready. Build ..." is context).
-const REQUESTED_NOUN = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:i|we) (?:need|want|would like)|i'd like|we'd like|give me|send me|preciso de|precisamos de|quero|queremos|gostaria de|gostariamos de|me de|me passe|me envie|me mande)\s+)?(?:a|an|the|um|uma|o|os|as|some|algum|alguma|alguns|algumas)\s+(?:(?:new|novo|nova|detailed|detalhado|detalhada|simple|simples|quick|rapido|rapida|good|bom|boa|short|curto|curta)\s+)?$/
+// names the request: a determiner (after an optional request opener or verb) opens its sentence, up to two plain
+// modifiers may sit between them ("a migration plan"), and no copula follows ("The plan is ready. Build ..." is context).
+const REQUESTED_NOUN = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:i|we) (?:need|want|would like)|i'd like|we'd like|give me|send me|preciso de|precisamos de|quero|queremos|gostaria de|gostariamos de|me de|me passe|me envie|me mande|outline|draft|prepare|propose|sketch|produce|provide|esboce|elabore|prepare|proponha|produza|forneca|apresente)\s+(?:me\s+)?)?(?:a|an|the|um|uma|o|os|as|some|algum|alguma|alguns|algumas)\s+(?:(?!(?:to|for|of|and|or|that|which|para|de|do|da|que|e|ou)\s)[\w-]+\s+){0,2}$/
 const COPULA = /^\s+(?:is|are|was|were|will|would|has|have|had|e|esta|estao|era|eram|foi|foram|sera|serao|ja|fica|ficou|seems|looks|parece)\b/
 // A noun-signal word followed by a determiner is the verb wherever it sits ("... so plan the steps", "review our API").
 // Portuguese este/esta are left out: folded, "esta" is also "esta" ("Nosso plano esta pronto").
 const VERB_OBJECT = /^\s+(?:the|a|an|our|my|your|this|these|those|all|each|every|o|os|as|um|uma|uns|umas|nosso|nossa|nossos|nossas|meu|minha|seu|sua|esse|essa|esses|essas|todos|todas|cada)\b/
 // A verb right after a negation (an adverb at most in between) is a prohibition, not the order ("do not run any
 // commands", "never ever deploy", "nao execute"). A reminder ("don't forget to review") still asks for the review.
-const NEGATED = /(?:^|[\s,;:(])(?:(?:do not|don't|dont|does not|doesn't|never|not|nao|nunca|jamais)(?:\s+(?:ever|even|just|simply|actually|really|ainda|mesmo|sequer|simplesmente))?|without|sem)\s*$/
+const NEGATED = /(?:^|[\s,;:(])(?:(?:do not|don't|dont|does not|doesn't|never|not|nao|nunca|jamais)(?:\s+(?:ever|even|just|simply|actually|really|ainda|mesmo|sequer|simplesmente))?(?:\s+(?:want|wants|try|tries|need|needs|attempt|expect|intend|wish|dare|like|allow|let|ask|tell)(?:\s+(?:you|me|us|them|him|her|anyone))?\s+to|\s+(?:quero|queremos|tente|tentem|tentar|precisa|precisamos|espero|esperamos|permito|deixe|peca|peço)(?:\s+que\s+(?:voce|voces|ele|ela|eles|elas|ninguem|alguem))?)?|without|sem)\s*$/
+// A prohibition may be indirect ("I do not want you to configure", "do not try to configure", "nao quero que voce
+// configure"); a reminder ("don't forget to review") is not one.
 // The prohibition covers the verbs coordinated with the negated one ("do not build or deploy anything", "never
 // install, configure or deploy"): a coordinator or a list comma leads back to the previous word.
 const COORDINATED = /\b(\w+)\s*(?:,|,?\s+(?:or|nor|and|ou|nem|e))\s*$/
@@ -861,9 +865,9 @@ function prohibited(text, at, hops = 0) {
 }
 // Languages: Portuguese (unaccented) + English.
 // A yes/no question, closed by its mark ("Can I configure nginx?", "Posso reiniciar o servidor?"). "Can you ..." and
-// "Voce pode ..." are requests, not questions, unless they ask what the reader thinks or knows; "Do not ..." is a
+// "Voce pode ..." are requests, not questions, unless they ask what the reader thinks, knows or can tell; "Do not ..." is a
 // prohibition, and the question ends at its own sentence, so a later request is read on its own.
-const YESNO_FORM = /^(?:(?:can|could|should|would|will|may|might|shall|must|do|does|did|is|are|was|were|am|have|has|posso|podemos|devo|devemos|consigo|conseguimos|preciso|precisamos|existe|existem|ha|tem como|da para|e possivel|e preciso|e necessario|e seguro|e melhor|sera que|vale)(?!\s+(?:you|voce|voces)\b(?!\s+(?:think|know|believe|recommend|suggest|mean|see|acha|sabe|recomenda|sugere|conhece)\b))(?!\s+not\b|n't\b))\b(?:[^.?!\n]|\.(?=\S)|\n(?![ \t]*\n))*\?/
+const YESNO_FORM = /^(?:(?:voce|voces)\s+(?:pode|podem|poderia|poderiam|consegue|conseguem|sabe|sabem)\s+(?:me\s+)?(?:dizer|explicar|mostrar|contar|descrever|esclarecer|ajudar|orientar|indicar)|(?:can|could|should|would|will|may|might|shall|must|do|does|did|is|are|was|were|am|have|has|posso|podemos|devo|devemos|consigo|conseguimos|preciso|precisamos|existe|existem|ha|tem como|da para|e possivel|e preciso|e necessario|e seguro|e melhor|sera que|vale)(?!\s+(?:you|voce|voces)\b(?!\s+(?:think|know|believe|recommend|suggest|mean|see|tell|say|explain|describe|clarify|show|walk|help|acha|sabe|recomenda|sugere|conhece|me dizer|me explicar|me mostrar|me contar|me descrever|me esclarecer|me ajudar|me orientar|dizer|explicar|mostrar|contar|descrever|esclarecer)\b))(?!\s+not\b|n't\b))\b(?:[^.?!\n]|\.(?=\S)|\n(?![ \t]*\n))*\?/
 // The question form, unless its comma follows something that is not a question ("Como especialista, escreva").
 function isQuestion(goal) {
   const yesNo = YESNO_FORM.exec(goal)
@@ -1399,7 +1403,7 @@ const INTERFACE = /\b(dashboards?|sites?|website|landing|pages?|pagina|telas?|sc
 
 // Languages: Portuguese (unaccented) + English.
 // A signal that is a noun, not an order ("Our plan is ready. Build ..."): it decides only when no verb does.
-const NOUN_SIGNAL = /^(plano|planos|plan|roadmap|cronograma|estrategia|strategy|workflows?|pipelines?|planilhas?|csv|datasets?|spreadsheets?|revisao|reviews|pesquisa)$/
+const NOUN_SIGNAL = /^(plano|planos|plan|roadmap|cronograma|estrategia|strategy|workflows?|pipelines?|planilhas?|csv|datasets?|spreadsheets?|revisao|reviews|pesquisa|code|codigo)$/
 // The match opens the draft or a sentence (only punctuation or a line break and spaces before it), or follows a
 // one-word opener and its comma ("First, plan ..."), a polite prefix ("Please plan ...", "Por favor, planeje") or a
 // request prefix ("Can you plan ...", "I need you to plan ...", "Preciso que voce planeje ...").
@@ -1408,16 +1412,18 @@ const SENTENCE_START = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor
 // A noun-signal word after an infinitive or modal marker is the verb ("we need to plan before ...", "let's plan").
 const INFINITIVE_MARK = /\b(?:(?:need|needs|needed|want|wants|wanted|have|has|had|going|ought|able|like|try|trying|time|ready|how)\s+to|let'?s|let us|(?:we|you|i|they)\s+(?:should|must|will|can|could|shall|may|might)(?:\s+(?:also|first|then|now|just))?|precisamos|devemos|vamos|queremos|preciso|quero|devo|vou)\s*$/
 // A noun-signal word that heads a requested noun phrase ("A plan to configure nginx", "Preciso de um plano para ...")
-// names the request: a determiner (after an optional request opener) opens its sentence, and no copula follows it
-// ("The plan is ready. Build ..." is context).
-const REQUESTED_NOUN = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:i|we) (?:need|want|would like)|i'd like|we'd like|give me|send me|preciso de|precisamos de|quero|queremos|gostaria de|gostariamos de|me de|me passe|me envie|me mande)\s+)?(?:a|an|the|um|uma|o|os|as|some|algum|alguma|alguns|algumas)\s+(?:(?:new|novo|nova|detailed|detalhado|detalhada|simple|simples|quick|rapido|rapida|good|bom|boa|short|curto|curta)\s+)?$/
+// names the request: a determiner (after an optional request opener or verb) opens its sentence, up to two plain
+// modifiers may sit between them ("a migration plan"), and no copula follows ("The plan is ready. Build ..." is context).
+const REQUESTED_NOUN = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:i|we) (?:need|want|would like)|i'd like|we'd like|give me|send me|preciso de|precisamos de|quero|queremos|gostaria de|gostariamos de|me de|me passe|me envie|me mande|outline|draft|prepare|propose|sketch|produce|provide|esboce|elabore|prepare|proponha|produza|forneca|apresente)\s+(?:me\s+)?)?(?:a|an|the|um|uma|o|os|as|some|algum|alguma|alguns|algumas)\s+(?:(?!(?:to|for|of|and|or|that|which|para|de|do|da|que|e|ou)\s)[\w-]+\s+){0,2}$/
 const COPULA = /^\s+(?:is|are|was|were|will|would|has|have|had|e|esta|estao|era|eram|foi|foram|sera|serao|ja|fica|ficou|seems|looks|parece)\b/
 // A noun-signal word followed by a determiner is the verb wherever it sits ("... so plan the steps", "review our API").
 // Portuguese este/esta are left out: folded, "esta" is also "esta" ("Nosso plano esta pronto").
 const VERB_OBJECT = /^\s+(?:the|a|an|our|my|your|this|these|those|all|each|every|o|os|as|um|uma|uns|umas|nosso|nossa|nossos|nossas|meu|minha|seu|sua|esse|essa|esses|essas|todos|todas|cada)\b/
 // A verb right after a negation (an adverb at most in between) is a prohibition, not the order ("do not run any
 // commands", "never ever deploy", "nao execute"). A reminder ("don't forget to review") still asks for the review.
-const NEGATED = /(?:^|[\s,;:(])(?:(?:do not|don't|dont|does not|doesn't|never|not|nao|nunca|jamais)(?:\s+(?:ever|even|just|simply|actually|really|ainda|mesmo|sequer|simplesmente))?|without|sem)\s*$/
+const NEGATED = /(?:^|[\s,;:(])(?:(?:do not|don't|dont|does not|doesn't|never|not|nao|nunca|jamais)(?:\s+(?:ever|even|just|simply|actually|really|ainda|mesmo|sequer|simplesmente))?(?:\s+(?:want|wants|try|tries|need|needs|attempt|expect|intend|wish|dare|like|allow|let|ask|tell)(?:\s+(?:you|me|us|them|him|her|anyone))?\s+to|\s+(?:quero|queremos|tente|tentem|tentar|precisa|precisamos|espero|esperamos|permito|deixe|peca|peço)(?:\s+que\s+(?:voce|voces|ele|ela|eles|elas|ninguem|alguem))?)?|without|sem)\s*$/
+// A prohibition may be indirect ("I do not want you to configure", "do not try to configure", "nao quero que voce
+// configure"); a reminder ("don't forget to review") is not one.
 // The prohibition covers the verbs coordinated with the negated one ("do not build or deploy anything", "never
 // install, configure or deploy"): a coordinator or a list comma leads back to the previous word.
 const COORDINATED = /\b(\w+)\s*(?:,|,?\s+(?:or|nor|and|ou|nem|e))\s*$/
@@ -1446,9 +1452,9 @@ function prohibited(text, at, hops = 0) {
 }
 // Languages: Portuguese (unaccented) + English.
 // A yes/no question, closed by its mark ("Can I configure nginx?", "Posso reiniciar o servidor?"). "Can you ..." and
-// "Voce pode ..." are requests, not questions, unless they ask what the reader thinks or knows; "Do not ..." is a
+// "Voce pode ..." are requests, not questions, unless they ask what the reader thinks, knows or can tell; "Do not ..." is a
 // prohibition, and the question ends at its own sentence, so a later request is read on its own.
-const YESNO_FORM = /^(?:(?:can|could|should|would|will|may|might|shall|must|do|does|did|is|are|was|were|am|have|has|posso|podemos|devo|devemos|consigo|conseguimos|preciso|precisamos|existe|existem|ha|tem como|da para|e possivel|e preciso|e necessario|e seguro|e melhor|sera que|vale)(?!\s+(?:you|voce|voces)\b(?!\s+(?:think|know|believe|recommend|suggest|mean|see|acha|sabe|recomenda|sugere|conhece)\b))(?!\s+not\b|n't\b))\b(?:[^.?!\n]|\.(?=\S)|\n(?![ \t]*\n))*\?/
+const YESNO_FORM = /^(?:(?:voce|voces)\s+(?:pode|podem|poderia|poderiam|consegue|conseguem|sabe|sabem)\s+(?:me\s+)?(?:dizer|explicar|mostrar|contar|descrever|esclarecer|ajudar|orientar|indicar)|(?:can|could|should|would|will|may|might|shall|must|do|does|did|is|are|was|were|am|have|has|posso|podemos|devo|devemos|consigo|conseguimos|preciso|precisamos|existe|existem|ha|tem como|da para|e possivel|e preciso|e necessario|e seguro|e melhor|sera que|vale)(?!\s+(?:you|voce|voces)\b(?!\s+(?:think|know|believe|recommend|suggest|mean|see|tell|say|explain|describe|clarify|show|walk|help|acha|sabe|recomenda|sugere|conhece|me dizer|me explicar|me mostrar|me contar|me descrever|me esclarecer|me ajudar|me orientar|dizer|explicar|mostrar|contar|descrever|esclarecer)\b))(?!\s+not\b|n't\b))\b(?:[^.?!\n]|\.(?=\S)|\n(?![ \t]*\n))*\?/
 // The question form, unless its comma follows something that is not a question ("Como especialista, escreva").
 function isQuestion(goal) {
   const yesNo = YESNO_FORM.exec(goal)

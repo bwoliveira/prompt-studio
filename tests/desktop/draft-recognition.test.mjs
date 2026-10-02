@@ -267,6 +267,29 @@ const TABLE = [
   ['Can I configure nginx? Can you build the app?', 'implementation', 'near miss: a request after a yes/no question'],
   ['Do I need Docker? Be brief.', 'answer', 'near miss: yes/no then a style note'],
   ['Does it matter which port I use?', 'answer', 'near miss: does it, no negation'],
+  // a requested plan keeps its modifiers and its request verb (Codex P1)
+  ['I need a migration plan to configure nginx', 'plan', 'modifier before the noun'],
+  ['Please outline a plan to configure nginx', 'plan', 'request verb before the determiner'],
+  ['Preciso de um plano detalhado de migracao para configurar o nginx', 'plan', 'pt, two modifiers'],
+  ['Elabore uma estrategia para automatizar o deploy', 'plan', 'pt request verb'],
+  ['The migration plan is ready. Build a React dashboard', 'implementation', 'near miss: copula after the modified noun'],
+  ['A script to configure nginx', 'workflow', 'near miss: a plain noun before "to" does not name the request'],
+  // an indirect prohibition is still a prohibition (Codex P1)
+  ['What is Docker? I do not want you to configure anything', 'answer', 'do not want you to'],
+  ['What is Docker? Do not try to configure anything', 'answer', 'do not try to'],
+  ['O que é Docker? Não quero que você configure nada', 'answer', 'pt nao quero que voce'],
+  ["What is Docker? Don't forget to configure nginx", 'workflow', 'near miss: a reminder is an order'],
+  ['I want you to configure nginx', 'workflow', 'near miss: no negation'],
+  // "tell me how" asks for an explanation (Codex P1)
+  ['Can you tell me how to configure nginx?', 'answer', 'can you tell me how'],
+  ['Você pode me dizer como configurar o nginx?', 'answer', 'pt voce pode me dizer'],
+  ['Could you walk me through installing Docker?', 'answer', 'walk me through'],
+  ['Can you configure nginx and tell me how it went?', 'workflow', 'near miss: the order comes first'],
+  // "code" named as a noun after a question is not an order (Codex P2)
+  ['How do I configure nginx? Include a code example', 'answer', 'a code example'],
+  ['Como configurar o nginx? Inclua um exemplo de código', 'answer', 'pt exemplo de codigo'],
+  ['Build the login page. Include a code example', 'implementation', 'near miss: the order comes first, code is context'],
+  ['Write a script that parses the CSV', 'implementation', 'near miss: the script is the artifact of the order'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
