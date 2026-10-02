@@ -1,0 +1,13 @@
+{
+  "goal": "Crie um dashboard React que mostre as vendas do mês a partir de um CSV.",
+  "context": "Loja pequena; o CSV vem do caixa e tem uma linha por venda.",
+  "requirements": "Gráfico de barras por dia e total do mês no topo.",
+  "success": "O dashboard abre e o total do mês confere com o CSV de exemplo.",
+  "thirdPartyText": "Chamado 481: o cabeçalho do CSV traz \"vendas <10 & devoluções\" e quebra a leitura.",
+  "thirdPartySource": "Chamado do suporte, texto copiado",
+  "examples": "Total do mês: R$ 12.345,67\n---\nMelhor dia: 14, com R$ 1.020,00",
+  "autonomy": "proactive",
+  "subagents": "team",
+  "format": "steps",
+  "length": "concise"
+}

@@ -112,6 +112,7 @@ const STATE_LINE = 'When you stop, say whether the task is fully done; if it is 
 // and use the smallest useful fallback."
 const EXPLORE_STOP_LINE = 'Stop exploring once the core request can be answered with useful evidence. If required evidence is still missing, name the missing fact and use the smallest useful fallback.'
 // gpt6-rethinking-prompts.md: "define completion before starting". Used only when the user gave no success criteria.
+// A plain answer has none: "Done when the question is answered directly" only restates the request.
 const DONE_LINES = {
   implementation: 'Done when the requested behavior works in the environment it is meant for.',
   analysis: 'Done when the question is answered with a recommendation and the evidence behind it.',
@@ -119,8 +120,7 @@ const DONE_LINES = {
   plan: 'Done when the plan gives ordered steps with their dependencies, the main risks and the first action to take.',
   text: 'Done when the text is ready to send or publish as it stands.',
   data: 'Done when the figures are computed from the data provided, with units, and the method is stated.',
-  workflow: 'Done when the workflow has run end to end and its effects are in place.',
-  answer: 'Done when the question is answered directly.'
+  workflow: 'Done when the workflow has run end to end and its effects are in place.'
 }
 
 // gpt6-using.md, writing style (verbatim): "Use plain, simple language: familiar words, concrete
@@ -145,7 +145,9 @@ const LENGTH_LINES = {
   detailed: 'Make sure to state the main point clearly and early, then develop it with the explanation and detail the reader needs. Develop the points that matter and provide enough support to be useful.'
 }
 // prompt-engineering.md, few-shot: "The model implicitly "picks up" the pattern from those examples".
-const EXAMPLES_LINE = 'Follow the pattern of these examples; do not copy their content.'
+// Wrapped like the Opus and Sonnet targets: <example> per item, <examples> around several (items split on a --- line).
+const EXAMPLE_NOTE_ONE = 'Follow the pattern of this example; do not copy its content.'
+const EXAMPLE_NOTE_MANY = 'Follow the pattern of these examples; do not copy their content.'
 
 // Subagents (user's wording + gpt6-using.md verbatim lines; PROMPT-DOCS-REVIEW section 5).
 // gpt6-using.md (verbatim).
@@ -158,6 +160,10 @@ const REVIEWER_LINE = 'Name one subagent as the reviewer. The reviewer did not w
 const LEGIBLE_LINE = 'Messages that you send to other agents and your final answer may be read by a human, so ensure they are legible. Always put proper spaces between words and/or numbers.'
 const REAL_LINE = 'Only report delegation that actually happened through subagent tools; if they are not available, do the parts yourself in the same order and say so.'
 const DIRECT_LINE = 'Do not use subagents; perform the work directly.'
+
+// What the escaping did, said once (only when it changed something): pasted text is escaped so it cannot close its
+// tags, and a model that quotes it back would otherwise hand the user "&lt;" and "&amp;".
+const ESCAPE_NOTE = 'Inside the pasted material, "&lt;" stands for "<" and "&amp;" for "&"; read and quote them as those characters.'
 
 // agent-safety.md: "A prompt injection happens when untrusted text or data enters an AI system, and
 // malicious contents in that text or data attempt to override instructions to the AI."
@@ -255,20 +261,25 @@ function analyze(brief) {
 }
 
 function documentBlock(pasted, source) {
-  const origin = escapeXml(source.replace(/\s+/g, ' ').trim().slice(0, 300))
+  const plainOrigin = source.replace(/\s+/g, ' ').trim().slice(0, 300)
+  const origin = escapeXml(plainOrigin)
+  const text = escapeXml(pasted)
   return [
     '<document>',
     ...(origin ? [`<source>${origin}</source>`] : []),
     '<document_content>',
-    escapeXml(pasted),
+    text,
     '</document_content>',
     '</document>',
-    DOCUMENT_NOTE
+    DOCUMENT_NOTE,
+    ...(text !== pasted || origin !== plainOrigin ? [ESCAPE_NOTE] : [])
   ].join('\n')
 }
 
 const ACTION = ['implementation', 'workflow']
-const WRITTEN = ['text', 'answer', 'analysis']
+// A plain answer is not here: it gets neither the plain-language nor the style lines, so a trivial question
+// stays as short as the Opus prompt (#38).
+const WRITTEN = ['text', 'analysis']
 // AS-10: gpt6-using.md also asks for plain language in technical communication ("Use plain language
 // over jargon"), so the plain-language line also covers code, review and workflow reports.
 const PLAIN = [...WRITTEN, 'implementation', 'review', 'workflow']
@@ -314,7 +325,12 @@ function buildSafe(brief) {
     ? [FEATURE_COMPLETE_LINE, RENDER_LINE]
     : !making && ui && UI_EDIT.test(goalText) ? [FRONTEND_CHANGE_LINES] : []
   add('requirements', 'REQUIREMENTS', [b.requirements, ...frontend])
-  if (b.examples.trim()) add('examples', 'EXAMPLES', [b.examples, EXAMPLES_LINE])
+  if (b.examples.trim()) {
+    const safe = b.examples.replace(/<\/?example/gi, m => m.replace('<', '&lt;'))
+    const items = safe.split(/\n[ \t]*---[ \t]*(?:\n|$)/).map(item => item.trim()).filter(Boolean)
+    if (items.length > 1) add('examples', 'EXAMPLES', ['<examples>', ...items.map(item => `<example>\n${item}\n</example>`), '</examples>', EXAMPLE_NOTE_MANY])
+    else if (items.length === 1) add('examples', 'EXAMPLE', ['<example>', items[0], '</example>', EXAMPLE_NOTE_ONE])
+  }
   // Answers and texts: no skill/approval process lines (gpt56-prompt-guidance.md: remove process
   // instructions for behavior the model already performs reliably; repeated ask-first rules).
   const light = ['text', 'answer'].includes(deliverable)

@@ -12,7 +12,8 @@ The three models need different prompts, and the engines follow each vendor's gu
   - The request is stated to take precedence over skills and `AGENTS.md`.
   - An action request is framed as work to finish, not a plan to propose.
   - Only the official testing line is used, without extra verification lines.
-  - The plain-writing lines apply to text answers.
+  - The plain-writing lines apply to texts, analyses and reports; a plain answer to a question gets neither them nor a
+    `DONE WHEN` line, so a trivial question stays as short as the Opus prompt.
   - Pasted material goes last, inside `<document>` tags.
 - **Claude Sonnet 5.5** (Anthropic, *Prompting Claude Sonnet 5.5*):
   - Autonomy wording keeps it working through a long task: at low and medium effort it can stop to check in
@@ -23,6 +24,9 @@ The three models need different prompts, and the engines follow each vendor's gu
   - An optional **subagents** step. "Team" splits the task into independent parts that run in parallel,
     and names one reviewer who did not write any of the work and starts from a fresh context.
   - Examples go in `<example>` tags.
-  - Pasted text is escaped so it cannot close its tags, and it is marked as data, not instructions.
+  - Pasted text is escaped so it cannot close its tags, and it is marked as data, not instructions. When the text
+    holds `<` or `&`, one line tells the model that `&lt;` and `&amp;` stand for them.
+  - The subagents step recommends "the model decides" on every target; a team is added only when you pick it, one
+    rule per line.
 
 `PROMPT-DOCS-REVIEW.md` lists every rule line with the quote it comes from.

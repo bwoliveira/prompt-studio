@@ -71,7 +71,7 @@ export const CORE_MESSAGES = {
         subagents: {
           question: () => 'Use subagents?',
           help: 'Subagent team = the prompt splits the task into independent parts that run in parallel, each with its own subagent, and names a reviewer who did not write the work. Costs more and usually finishes sooner. The model decides = no instruction. No subagents = direct work.',
-          guide: 'The user prefers subagent teams even at higher cost. Recommend "Subagent team" unless the draft is one short text or answer, or says not to delegate.',
+          guide: 'Delegation is the target model\'s call by default: it multiplies cost and time on small tasks. Recommend "The model decides" (the default of every target), unless the draft asks for subagents or a team (then "Subagent team") or says not to delegate (then "No subagents").',
           options: { team: 'Subagent team', auto: 'The model decides', direct: 'No subagents' }
         },
         examples: {
@@ -156,7 +156,7 @@ export const CORE_MESSAGES = {
         subagents: {
           question: () => 'Usar subagentes?',
           help: 'Equipe de subagentes = o prompt manda dividir a tarefa em partes independentes que rodam em paralelo, cada uma com seu subagente, e nomeia um revisor que não escreveu o trabalho. Custa mais e costuma terminar antes. O modelo decide = sem instrução. Sem subagentes = trabalho direto.',
-          guide: 'The user prefers subagent teams even at higher cost. Recommend "Equipe de subagentes" unless the draft is one short text or answer, or says not to delegate.',
+          guide: 'Delegation is the target model\'s call by default: it multiplies cost and time on small tasks. Recommend "O modelo decide" (the default of every target), unless the draft asks for subagents or a team (then "Equipe de subagentes") or says not to delegate (then "Sem subagentes").',
           options: { team: 'Equipe de subagentes', auto: 'O modelo decide', direct: 'Sem subagentes' }
         },
         examples: {

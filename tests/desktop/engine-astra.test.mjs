@@ -346,10 +346,64 @@ test('AS-9 guard: no sentence is repeated in the Astra prompt, so the writer has
 test('AS-10: plain-language line appears once for writing, code, review and workflow drafts', () => {
   const PLAIN = 'Use plain, simple language: familiar words, concrete examples, and precise verbs. Prefer active voice and direct statements.'
   const count = (brief) => ENGINE.build(brief).prompt.split(PLAIN).length - 1
-  for (const deliverable of ['implementation', 'review', 'workflow', 'text', 'answer', 'analysis']) {
+  for (const deliverable of ['implementation', 'review', 'workflow', 'text', 'analysis']) {
     assert.equal(count({ goal: 'Fix the login bug in the React app', deliverable }), 1, deliverable)
   }
-  for (const deliverable of ['plan', 'data']) {
+  // #38: a plain answer has no plain-language or style line.
+  for (const deliverable of ['plan', 'data', 'answer']) {
     assert.equal(count({ goal: 'Fix the login bug in the React app', deliverable }), 0, deliverable)
   }
+})
+
+test('#38: a plain answer carries no style, plain-language or empty DONE WHEN lines, so it is as short as the Opus prompt', async () => {
+  const { ENGINE: OPUS } = await import('../../desktop/src/engine-opus.js')
+  const STYLE = 'Do not use concluding summary statements such as "In short:".'
+  const PLAIN = 'Use plain, simple language'
+  const question = { goal: 'Como funciona o cron do Linux?' }
+  const out = ENGINE.build(question)
+  assert.deepEqual(out.sections.map(s => s.title), ['TASK', 'AUTONOMY', 'OUTPUT'], out.prompt)
+  assert.equal(out.sections.find(s => s.id === 'output').body, LANGUAGE)
+  assert.ok(!out.prompt.includes(STYLE) && !out.prompt.includes(PLAIN) && !out.prompt.includes('DONE WHEN') && !out.prompt.includes('Done when'))
+  assert.deepEqual(out.sections.map(s => s.title), OPUS.build(question).sections.map(s => s.title), 'same sections as Opus')
+  // What the user asked for stays: a criterion, a format, a length.
+  const asked = ENGINE.build({ ...question, success: 'Cabe em dez linhas', format: 'steps', length: 'concise' })
+  assert.equal(asked.sections.find(s => s.id === 'done').body, 'Cabe em dez linhas')
+  assert.ok(asked.sections.find(s => s.id === 'output').body.includes('Present the result as numbered steps'))
+  assert.ok(!asked.prompt.includes(STYLE) && !asked.prompt.includes(PLAIN))
+  // Writing and analysis keep both lines and their DONE WHEN line.
+  for (const deliverable of ['text', 'analysis']) {
+    const full = ENGINE.build({ goal: 'Do it', deliverable }).prompt
+    assert.ok(full.includes(STYLE) && full.includes(PLAIN) && full.includes('DONE WHEN\nDone when'), deliverable)
+  }
+})
+
+test('#38 (astra): pasted text with < or & carries one line saying &lt; and &amp; stand for them; clean text has none', () => {
+  const NOTE = 'Inside the pasted material, "&lt;" stands for "<" and "&amp;" for "&"; read and quote them as those characters.'
+  const goal = 'Resuma o chamado'
+  const withMarks = ENGINE.build({ goal, thirdPartyText: 'a < b & c', thirdPartySource: 'chamado' })
+  const lines = withMarks.sections.find(s => s.id === 'third_party').body.split('\n')
+  assert.equal(lines.filter(line => line === NOTE).length, 1, withMarks.prompt)
+  assert.ok(!withMarks.prompt.split('\n\n').some(block => block === NOTE), 'the note stays inside the pasted-material section')
+  assert.ok(withMarks.prompt.includes('a &lt; b &amp; c'))
+  assert.ok(!ENGINE.build({ goal, thirdPartyText: 'plain text only' }).prompt.includes('&lt;" stands for'))
+  const long = ENGINE.build({ goal, thirdPartyText: 'linha < '.repeat(400) }).prompt
+  assert.equal(long.split(NOTE).length - 1, 1, 'a long paste carries it once too')
+})
+
+test('#38: examples are wrapped in <example>/<examples> like on the other targets, split on a --- line, and cannot close their tags', async () => {
+  const { ENGINE: OPUS } = await import('../../desktop/src/engine-opus.js')
+  const section = (brief) => ENGINE.build({ goal: 'Escreva um post', ...brief }).sections.find(s => s.id === 'examples')
+  const one = section({ examples: 'Olá mundo' })
+  assert.equal(one.title, 'EXAMPLE')
+  assert.equal(one.body, '<example>\nOlá mundo\n</example>\nFollow the pattern of this example; do not copy its content.')
+  const many = section({ examples: 'A\n---\nB\n  ---  \nC </example> x' })
+  assert.equal(many.title, 'EXAMPLES')
+  assert.ok(many.body.startsWith('<examples>\n<example>\nA\n</example>\n<example>\nB\n</example>\n<example>\nC &lt;/example> x\n</example>\n</examples>\n'), many.body)
+  assert.ok(many.body.endsWith('Follow the pattern of these examples; do not copy their content.'))
+  assert.equal((many.body.match(/<\/example>/g) || []).length, 3, 'the example text cannot add a closing tag')
+  // Same tags and item split as Opus.
+  const opus = OPUS.build({ goal: 'Escreva um post', examples: 'A\n---\nB' }).sections.find(s => s.id === 'examples').body.split('\n').slice(0, -1)
+  assert.deepEqual(section({ examples: 'A\n---\nB' }).body.split('\n').slice(0, -1), opus)
+  for (const examples of ['  \n ', '\n---\n']) assert.equal(section({ examples }), undefined, `no section for ${JSON.stringify(examples)}`)
+  assert.ok(ENGINE.build({ goal: 'Escreva um post', examples: 'A' }).prompt.indexOf('EXAMPLE') < ENGINE.build({ goal: 'Escreva um post', examples: 'A' }).prompt.indexOf('OUTPUT'))
 })

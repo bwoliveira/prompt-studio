@@ -4,6 +4,15 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
 
 ## Unreleased
 
+- Feature: the generated prompts read better on every target. Opus and Sonnet put each rule of the subagent team on
+  its own line, as Astra does. On Opus, a done-criterion you wrote is followed only by the line asking for evidence
+  (the commands run and what they returned), no longer by a generic "done when the behavior works". Astra leaves out the plain-language and
+  style lines and the `DONE WHEN` line for a plain answer, so a trivial question gives the same short prompt as on
+  Opus. Pasted text that contains `<` or `&` carries one line saying that `&lt;` and `&amp;` stand for them, so
+  quotes come back unescaped. Astra wraps examples in `<example>` tags like the other targets. The subagents
+  recommendation is now the same everywhere: the AI suggestion, the guide behind it and the docs all recommend "The
+  model decides", the default of every engine (a team only when you pick it or the draft asks for one). One prompt
+  snapshot per target (`tests/desktop/fixtures/prompt-snapshots/`) locks the wording.
 - Feature: a provider failure now says what happened. A wrong or expired API key (401) is `auth_failed`, a model or plan
   the provider refuses (403) stays `provider_refused` (its text no longer mentions the key), a rate limit (429) is
   `rate_limited` and a provider call that timed out on its own (client timeout, 408, 504) is `provider_timeout`; each has its own

@@ -368,3 +368,33 @@ test('speed: 1000 varied briefs under 300 ms', () => {
   const ms = performance.now() - start
   assert.ok(ms < 300, `${ms} ms`)
 })
+
+test('#38: the team paragraph is one rule per line, like Astra (Sonnet)', () => {
+  const body = ENGINE.build({ goal: 'Crie um app', subagents: 'team' }).sections.find(s => s.id === 'subagents').body
+  const lines = body.split('\n')
+  assert.equal(lines.length, 4, body)
+  assert.deepEqual(lines.map(line => line.split(' ').slice(0, 3).join(' ')), ['Use subagents. Split', 'Work directly on', 'The user asks', 'Only report delegation'])
+  assert.ok(lines[0].endsWith('with the lead agent.') && lines[2].endsWith('treats the rest as optional.'))
+})
+
+test('#38: after a user done-criterion Sonnet adds the verification paragraph only, never a "behavior works" sentence', () => {
+  const body = ENGINE.build({ goal: 'Crie um app', success: 'Login funciona' }).sections.find(s => s.id === 'done').body
+  const lines = body.split('\n')
+  assert.equal(lines[0], 'Login funciona')
+  assert.equal(lines.length, 2, body)
+  assert.ok(lines[1].startsWith('When you change code that can be run, built, or type-checked, run a real check'))
+  assert.ok(!/behaviou?r works/i.test(body))
+})
+
+test('#38 (sonnet): pasted text with < or & carries one line saying &lt; and &amp; stand for them; clean text has none', () => {
+  const NOTE = 'Inside the pasted material, "&lt;" stands for "<" and "&amp;" for "&"; read and quote them as those characters.'
+  const goal = 'Resuma o chamado'
+  const withMarks = ENGINE.build({ goal, thirdPartyText: 'a < b & c', thirdPartySource: 'chamado' })
+  const lines = withMarks.sections.find(s => s.id === 'material').body.split('\n')
+  assert.equal(lines.filter(line => line === NOTE).length, 1, withMarks.prompt)
+  assert.ok(!withMarks.prompt.split('\n\n').some(block => block === NOTE), 'the note stays inside the pasted-material section')
+  assert.ok(withMarks.prompt.includes('a &lt; b &amp; c'))
+  assert.ok(!ENGINE.build({ goal, thirdPartyText: 'plain text only' }).prompt.includes('&lt;" stands for'))
+  const long = ENGINE.build({ goal, thirdPartyText: 'linha < '.repeat(400) }).prompt
+  assert.equal(long.split(NOTE).length - 1, 1, 'a long paste carries it once too')
+})
