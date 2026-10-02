@@ -120,6 +120,24 @@ const TABLE = [
   ['Como criar um app.', 'answer', 'pt trailing period'],
   ['Como instalar o Docker no servidor.', 'answer', 'pt long, trailing period'],
   ['How do I write a script. ', 'answer', 'trailing period and space'],
+  // a code word that only modifies the text asked for is not the artifact (Codex P2)
+  ['Write an API announcement email to our customers', 'text', 'api modifies email'],
+  ['Write an API reference article', 'text', 'api modifies article'],
+  ['Escreva um e-mail de lançamento da API', 'text', 'pt: e-mail first, api after a preposition'],
+  ['Write an email script', 'implementation', 'near miss: email modifies script'],
+  ['Write a function that validates the product description', 'implementation', 'near miss: a clause, not a modifier'],
+  // a noun before the verb is context, not the order (Codex P2)
+  ['Our plan is ready. Build a React dashboard', 'implementation', 'plan noun before build'],
+  ['Nosso plano está pronto. Construa um dashboard React', 'implementation', 'pt'],
+  ['The spreadsheet is attached. Write an email to the client', 'text', 'data noun before write'],
+  ['Plano de lançamento do produto', 'plan', 'near miss: a noun with no verb still decides'],
+  ['Planilha de vendas do trimestre', 'data', 'near miss: noun only'],
+  // an order after an opening question is the task; a style note is not (Codex P2)
+  ['How does this app work? Fix the login bug.', 'implementation', 'fix after the question'],
+  ['Como funciona este app? Corrija o bug de login.', 'implementation', 'pt'],
+  ['What is cron? Write a script that runs it nightly', 'implementation', 'write + script after the question'],
+  ['Como instalar o Docker? Responda em dez linhas.', 'answer', 'near miss: a style note, no task verb'],
+  ['How does cron work? Be brief.', 'answer', 'near miss: style note'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
@@ -187,7 +205,7 @@ test('parity: Opus and Sonnet carry the identical detection block', async () => 
   const [opus, sonnet] = await Promise.all([src('engine-opus.js'), src('engine-sonnet.js')])
   const a = detection(opus)
   const b = detection(sonnet)
-  for (const needle of ['CATEGORY_RULES', 'DELIVERABLE_RULES', 'MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'QUESTION_START', 'INTERFACE', 'function detect', 'function analyzeNormalized']) {
+  for (const needle of ['CATEGORY_RULES', 'DELIVERABLE_RULES', 'MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'QUESTION_START', 'NOUN_SIGNAL', 'MODIFIER_GAP', 'INTERFACE', 'function firstSignal', 'function detect', 'function analyzeNormalized']) {
     assert.ok(a.includes(needle), `opus block has ${needle}`)
   }
   assert.equal(a, b, 'Opus and Sonnet detection blocks drifted apart: change both engines identically')
@@ -195,7 +213,7 @@ test('parity: Opus and Sonnet carry the identical detection block', async () => 
 
 test('parity: the artifact constants are the same text on all three engines', async () => {
   const sources = await Promise.all(['engine-opus.js', 'engine-sonnet.js', 'engine-astra.js'].map(src))
-  for (const name of ['MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'REVIEW_OBJECT', 'PLAN_OBJECT', 'DATA_OBJECT', 'WORKFLOW_OBJECT']) {
+  for (const name of ['MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'NOUN_SIGNAL', 'MODIFIER_GAP', 'REVIEW_OBJECT', 'PLAN_OBJECT', 'DATA_OBJECT', 'WORKFLOW_OBJECT']) {
     const lines = sources.map(source => source.split('\n').find(line => line.startsWith(`const ${name} =`)))
     assert.ok(lines.every(Boolean), `${name} exists in every engine`)
     assert.equal(new Set(lines).size, 1, `${name} differs between engines:\n${lines.join('\n')}`)

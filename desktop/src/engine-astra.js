@@ -234,25 +234,54 @@ const COMPATIBLE = {
   workflow: ['implementation', 'plan'], answer: ['text', 'analysis']
 }
 
+// Languages: Portuguese (unaccented) + English.
+// A signal that is a noun, not an order ("Our plan is ready. Build ..."): it decides only when no verb does.
+const NOUN_SIGNAL = /^(plano|planos|plan|roadmap|cronograma|estrategia|strategy|workflows?|pipelines?|planilhas?|csv|datasets?|spreadsheets?|revisao|reviews|pesquisa)$/
+// Languages: Portuguese (unaccented) + English.
+// Between two artifact words, only bare modifiers ("API announcement email"): a preposition or clause word means the
+// first word is the artifact asked for ("script that sends an e-mail", "app de blog").
+const MODIFIER_GAP = /^\s+(?:(?!(?:that|which|who|to|for|of|on|about|with|and|or|in|by|que|para|de|do|da|dos|das|sobre|com|e|ou|em|no|na|por)\b)\w+\s+){0,2}$/
+// The earliest explicit verb decides; a noun signal counts only when no verb fired.
+function firstSignal(text) {
+  let signal = null
+  let at = Infinity
+  let noun = null
+  let nounAt = Infinity
+  for (const [id, re] of VERBS) {
+    const m = re.exec(text)
+    if (!m) continue
+    if (NOUN_SIGNAL.test(m[0])) { if (m.index < nounAt) { noun = id; nounAt = m.index } } else if (m.index < at) { signal = id; at = m.index }
+  }
+  if (signal) return { signal, at, verb: true }
+  return noun ? { signal: noun, at: nounAt, verb: false } : { signal: null, at: Infinity, verb: false }
+}
+
 function detect(goal, requirements) {
   const text = fold(`${goal}\n${requirements}`)
-  let best = null
-  for (const [kind, re] of VERBS) {
-    const m = re.exec(text)
-    if (m && (best === null || m.index < best.at)) best = { kind, at: m.index }
+  let { signal: kind, at } = firstSignal(text)
+  // A question stays an answer, whatever verbs it contains; only an order after it ("How does it work? Fix the bug.")
+  // is a task, and a style note ("Seja breve.") is not.
+  const question = QUESTION_FORM.exec(fold(goal).trim())
+  if (question) {
+    const restAt = (text.length - text.trimStart().length) + question[0].length
+    const after = firstSignal(text.slice(restAt))
+    if (after.verb) { kind = after.signal; at = restAt + after.at } else { kind = 'answer'; at = Infinity }
   }
-  let kind = best?.kind ?? null
   // "Write/create a script that ... CSV": the artifact is code, whatever text or data words it mentions.
-  // When both kinds are named, the first one decides ("Write a function that validates the description" is code).
+  // When both kinds are named, the first one decides ("Write a function that validates the description" is code),
+  // unless it only modifies the other ("Write an API announcement email" is text).
   // Only what follows the verb names its object: context before it ("For our app, write a blog post") does not.
-  const request = best ? text.slice(best.at) : text
-  const codeAt = request.search(CODE_ARTIFACT)
-  const textAt = request.search(TEXT_ARTIFACT)
-  if ((kind === 'text' || kind === 'data' || kind === 'analysis') && MAKE_VERB.test(request) && codeAt >= 0 && (textAt < 0 || codeAt < textAt)) kind = 'implementation'
+  const request = Number.isFinite(at) ? text.slice(at) : text
+  const code = CODE_ARTIFACT.exec(request)
+  const txt = TEXT_ARTIFACT.exec(request)
+  const codeAt = code ? code.index : -1
+  const textAt = txt ? txt.index : -1
+  const modifier = (first, nextAt) => nextAt >= 0 && MODIFIER_GAP.test(request.slice(first.index + first[0].length, nextAt))
+  const codeWins = codeAt >= 0 && (textAt < 0 || (codeAt < textAt ? !modifier(code, textAt) : modifier(txt, codeAt)))
+  const textWins = textAt >= 0 && (codeAt < 0 || (textAt < codeAt ? !modifier(txt, codeAt) : modifier(code, textAt)))
+  if ((kind === 'text' || kind === 'data' || kind === 'analysis') && MAKE_VERB.test(request) && codeWins) kind = 'implementation'
   // "Gere um e-mail", "Monte uma mensagem": the verb does not say what is made, the first artifact named does.
-  if (kind === 'implementation' && GENERATE_VERB.test(request) && textAt >= 0 && (codeAt < 0 || textAt < codeAt)) kind = 'text'
-  // A question stays an answer, whatever verbs it contains; only an order is a task.
-  if (QUESTION_FORM.test(fold(goal).trim())) kind = 'answer'
+  if (kind === 'implementation' && GENERATE_VERB.test(request) && textWins) kind = 'text'
   if (kind === 'analysis' && DATA_NOUN.test(text) && !/\b(pesquis|research|compar)/.test(text)) kind = 'data'
   const fallback = fold(goal).trim().endsWith('?') || !CODE_NOUN.test(text) ? 'answer' : 'implementation'
   return { detected: kind, resolved: kind ?? fallback, text }
