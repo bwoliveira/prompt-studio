@@ -3351,11 +3351,8 @@ for (const role of ['dialog', 'menu', 'listbox', 'settings']) {
     let overlay = null
     if (role === 'settings') {
       await openStudio(INTENT, 'off')
+      // Settings only lives with the studio (closeStudio closes it), so the guard is checked with both open.
       await openSettings()
-      await ui.act(async () => { $('[data-studio-cancel]').click() })
-      // The Settings state outlives the strip, so it is still "open" for the guard.
-      assert.ok($('[data-studio-strip]') === null)
-      $('[data-slot="composer-rich-input"]').textContent = INTENT
     } else {
       overlay = document.createElement('div')
       overlay.setAttribute('role', role)
@@ -3366,8 +3363,11 @@ for (const role of ['dialog', 'menu', 'listbox', 'settings']) {
       const writes = composer().writes.length
       await ui.act(async () => { await keybind().run() })
       await settle()
-      assert.ok($('[data-studio-strip]') === null, 'studio stayed closed')
-      assert.equal(draft(), INTENT, 'draft untouched')
+      if (role === 'settings') assert.ok($('[data-studio-settings-dialog]') !== null, 'Settings stayed open')
+      else {
+        assert.ok($('[data-studio-strip]') === null, 'studio stayed closed')
+        assert.equal(draft(), INTENT, 'draft untouched')
+      }
       assert.equal(composer().writes.length, writes, 'composer not written')
       assert.equal(ui.notifications.length, 0, 'no notice')
       // The palette command is chosen from the palette itself (an overlay): not guarded.
@@ -3386,3 +3386,55 @@ for (const role of ['dialog', 'menu', 'listbox', 'settings']) {
     }
   })
 }
+
+// ---------------------------------------------------------------- one closeStudio: Cancel, place, send and dispose
+// Settings is the studio's own dialog (the Settings button sits on the strip): it must not outlive the studio, or it
+// reappears over the next opening.
+async function reopenAndExpectNoSettings(why) {
+  $('[data-slot="composer-rich-input"]').textContent = INTENT
+  await click('[data-studio-open]')
+  await waitFor(() => $('[data-studio-strip]'), { label: 'studio reopened' })
+  assert.ok($('[data-studio-settings-dialog]') === null, why)
+  await click('[data-studio-cancel]')
+}
+
+test('CLOSE-1: Cancel with Settings open closes both, and the next opening does not bring Settings back', { skip }, async () => {
+  await openStudio(INTENT, 'off')
+  await openSettings()
+  await click('[data-studio-cancel]')
+  assert.ok($('[data-studio-strip]') === null, 'the studio closed')
+  assert.ok($('[data-studio-settings-dialog]') === null, 'Settings closed with it')
+  assert.equal(draft(), INTENT, 'Cancel still gives the draft back')
+  await reopenAndExpectNoSettings('the new opening starts without Settings')
+})
+
+test('CLOSE-1: Put in composer to edit with Settings open closes both', { skip }, async () => {
+  await toPreview()
+  await openSettings()
+  const prompt = $('[data-studio-preview-text]').textContent
+  await click('[data-studio-use-prompt]')
+  assert.ok($('[data-studio-strip]') === null, 'the studio closed')
+  assert.equal(draft(), prompt, 'the prompt was placed')
+  await reopenAndExpectNoSettings('Settings did not outlive the placed prompt')
+})
+
+test('CLOSE-1: Send now with Settings open closes both', { skip }, async () => {
+  await toPreview()
+  await openSettings()
+  const prompt = $('[data-studio-preview-text]').textContent
+  await click('[data-studio-send-prompt]')
+  assert.ok($('[data-studio-strip]') === null, 'the studio closed')
+  assert.deepEqual(composer().submits, [{ sessionId: 'sess-live', text: prompt }], 'the prompt was sent')
+  await reopenAndExpectNoSettings('Settings did not outlive the sent prompt')
+})
+
+test('CLOSE-1: a dispose with Settings open closes both, and the reloaded plugin opens without Settings', { skip }, async () => {
+  resetComposer()
+  await openStudio(INTENT, 'off')
+  await openSettings()
+  await hostReload()
+  assert.ok($('[data-studio-strip]') === null, 'studio closed by the dispose')
+  assert.ok($('[data-studio-settings-dialog]') === null, 'Settings closed with it')
+  assert.deepEqual(composer().writes.at(-1), { sessionId: 'sess-live', text: INTENT }, 'the draft is back in its composer')
+  await reopenAndExpectNoSettings('the reloaded plugin starts without Settings')
+})

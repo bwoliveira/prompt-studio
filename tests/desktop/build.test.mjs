@@ -271,11 +271,11 @@ test('CLI --check: missing desktop/plugin.js is a clear error, not "stale"', asy
 test('CLI: a name declared in two UI files fails the build', async () => {
   const dir = await buildCopy()
   try {
-    await writeFile(join(dir, 'desktop/src/ui-prefs.js'), 'const uiFlowTwin = 1\n', { flag: 'a' })
-    await writeFile(join(dir, 'desktop/src/ui-flow.js'), 'const uiFlowTwin = 2\n', { flag: 'a' })
+    await writeFile(join(dir, 'desktop/src/ui-settings.js'), 'const uiFlowTwin = 1\n', { flag: 'a' })
+    await writeFile(join(dir, 'desktop/src/ui-steps.js'), 'const uiFlowTwin = 2\n', { flag: 'a' })
     const result = run(dir)
     assert.notEqual(result.status, 0)
-    assert.match(result.stderr, /name collision: uiFlowTwin declared by both ui-prefs\.js and ui-flow\.js/)
+    assert.match(result.stderr, /name collision: uiFlowTwin declared by both ui-settings\.js and ui-steps\.js/)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
@@ -285,8 +285,8 @@ test('CLI: a duplicate const the name scan cannot see fails the build, and --che
   const dir = await buildCopy()
   try {
     assert.equal(run(dir).status, 0)
-    await writeFile(join(dir, 'desktop/src/ui-prefs.js'), '  const indentedTwin = 1\n', { flag: 'a' })
-    await writeFile(join(dir, 'desktop/src/ui-flow.js'), 'const indentedTwin = 2\n', { flag: 'a' })
+    await writeFile(join(dir, 'desktop/src/ui-settings.js'), '  const indentedTwin = 1\n', { flag: 'a' })
+    await writeFile(join(dir, 'desktop/src/ui-steps.js'), 'const indentedTwin = 2\n', { flag: 'a' })
     for (const args of [[], ['--check']]) {
       const result = run(dir, ...args)
       assert.notEqual(result.status, 0, result.stdout)
@@ -301,11 +301,11 @@ test('CLI: a duplicate const the name scan cannot see fails the build, and --che
 test('CLI: a duplicate hidden behind a template literal or a comment fails the build as a name collision', async () => {
   const dir = await buildCopy()
   try {
-    await writeFile(join(dir, 'desktop/src/ui-prefs.js'), "const tplTwin = `${'x'}`, hiddenTwin = 1\n", { flag: 'a' })
-    await writeFile(join(dir, 'desktop/src/ui-flow.js'), 'const hiddenTwin = 2\n', { flag: 'a' })
+    await writeFile(join(dir, 'desktop/src/ui-settings.js'), "const tplTwin = `${'x'}`, hiddenTwin = 1\n", { flag: 'a' })
+    await writeFile(join(dir, 'desktop/src/ui-steps.js'), 'const hiddenTwin = 2\n', { flag: 'a' })
     const result = run(dir)
     assert.notEqual(result.status, 0)
-    assert.match(result.stderr, /name collision: hiddenTwin declared by both ui-prefs\.js and ui-flow\.js/)
+    assert.match(result.stderr, /name collision: hiddenTwin declared by both ui-settings\.js and ui-steps\.js/)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }

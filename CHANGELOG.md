@@ -15,6 +15,9 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
   and `docs/DESKTOP-DEV.md`, configuration, model and remote-install details to `docs/CONFIGURATION.md`, `docs/MODELS.md`
   and `docs/REMOTE-INSTALL.md`; six ADRs in `docs/adr/` record the standing decisions and `CONTEXT.md` is the glossary.
 
+- Fix: Cancel, Put in composer to edit and Send now left the studio's Settings dialog open when it was open at the
+  time, so it came back over the next opening. Cancel, placing, sending and a plugin reload now all close the studio
+  through one function that closes Settings with it.
 - Feature: Prompt Studio opens without an F-key. It adds a binding to Hermes Desktop's keybinds area, **Ctrl+Shift+E**
   (**⌘⇧E** on a Mac), which you can reassign in Desktop's settings; its default is a chord none of Desktop's own
   actions uses, and it runs the same opening as F4 (an empty or short draft and a missing message field are reported

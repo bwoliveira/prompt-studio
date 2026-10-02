@@ -21,7 +21,7 @@ function fixedT(language) {
 function tr(key, ...args) {
   const language = $language.get()
   if (language !== 'auto') return fixedT(language)(key, ...args)
-  const t = pluginContext?.i18n?.t
+  const t = lifecycle.pluginContext?.i18n?.t
   if (t) return t(key, ...args)
   return resolveMessage(UI_MESSAGES.en, key, args) ?? key
 }
