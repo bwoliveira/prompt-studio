@@ -272,9 +272,10 @@ const NEGATED = /(?:^|[\s,;:(])(?:(?:do not|don't|dont|does not|doesn't|never|no
 // install, configure or deploy"): a coordinator or a list comma leads back to the previous word.
 const COORDINATED = /\b(\w+)\s*(?:,|,?\s+(?:or|nor|and|ou|nem|e))\s*$/
 // "Do not build the app or configure nginx": the clause before the coordinator opens with the prohibition.
-// "Do not build, test or deploy anything": a bare comma is a list only when a coordinator closes it later in the
-// sentence; "Do not deploy, review the code instead" opens an alternative order.
-const LIST_TAIL = /^[^.!?;:\n]{0,120}?\b(?:or|nor|and|ou|nem|e)\b/
+// "Do not build, test or deploy anything": a bare comma is a list only when the next item is bare ("test or") or a
+// comma precedes the coordinator ("deploy, and"); "Do not configure nginx, review the API and report findings" opens
+// an alternative order whose own coordinator does not reach back.
+const LIST_TAIL = /^[\w-]+(?:\s+[\w-]+)?\s+(?:or|nor|and|ou|nem|e)\b|^[^.!?;:\n]{0,120}?,\s*(?:or|nor|and|ou|nem|e)\b/
 const CLAUSE_NEGATION = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|por favor)\s*,?\s+)?(?:(?:i|we|eu|nos)\s+)?(?:do not|don't|dont|does not|doesn't|never|not|nao|nunca|jamais)\b[^.!?;:\n]*$/
 const PREDICATE_NEGATION = /\b(?:is|are|was|were|am|be|been|being|'s|'re|seems|looks|esta|estao|estava|estavam|e|era|eram|foi|foram|fica|ficou|parece)\s+(?:not|nao|never|nunca)(?:\s+\w+)?\s*$/
 // A mark-less question may carry a comma only when what precedes the comma already reads as a question ("How do
@@ -290,6 +291,8 @@ const REQUESTED_ARTIFACT = /((?:(?:i|we) (?:need|want|would like)|i'd like|we'd 
 // "how to configure nginx and deploy the app", "the architecture and how to configure nginx": a topic, not an order.
 const TOPIC_TAIL = /\b(?:how to|como)\s+\w+[^.!?,;]*$/
 const TOPIC_HEAD = /^\s*(?:how|what|why|when|where|which|whether|como|o que|por que|quando|onde|qual|quais)\b/
+// "and fix the login bug": the order verb opens right after the coordinator, at most behind please/then/an adverb.
+const ORDER_LEAD = /^\s*(?:(?:please|por favor|then|depois|also|tambem|now|agora|\w+ly|\w+mente)\s+){0,2}$/
 const ORDER_JOIN = /\b(?:and|then|e|depois|entao)\s+(?:then\s+|depois\s+)?/g
 function coordinatedOrder(text) {
   ORDER_JOIN.lastIndex = 0
@@ -299,7 +302,8 @@ function coordinatedOrder(text) {
     // "how to configure nginx and deploy the app": the coordinator extends the topic, not the request; "and then" orders.
     const sequence = /\b(?:then|depois|entao)\b/.test(m[0])
     if (TOPIC_HEAD.test(rest) || (!sequence && TOPIC_TAIL.test(before))) continue
-    if (firstSignal(rest).verb) return m.index
+    const next = firstSignal(rest)
+    if (next.verb && ORDER_LEAD.test(rest.slice(0, next.at))) return m.index
   }
   return -1
 }

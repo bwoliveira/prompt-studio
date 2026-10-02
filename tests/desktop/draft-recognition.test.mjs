@@ -493,6 +493,18 @@ const TABLE = [
   ['Preciso de um script que vai configurar o nginx', 'implementation', 'pt um script que vai configurar'],
   ['I need an email to kindly schedule the meeting', 'text', 'an email to kindly schedule'],
   ['I need a plan that will configure nginx', 'plan', 'near miss: the plan is the noun request'],
+  // a verb deep inside a coordinated topic is not an order (Codex P2)
+  ['Can you explain cron and the steps to configure nginx?', 'answer', 'and the steps to configure'],
+  ['Can you tell me about Docker and the way we deploy the app?', 'answer', 'and the way we deploy'],
+  ['Você pode me explicar o cron e os passos para configurar o nginx?', 'answer', 'pt e os passos para configurar'],
+  ['Can you explain cron and configure nginx?', 'workflow', 'near miss: the order opens right after and'],
+  ['Can you explain cron and then carefully configure nginx?', 'workflow', 'near miss: then plus an adverb'],
+  // a bare comma continues a prohibition only through a bare item or an Oxford comma (Codex P2)
+  ['Do not configure nginx, review the API and report findings.', 'review', 'do not configure, review ... and report'],
+  ['Do not deploy, review the code and write a summary', 'review', 'do not deploy, review ... and write'],
+  ['Não configure o nginx, revise a API e relate os achados.', 'review', 'pt nao configure, revise ... e relate'],
+  ['What is Docker? Do not build, deploy, and configure anything', 'answer', 'near miss: an Oxford comma closes the list'],
+  ['How does cron work? Never install, configure or deploy anything here.', 'answer', 'near miss: a bare item then or'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
@@ -585,7 +597,7 @@ test('parity: Opus and Sonnet carry the identical detection block', async () => 
   const [opus, sonnet] = await Promise.all([src('engine-opus.js'), src('engine-sonnet.js')])
   const a = detection(opus)
   const b = detection(sonnet)
-  for (const needle of ['CATEGORY_RULES', 'DELIVERABLE_RULES', 'MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'YESNO_FORM', 'EXPLAIN_FORM', 'QUESTION_START', 'NOUN_SIGNAL', 'SENTENCE_START', 'VERB_OBJECT', 'REQUESTED_NOUN', 'COPULA', 'PREDICATE', 'INFINITIVE_MARK', 'NEGATED', 'COORDINATED', 'PREDICATE_NEGATION', 'CLAUSE_NEGATION', 'LIST_TAIL', 'QUESTION_HEAD', 'DECLARATIVE', 'TOPIC_TAIL', 'TOPIC_HEAD', 'ORDER_JOIN', 'INTRO_CLAUSE', 'MODIFIER_USE', 'COMPOUND_AFTER', 'NARRATIVE', 'CONTEXT_WINDOW', 'REQUESTED_ARTIFACT', 'MODIFIER_GAP', 'INTERFACE', 'function contextBefore', 'function prohibited', 'function isQuestion', 'function questionAt', 'function coordinatedOrder', 'function pickArtifact', 'function firstSignal', 'function detect', 'function analyzeNormalized']) {
+  for (const needle of ['CATEGORY_RULES', 'DELIVERABLE_RULES', 'MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'YESNO_FORM', 'EXPLAIN_FORM', 'QUESTION_START', 'NOUN_SIGNAL', 'SENTENCE_START', 'VERB_OBJECT', 'REQUESTED_NOUN', 'COPULA', 'PREDICATE', 'INFINITIVE_MARK', 'NEGATED', 'COORDINATED', 'PREDICATE_NEGATION', 'CLAUSE_NEGATION', 'LIST_TAIL', 'QUESTION_HEAD', 'DECLARATIVE', 'TOPIC_TAIL', 'TOPIC_HEAD', 'ORDER_LEAD', 'ORDER_JOIN', 'INTRO_CLAUSE', 'MODIFIER_USE', 'COMPOUND_AFTER', 'NARRATIVE', 'CONTEXT_WINDOW', 'REQUESTED_ARTIFACT', 'MODIFIER_GAP', 'INTERFACE', 'function contextBefore', 'function prohibited', 'function isQuestion', 'function questionAt', 'function coordinatedOrder', 'function pickArtifact', 'function firstSignal', 'function detect', 'function analyzeNormalized']) {
     assert.ok(a.includes(needle), `opus block has ${needle}`)
   }
   assert.equal(a, b, 'Opus and Sonnet detection blocks drifted apart: change both engines identically')
@@ -593,7 +605,7 @@ test('parity: Opus and Sonnet carry the identical detection block', async () => 
 
 test('parity: the artifact constants are the same text on all three engines', async () => {
   const sources = await Promise.all(['engine-opus.js', 'engine-sonnet.js', 'engine-astra.js'].map(src))
-  for (const name of ['MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'YESNO_FORM', 'EXPLAIN_FORM', 'NOUN_SIGNAL', 'SENTENCE_START', 'VERB_OBJECT', 'REQUESTED_NOUN', 'COPULA', 'PREDICATE', 'INFINITIVE_MARK', 'NEGATED', 'COORDINATED', 'PREDICATE_NEGATION', 'CLAUSE_NEGATION', 'LIST_TAIL', 'QUESTION_HEAD', 'DECLARATIVE', 'TOPIC_TAIL', 'TOPIC_HEAD', 'ORDER_JOIN', 'INTRO_CLAUSE', 'MODIFIER_USE', 'COMPOUND_AFTER', 'NARRATIVE', 'CONTEXT_WINDOW', 'REQUESTED_ARTIFACT', 'MODIFIER_GAP', 'REVIEW_OBJECT', 'PLAN_OBJECT', 'DATA_OBJECT', 'WORKFLOW_OBJECT']) {
+  for (const name of ['MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'YESNO_FORM', 'EXPLAIN_FORM', 'NOUN_SIGNAL', 'SENTENCE_START', 'VERB_OBJECT', 'REQUESTED_NOUN', 'COPULA', 'PREDICATE', 'INFINITIVE_MARK', 'NEGATED', 'COORDINATED', 'PREDICATE_NEGATION', 'CLAUSE_NEGATION', 'LIST_TAIL', 'QUESTION_HEAD', 'DECLARATIVE', 'TOPIC_TAIL', 'TOPIC_HEAD', 'ORDER_LEAD', 'ORDER_JOIN', 'INTRO_CLAUSE', 'MODIFIER_USE', 'COMPOUND_AFTER', 'NARRATIVE', 'CONTEXT_WINDOW', 'REQUESTED_ARTIFACT', 'MODIFIER_GAP', 'REVIEW_OBJECT', 'PLAN_OBJECT', 'DATA_OBJECT', 'WORKFLOW_OBJECT']) {
     const lines = sources.map(source => source.split('\n').find(line => line.startsWith(`const ${name} =`)))
     assert.ok(lines.every(Boolean), `${name} exists in every engine`)
     assert.equal(new Set(lines).size, 1, `${name} differs between engines:\n${lines.join('\n')}`)
