@@ -55,12 +55,38 @@ jobs:
     name: gitleaks
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      GITLEAKS_VERSION: "8.30.1"
+      GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb" # gitleaks_<version>_linux_x64.tar.gz
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 0 # the action scans the PR/push commit range and needs those commits, not only the tip
-      - uses: gitleaks/gitleaks-action@v3
+          fetch-depth: 0 # the scan reads every commit of the range below
+      # Not gitleaks/gitleaks-action: it scans from the first to the last of the first 30 commits the PR API lists, with
+      # `--no-merges --first-parent`, so a secret in commit 31 or in a merged side branch would pass.
+      - name: Install gitleaks (pinned version, checked against its published checksum)
+        run: |
+          set -eu
+          curl -sSfL -o gitleaks.tar.gz "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf gitleaks.tar.gz gitleaks
+      - name: Scan every commit the pull request or push adds
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_ENABLE_COMMENTS: "false"
-          # GITLEAKS_LICENSE is only required for organizations; this repository is a personal one.
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: |
+          set -eu
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            range="$PR_BASE..$PR_HEAD"
+          elif [ "${PUSH_BEFORE#0000000}" != "$PUSH_BEFORE" ] || ! git cat-file -e "$PUSH_BEFORE^{commit}" 2>/dev/null; then
+            range="" # a new branch or a force push: the old tip is not a commit here, scan the whole history
+          else
+            range="$PUSH_BEFORE..$PUSH_AFTER"
+          fi
+          if [ -n "$range" ]; then
+            ./gitleaks detect --redact -v --exit-code 2 --log-opts="$range"
+          else
+            ./gitleaks detect --redact -v --exit-code 2
+          fi

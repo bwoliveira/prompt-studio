@@ -49,7 +49,7 @@ memory cap from `AGENTS.md`. Python test dependencies are in `requirements-dev.t
 
 CI (`.github/workflows/ci.yml`, GitHub-hosted `ubuntu-latest`) runs on every pull request and push to `main`: the build
 check, `npm test`, `npm run test:bin`, `pytest -q tests` and gitleaks over the commits of the pull request (or the pushed commits on `main`): the checkout
-fetches the whole history, but gitleaks-action scans only that commit range, so old synthetic test keys in earlier
+fetches the whole history, but gitleaks (the pinned binary, not gitleaks-action, which would skip commits past the first 30 and merged side branches) scans only that commit range, merges included, so old synthetic test keys in earlier
 commits do not fail it. After the push `bin/pr` reads the check runs of the commit it reviewed (`gh api`, polled
 every `CHECKS_POLL_SECONDS`, default 10) and merges only when `Build check and Node tests`, `Python tests` and
 `gitleaks` all ended in success. It refuses on a failed, cancelled, skipped or neutral one, on a job still running

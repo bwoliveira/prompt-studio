@@ -57,7 +57,7 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
   @nanostores/react and esbuild to the versions the Hermes install provides (`package-lock.json` is committed), so
   `npm ci && npm test` runs the UI tests without a Hermes install; under `npm test` a missing dependency fails the run
   instead of skipping the UI tests. The Python test dependencies are in `requirements-dev.txt`. A GitHub Actions
-  workflow (`.github/workflows/ci.yml`) runs the build check, the Node tests, the Python tests and gitleaks on every
+  workflow (`.github/workflows/ci.yml`) runs the build check, the Node tests, the Python tests and gitleaks (the pinned binary over the explicit commit range of the pull request, merges and side branches included) on every
   pull request and push to `main`, and `bin/pr` now waits for those checks and merges only when each of the three jobs
   succeeded on the reviewed commit (not while one is pending past a timeout, missing, failed, cancelled, skipped or
   neutral). gitleaks scans the commits of the pull request, not the whole history. No change to the plugin itself.
