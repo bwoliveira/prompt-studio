@@ -33,9 +33,6 @@ if (!nodeModules) {
   console.error(`studio-flow: SKIPPING UI tests: ${reason}`)
 }
 
-// PROMPT_STUDIO_LEGACY_SDK=1 runs the file against an SDK stub without ListRow/ToggleRow (Hermes
-// 0.20.0..0.21.4); tests/desktop/sdk-compat.test.mjs runs the settings tests that way.
-const LEGACY_SDK = process.env.PROMPT_STUDIO_LEGACY_SDK === '1'
 const REMOVED = ['category', 'effort', 'tools', 'browsing', 'delegation', 'structure', 'language', 'depth']
 const INTENT = 'Crie um app web simples para registrar gastos da casa por categoria, com React e Supabase.'
 // A clear code draft: "O que você quer receber" is detected with no real alternative, so it is skipped.
@@ -84,15 +81,12 @@ before(async () => {
   })
 
   tmp = mkdtempSync(join(tmpdir(), 'studio-flow-'))
-  // Legacy mode drops the ListRow/ToggleRow exports entirely, as Hermes 0.20.0..0.21.4 do: a named
-  // import of them then fails to link, exactly like the Desktop blob shim.
   const sdkSource = `
 import { atom as nanoAtom } from 'nanostores'
 import { useStore } from '@nanostores/react'
 import { jsx, jsxs } from 'react/jsx-runtime'
 import { createContext, useContext } from 'react'
 export const atom = nanoAtom
-export const sdkHasRows = ${JSON.stringify(!LEGACY_SDK)}
 // Settings dialog stubs (CX-1): just enough of the SDK components to drive them from tests.
 export const Codicon = ({ name }) => jsx('span', { 'data-codicon': name })
 export const Dialog = ({ open, children }) => (open ? jsx('div', { 'data-sdk-dialog': true, children }) : null)
@@ -217,10 +211,10 @@ export const host = {
   notifyError: (_e, message) => { notifications.push({ kind: 'error', message }) }
 }
 `
-  writeFileSync(join(tmp, 'sdk.js'), LEGACY_SDK ? sdkSource.replace(/^export const (ListRow|ToggleRow|formatModifierToken) = .*\n/gm, '') : sdkSource)
+  writeFileSync(join(tmp, 'sdk.js'), sdkSource)
   writeFileSync(join(tmp, 'entry.js'), `
 export { default as plugin, SHORTCUTS } from ${JSON.stringify(process.env.PROMPT_STUDIO_PLUGIN || join(repo, 'desktop', 'plugin.js'))}
-export { notifications, i18n, translate, $locale, host, sdkHasRows } from './sdk.js'
+export { notifications, i18n, translate, $locale, host } from './sdk.js'
 export { createRoot } from 'react-dom/client'
 export { act } from 'react'
 export { jsx } from 'react/jsx-runtime'
@@ -237,7 +231,6 @@ export { jsx } from 'react/jsx-runtime'
     logLevel: 'error'
   })
   const mod = await import(pathToFileURL(join(tmp, 'bundle.mjs')).href)
-  if (LEGACY_SDK) assert.ok(mod.sdkHasRows === false, 'legacy SDK stub has no ListRow/ToggleRow')
 
   // Fixed test markup (no user content): a minimal Hermes composer skeleton.
   document.body.innerHTML = `
@@ -2378,8 +2371,7 @@ test('KEYS-MAC-CAPS: on a Mac every key cap, tooltip and F1 row reads ⌥E / ⇧
     assert.ok($('[data-studio-answer-input]'), 'Option+C opened the paste field')
     await press(map.close)
   })
-  if (ui.sdkHasRows) assert.ok(globalThis.__sdkModifierCalls > 0, 'the SDK formatModifierToken drew the modifiers')
-  else assert.equal(globalThis.__sdkModifierCalls, 0, 'no SDK formatModifierToken on this SDK: the local glyphs were used')
+  assert.ok(globalThis.__sdkModifierCalls > 0, 'the SDK formatModifierToken drew the modifiers')
 })
 
 test('README-KEYS: the README keyboard table shows, per platform, the keys the F1 list shows, in the same order', { skip }, async () => {
@@ -2603,22 +2595,13 @@ test('SET-1: read-context switch off: no /context and no loading state, persiste
   assert.equal(contextCalls().length, 1, 'on: it reads')
 })
 
-test('SDK-1: the Settings rows use the SDK ListRow/ToggleRow when present and the built-in fallbacks otherwise', { skip }, async () => {
+test('SDK-1: the Settings rows are the SDK ListRow/ToggleRow', { skip }, async () => {
   await freshSettings(null)
   await openStudio(INTENT, 'auto')
   await openSettings()
   const sw = $('[data-studio-read-context] [role="switch"]')
   assert.ok(sw, 'a switch is shown')
-  if (LEGACY_SDK) {
-    assert.ok($('[data-sdk-list-row]') === null && $('[data-sdk-toggle]') === null, 'no SDK rows on a legacy SDK')
-    assert.ok($('[data-studio-settings-dialog] [data-studio-list-row]'), 'fallback ListRow rendered')
-    assert.equal(sw.tagName, 'BUTTON', 'fallback switch is a real button (Space/Enter, focusable)')
-    assert.equal(sw.getAttribute('aria-checked'), 'true')
-    assert.ok(sw.getAttribute('aria-label') || sw.getAttribute('aria-labelledby'), 'switch is labelled')
-  } else {
-    assert.ok($('[data-sdk-list-row]') && $('[data-sdk-toggle]'), 'SDK rows used when the SDK has them')
-    assert.ok($('[data-studio-list-row]') === null, 'no fallback when the SDK has ListRow')
-  }
+  assert.ok($('[data-sdk-list-row]') && $('[data-sdk-toggle]'), 'SDK rows used')
   await click('[data-studio-read-context] [role="switch"]')
   assert.equal(ui.storage.get('readContext'), false)
   assert.equal($('[data-studio-read-context] [role="switch"]').getAttribute('aria-checked'), 'false')

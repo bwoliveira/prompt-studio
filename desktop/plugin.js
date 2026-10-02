@@ -28,9 +28,10 @@ import {
   usePluginI18n,
   useValue
 } from '@hermes/plugin-sdk'
-// Names added to the SDK after the oldest supported Hermes (ListRow/ToggleRow: 0.21.5) are read from
-// the namespace, never imported by name: on an older Desktop a named import of a missing export
-// fails to link and the whole plugin fails to load. See tests/desktop/sdk-compat.test.mjs.
+// Names that only the oldest supported Hermes (0.21.5, plugin.yaml requires_hermes) exports (ListRow/ToggleRow) are
+// read from the namespace, never imported by name: on an older Desktop a named import of a missing export
+// fails to link and the whole plugin fails to load, so it could not even ask the user to update.
+// See tests/desktop/sdk-compat.test.mjs.
 import * as hermesSdk from '@hermes/plugin-sdk'
 import { jsx, jsxs } from 'react/jsx-runtime'
 import { Component, Fragment, useEffect, useState } from 'react'
@@ -3304,46 +3305,9 @@ function ModelPicker({ which, inherit }) {
 }
 
 
-// Built-in stand-ins for the SDK settings rows, used when the Desktop SDK lacks them (Hermes < 0.21.5).
-// Same props the Settings dialog passes to the SDK originals (apps/desktop/src/app/settings/primitives.tsx):
-// label + description with the control beside it; the toggle is a real <button role="switch">, so it
-// is focusable and Space/Enter toggle it natively, and aria-label names it like the SDK Switch.
-function LocalListRow({ title, description, action }) {
-  return jsxs('div', {
-    'data-studio-list-row': true,
-    style: { alignItems: 'center', columnGap: '12px', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', padding: '12px 0' },
-    children: [
-      jsxs('div', {
-        style: { minWidth: 0 },
-        children: [
-          jsx('div', { style: { color: 'var(--ui-text-primary, inherit)', fontSize: 'var(--conversation-text-font-size, 13px)', fontWeight: 500 }, children: title }),
-          description ? jsx('div', { style: { color: 'var(--ui-text-tertiary, inherit)', fontSize: 'var(--conversation-caption-font-size, 12px)', marginTop: '4px' }, children: description }) : null
-        ]
-      }),
-      action ? jsx('div', { style: { alignItems: 'center', display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'flex-end', minWidth: 0 }, children: action }) : null
-    ]
-  })
-}
-function LocalToggleRow({ checked, description, disabled, label, onChange }) {
-  const on = Boolean(checked)
-  return jsx(ListRow, {
-    title: label,
-    description,
-    action: jsx('button', {
-      'aria-checked': on,
-      'aria-label': label,
-      'data-state': on ? 'checked' : 'unchecked',
-      disabled,
-      onClick: () => onChange(!on),
-      role: 'switch',
-      type: 'button',
-      style: { background: on ? 'var(--dt-primary)' : 'var(--ui-stroke-secondary)', border: '1px solid var(--ui-stroke-secondary)', borderRadius: '999px', cursor: disabled ? 'default' : 'pointer', flexShrink: 0, height: '18px', padding: '2px', position: 'relative', width: '32px' },
-      children: jsx('span', { 'aria-hidden': true, style: { background: 'var(--dt-primary-foreground)', borderRadius: '999px', display: 'block', height: '14px', transform: on ? 'translateX(14px)' : 'none', transition: 'transform 120ms', width: '14px' } })
-    })
-  })
-}
-const ListRow = hermesSdk.ListRow ?? LocalListRow
-const ToggleRow = hermesSdk.ToggleRow ?? LocalToggleRow
+// The SDK settings rows (Hermes Desktop 0.21.5+, the minimum in plugin.yaml). Read from the namespace, not imported
+// by name: on an older Desktop a named import fails to link and the plugin could not tell the user to update.
+const { ListRow, ToggleRow } = hermesSdk
 
 function SettingsDialog() {
   const t = useT()
