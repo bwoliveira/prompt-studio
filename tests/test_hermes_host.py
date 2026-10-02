@@ -189,7 +189,8 @@ def test_an_import_that_crashes_is_host_incompatible(monkeypatch, tmp_path):
     (package / "redact.py").write_text("raise RuntimeError('changed under us')\n")
     monkeypatch.syspath_prepend(str(tmp_path))
     for name in ("agent", "agent.redact"):
-        monkeypatch.delitem(sys.modules, name, raising=False)
+        monkeypatch.setitem(sys.modules, name, types.ModuleType(name))  # registers the undo ...
+        del sys.modules[name]  # ... and forces a fresh import from tmp_path
     with pytest.raises(host.HostIncompatible, match="agent.redact"):
         host.redact_sensitive_text("x")
 
