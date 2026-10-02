@@ -700,6 +700,17 @@ const TABLE = [
   ['Escreva uma revisão deste código', 'review', 'pt revisao deste'],
   ['Escreva uma revisão naquele repositório', 'review', 'pt revisao naquele'],
   ['Faça uma planilha destes dados', 'data', 'pt planilha destes'],
+  // #49: a polite request to be shown an artifact is the artifact, with or without the question mark
+  ['Can you show me a script that extracts data?', 'implementation', '#49 can you show me a script, with the mark'],
+  ['Can you show me a script that extracts data', 'implementation', '#49 can you show me a script, no mark'],
+  ['Could you give me a regex that matches ISO dates?', 'implementation', '#49 could you give me a regex'],
+  ['Will you send me a class that parses dates?', 'implementation', '#49 will you send me a class'],
+  ['Você pode me mostrar um script que extrai dados?', 'implementation', '#49 pt pode me mostrar um script'],
+  ['Can you show me how to write a script?', 'answer', 'near miss: show me how'],
+  ['Can you show me the difference between a script and a function?', 'answer', 'near miss: show me the difference'],
+  ['Can you explain a script that extracts data?', 'answer', 'near miss: explain is the verb'],
+  ['Do you have a script that extracts data?', 'answer', 'near miss: do you have'],
+  ['Can you show me a script that extracts data and explain how it works?', 'answer', 'near miss: an explanation is asked for too'],
 ]
 
 for (const [draft, expected, why] of TABLE) {

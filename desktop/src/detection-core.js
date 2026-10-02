@@ -131,6 +131,10 @@ const QUESTION_HEAD = /\b(?:do|does|did|can|could|should|would|will|may|might|is
 // Only this many characters around a match are inspected, so the scan stays linear on long drafts; the prefixes
 // NEGATED and SENTENCE_START look for are far shorter than this.
 const CONTEXT_WINDOW = 120
+// "Can you show me a script that extracts data?": a polite request to be shown (given, sent, told) an artifact asks for
+// the artifact, with or without the mark, as "Show me a script that extracts data" does; no verb in it decides otherwise.
+// Languages: Portuguese (unaccented) + English.
+const ARTIFACT_REQUEST = /^(?:(?:please|pls|por favor),?\s+)?(?:(?:can|could|would|will)\s+you\s+(?:(?:please|kindly)\s+)?(?:show|give|send|tell|pass)\s+(?:me|us)|(?:(?:voce|voces)\s+)?(?:pode|poderia|podem|poderiam)\s+(?:por favor\s+)?me\s+(?:mostrar|dizer|passar|enviar|mandar|dar))\s+(?:(?:please\s+)?(?:a|an|the|some|another|my|our|your|um|uma|o|os|as|algum|alguma|alguns|algumas|outro|outra|meu|minha|nosso|nossa|seu|sua)\s+)/
 // "I need a script to write log files": the artifact asked for sits before the verb that tells its purpose; with the
 // request opener ("I need", "preciso de") it also decides the deliverable ("I need a script to configure nginx").
 // "I need a React app. Write it in TypeScript": the thing asked in the sentence before is what the order writes.
@@ -384,6 +388,9 @@ function createDetector(profile = {}) {
     else if ((signal === 'data' || signal === 'text') && MAKE_VERB.test(verbWord) && codeWins) { signal = 'implementation'; category = 'code' }
     // "Gere um e-mail", "Monte uma mensagem": the verb does not say what is made, the first artifact named does.
     if (signal === 'implementation' && GENERATE_VERB.test(request) && textWins) { signal = 'text'; category = 'writing' }
+    // A request to be shown a code artifact, when no verb and no question form decided anything.
+    const shown = signal === null && !question && ARTIFACT_REQUEST.exec(goal)
+    if (shown && pickArtifact(goal.slice(shown[0].length).split(/[.!?\n]/, 1)[0]) === 'code') { signal = 'implementation'; category = 'code' }
     return { category, signal, text, goal, asksQuestion: goal.endsWith('?') || QUESTION_START.test(goal) }
   }
 
