@@ -180,32 +180,43 @@ function fold(text) {
 
 // Languages: Portuguese (unaccented) + English; tested on normalize()/fold() output (lower-cased, NFD diacritics stripped).
 const CATEGORY_RULES = [
-  ['agent', /\b(automati[sz]\w*|automate\w*|agentes?|agents?|workflows?|cron\w*|pipelines?|bots?)\b/],
-  ['code', /\b(react|vue|angular|svelte|api|rest|codigo|code|bugs?|func(ao|oes)|functions?|scripts?|dashboards?|apps?|aplicativos?|frontend|front-end|backend|css|html|typescript|javascript|python|node|repos?|repositorio|pull request|pr|sites?|website|landing|pagina|page|componentes?|components?|login|deploy|endpoints?|refator\w*|refactor\w*)\b/],
+  ['agent', /\b(automati[sz]\w*|automate\w*|agentes?|agents?|workflows?|pipelines?|bots?)\b/],
+  ['code', /\b(react|vue|angular|svelte|api|codigo|code|bugs?|func(ao|oes)|functions?|scripts?|dashboards?|apps?|aplicativos?|frontend|front-end|backend|css|html|typescript|javascript|python|node|repos?|repositorio|pull request|pr|sites?|website|landing|pagina|page|componentes?|components?|login|deploy|endpoints?|refator\w*|refactor\w*)\b/],
   ['data', /\b(planilhas?|csv|datasets?|sql|excel|spreadsheets?|dados|data)\b/],
   ['research', /\b(pesquis\w*|research\w*|compar\w*|benchmark\w*|estudo|survey|investig\w*)\b/],
   ['writing', /(\be-?mails?\b|\b(artigos?|articles?|posts?|blog|texto|carta|letter|copy|redacao|newsletter|essay|ensaio|roteiro|script de video)\b)/],
   ['business', /\b(plano de|lancamento|launch|vendas|sales|marketing|proposta|proposal|pricing|precos?|estrategia|strategy|negocios?|business|trimestre|quarter|clientes?|customers?)\b/]
 ]
 
-// Verb signals: an explicit request in the draft. Order matters.
+// A make verb whose object is a plan, a data file or an automation names that deliverable, whatever verb rule it
+// also matches ("Create a plan", "Crie uma planilha"). Languages: Portuguese (unaccented) + English.
+const PLAN_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija|redigir|monte|montar|gere|gerar|elabore|elaborar|write|create|build|make|draft|develop)\s+(?:(?:a|an|the|um|uma|o|os|as|our|nosso|nossa|new|novo|nova|detailed|detalhado|detalhada|simple|simples)\s+){0,2}(?:\w+\s+)?(?:plan|plano|planos|roadmap|cronograma|strategy|estrategia)\b/
+const DATA_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija|redigir|monte|montar|gere|gerar|elabore|elaborar|write|create|build|make|draft|develop)\s+(?:(?:a|an|the|um|uma|o|os|as|our|nosso|nossa|new|novo|nova|detailed|detalhado|detalhada|simple|simples)\s+){0,2}(?:\w+\s+)?(?:planilhas?|spreadsheets?|csv|datasets?)\b/
+const WORKFLOW_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija|redigir|monte|montar|gere|gerar|elabore|elaborar|write|create|build|make|draft|develop)\s+(?:(?:a|an|the|um|uma|o|os|as|our|nosso|nossa|new|novo|nova|detailed|detalhado|detalhada|simple|simples)\s+){0,2}(?:\w+\s+)?(?:workflows?|pipelines?)\b/
+
+// Verb signals: an explicit request in the draft. The first match in the text decides; on a tie the earlier rule wins.
 // Languages: Portuguese (unaccented) + English; tested on normalize()/fold() output (lower-cased, NFD diacritics stripped).
 const DELIVERABLE_RULES = [
+  ['plan', PLAN_OBJECT],
+  ['data', DATA_OBJECT],
+  ['workflow', WORKFLOW_OBJECT],
   ['review', /\b(revise|revisar|revisao|review|reviews|audite|auditar|audit)\b/],
-  ['workflow', /\b(automati[sz]\w*|automate\w*|agende|schedule|workflows?|pipelines?|cron)\b/],
+  ['workflow', /\b(automati[sz]\w*|automate\w*|agende|schedule|workflows?|pipelines?|configure|configurar|instale|instalar)\b/],
   ['data', /\b(planilhas?|csv|datasets?|spreadsheets?|limpe os dados|clean the data|extraia|extract)\b/],
-  ['implementation', /\b(crie|criar|implemente|implementar|implement|build|construa|desenvolva|develop|corrija|corrigir|fix|refatore|refactor|programe|create|make|adicione|add)\b/],
+  ['implementation', /\b(crie|criar|implemente|implementar|implement|build|construa|desenvolva|develop|corrija|corrigir|fix|refatore|refactor|programe|create|make|adicione|add|gere|gerar|monte|montar)\b/],
   ['text', /\b(escreva|escrever|redija|write|draft|reescreva|rewrite|traduza|translate)\b/],
-  ['analysis', /\b(pesquise|pesquisar|research|compare|comparar|analise|analisar|analyze|analyse|investigue|investigate|avalie|evaluate)\b/],
+  ['analysis', /\b(pesquise|pesquisar|research|compare|comparar|analise|analisar|analyze|analyse|investigue|investigate|avalie|evaluate|resuma|resumir)\b/],
   ['plan', /\b(plano|planeje|planejar|plan|roadmap|cronograma|estrategia|strategy)\b/]
 ]
 // Languages: Portuguese (unaccented) + English.
-const MAKE_VERB = /\b(crie|criar|escreva|escrever|write|create|build|construa|desenvolva|develop|implemente|implement|programe)\b/
+const MAKE_VERB = /\b(crie|criar|escreva|escrever|write|create|build|construa|desenvolva|develop|implemente|implement|programe|gere|gerar|monte|montar)\b/
 // Languages: Portuguese (unaccented) + English.
-const CODE_ARTIFACT = /\b(scripts?|func(ao|oes)|functions?|apis?|endpoints?|cli|clis|apps?|aplicativos?|modul[oe]s?|class(e|es)?|programas?|programs?|bots?)\b/
+const CODE_ARTIFACT = /\b(scripts?|func(ao|oes)|functions?|apis?|endpoints?|cli|clis|apps?|aplicativos?|modul[oe]s?|class(e|es)?|programas?|programs?|bots?|tests?|testes?|quer(y|ies)|regex(es)?|readme|dockerfile)\b/
 // Languages: Portuguese (unaccented) + English.
-const TEXT_ARTIFACT = /(\be-?mails?\b|\b(posts?|artigos?|articles?|blog|carta|letter|newsletter|texto|essay|ensaio|roteiro|mensagem|message)\b)/
+const TEXT_ARTIFACT = /((?<!\b(?:and|then|also|e|depois|por|via|by)\s)\be-?mails?\b(?!\s+(?:me|us|him|her|them|you)\b)|\b(posts?|artigos?|articles?|blog|carta|letter|newsletter|texto|essay|ensaio|roteiro|mensagem|message|copy(?!\s+(?:of|function|script|command|files?|folders?)\b)|description|descricao)\b)/
 // Languages: Portuguese (unaccented) + English.
+// "Analise a planilha" stays a data task: the analysis verb with a data file as its subject.
+const DATA_NOUN = /\b(planilhas?|csv|datasets?|spreadsheets?)\b/
 const QUESTION_START = /^(qual|quais|como|o que|por que|porque|quando|onde|quem|quanto|what|how|why|which|who|when|where|is|are|does|do|can)\b/
 
 const CATEGORY_DEFAULT = { code: 'implementation', research: 'analysis', writing: 'text', data: 'data', agent: 'workflow', business: 'plan', general: 'answer' }
@@ -228,11 +239,19 @@ function detect(b) {
   let category = 'general'
   for (const [id, re] of CATEGORY_RULES) if (re.test(text)) { category = id; break }
   let signal = null
-  for (const [id, re] of DELIVERABLE_RULES) if (re.test(text)) { signal = id; break }
+  let at = Infinity
+  for (const [id, re] of DELIVERABLE_RULES) {
+    const m = re.exec(text)
+    if (m && m.index < at) { signal = id; at = m.index }
+  }
+  if (signal === 'analysis' && DATA_NOUN.test(text)) signal = 'data'
   // "Create/write a script that ... CSV": the artifact is code, whatever data words it mentions.
   // "Write an e-mail about the new app": the artifact is text, whatever product words it mentions.
+  // When both kinds are named, the first one decides ("Write a function that validates the description" is code).
   if (signal === 'text' && TEXT_ARTIFACT.test(text)) category = 'writing'
-  if ((signal === 'data' || signal === 'text') && MAKE_VERB.test(text) && CODE_ARTIFACT.test(text) && !TEXT_ARTIFACT.test(text)) { signal = 'implementation'; category = 'code' }
+  const codeAt = text.search(CODE_ARTIFACT)
+  const textAt = text.search(TEXT_ARTIFACT)
+  if ((signal === 'data' || signal === 'text') && MAKE_VERB.test(text) && codeAt >= 0 && (textAt < 0 || codeAt < textAt)) { signal = 'implementation'; category = 'code' }
   if (!signal) {
     const goal = fold(b.goal).trim()
     if (goal.endsWith('?') || QUESTION_START.test(goal)) signal = 'answer'
@@ -553,34 +572,47 @@ const pick = (v, allowed, fallback) => (allowed.includes(v) ? v : fallback)
 const fold = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 const escapeXml = s => s.replaceAll('&', '&amp;').replaceAll('<', '&lt;')
 
+const ENUM_KEYS = ['deliverable', 'autonomy', 'format', 'length', 'subagents']
+
 function read(brief) {
   const out = {}
   for (const key of ['goal', 'context', 'requirements', 'success', 'thirdPartyText', 'thirdPartySource', 'examples', 'deliverable', 'autonomy', 'format', 'length', 'subagents']) {
     let value = ''
     try { value = brief && typeof brief === 'object' ? str(brief[key]) : '' } catch { value = '' }
-    out[key] = value
+    // Same as Opus and Sonnet: line endings become \n, and an option value is trimmed and lower-cased before it is picked.
+    out[key] = ENUM_KEYS.includes(key) ? value.trim().toLowerCase() : value.replace(/\r\n?/g, '\n')
   }
   if (!out.goal && typeof brief === 'string') out.goal = brief
   return out
 }
 
-// Verb groups (pt + en). The earliest match in the draft decides the deliverable.
-// Languages: Portuguese (unaccented) + English; runs on fold(goal) text (NFD, diacritics stripped, lower-cased). 'answer' also anchors on PT/EN question words.
+// A make verb whose object is a plan, a data file or an automation names that deliverable, whatever verb rule it
+// also matches ("Create a plan", "Crie uma planilha"). Languages: Portuguese (unaccented) + English.
+const PLAN_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija|redigir|monte|montar|gere|gerar|elabore|elaborar|write|create|build|make|draft|develop)\s+(?:(?:a|an|the|um|uma|o|os|as|our|nosso|nossa|new|novo|nova|detailed|detalhado|detalhada|simple|simples)\s+){0,2}(?:\w+\s+)?(?:plan|plano|planos|roadmap|cronograma|strategy|estrategia)\b/
+const DATA_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija|redigir|monte|montar|gere|gerar|elabore|elaborar|write|create|build|make|draft|develop)\s+(?:(?:a|an|the|um|uma|o|os|as|our|nosso|nossa|new|novo|nova|detailed|detalhado|detalhada|simple|simples)\s+){0,2}(?:\w+\s+)?(?:planilhas?|spreadsheets?|csv|datasets?)\b/
+const WORKFLOW_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija|redigir|monte|montar|gere|gerar|elabore|elaborar|write|create|build|make|draft|develop)\s+(?:(?:a|an|the|um|uma|o|os|as|our|nosso|nossa|new|novo|nova|detailed|detalhado|detalhada|simple|simples)\s+){0,2}(?:\w+\s+)?(?:workflows?|pipelines?)\b/
+
+// Verb groups (pt + en). The earliest match in the draft decides the deliverable; on a tie the earlier entry wins.
+// Languages: Portuguese (unaccented) + English; runs on fold(goal + requirements) text (NFD, diacritics stripped, lower-cased). 'answer' also anchors on PT/EN question words.
 const VERBS = [
+  ['plan', PLAN_OBJECT],
+  ['data', DATA_OBJECT],
+  ['workflow', WORKFLOW_OBJECT],
   ['review', /\b(revise|revisar|revisao|review|audite|auditar|audit|diagnostique|diagnosticar|diagnose|critique)\b/],
-  ['analysis', /\b(pesquise|pesquisar|pesquisa|compare|comparar|research|investigue|investigar|investigate|avalie|avaliar|evaluate|analise|analisar|analyze|analyse|levante)\b/],
+  ['analysis', /\b(pesquise|pesquisar|pesquisa|compare|comparar|research|investigue|investigar|investigate|avalie|avaliar|evaluate|analise|analisar|analyze|analyse|levante|resuma|resumir)\b/],
   ['plan', /\b(planeje|planejar|plano|planos|plan|roadmap|cronograma|estrategia|strategy)\b/],
   ['text', /\b(escreva|escrever|redija|redigir|rascunhe|reescreva|traduza|write|draft|rewrite|translate|compose)\b/],
-  ['workflow', /\b(automatize|automatizar|automate|agende|agendar|schedule|cron|execute|executar|rode|rodar|deploy|publique|migre|migrate)\b/],
-  ['implementation', /\b(build|create|implement|develop|fix|make|add|refactor|code|programe|implemente|implementar|crie|criar|desenvolva|desenvolver|construa|construir|corrija|corrigir|conserte|adicione|refatore)\b/],
+  ['workflow', /\b(automatize|automatizar|automate|agende|agendar|schedule|execute|executar|rode|rodar|deploy|publique|migre|migrate|configure|configurar|instale|instalar)\b/],
+  ['data', /\b(planilhas?|csv|datasets?|spreadsheets?|limpe os dados|clean the data|extraia|extract)\b/],
+  ['implementation', /\b(build|create|implement|develop|fix|make|add|refactor|code|programe|implemente|implementar|crie|criar|desenvolva|desenvolver|construa|construir|corrija|corrigir|conserte|adicione|refatore|gere|gerar|monte|montar)\b/],
   ['answer', /(^|\s)(o que|qual|quais|como|por que|porque|explique|what|which|how|why|explain|who|quem)\b/]
 ]
 // Languages: Portuguese (unaccented) + English.
-const MAKE_VERB = /\b(write|escreva|escrever|create|crie|criar|build|construa|develop|desenvolva|implement|implemente|programe)\b/
+const MAKE_VERB = /\b(crie|criar|escreva|escrever|write|create|build|construa|desenvolva|develop|implemente|implement|programe|gere|gerar|monte|montar)\b/
 // Languages: Portuguese (unaccented) + English.
-const CODE_ARTIFACT = /\b(scripts?|funcao|funcoes|functions?|apis?|endpoints?|cli|clis|apps?|aplicativos?|modulos?|modules?|classes?|programas?|programs?|bots?)\b/
+const CODE_ARTIFACT = /\b(scripts?|func(ao|oes)|functions?|apis?|endpoints?|cli|clis|apps?|aplicativos?|modul[oe]s?|class(e|es)?|programas?|programs?|bots?|tests?|testes?|quer(y|ies)|regex(es)?|readme|dockerfile)\b/
 // Languages: Portuguese (unaccented) + English.
-const TEXT_ARTIFACT = /(\be-?mails?\b|\b(posts?|artigos?|articles?|blog|carta|letter|newsletter|texto|essay|ensaio|roteiro|mensagem|message)\b)/
+const TEXT_ARTIFACT = /((?<!\b(?:and|then|also|e|depois|por|via|by)\s)\be-?mails?\b(?!\s+(?:me|us|him|her|them|you)\b)|\b(posts?|artigos?|articles?|blog|carta|letter|newsletter|texto|essay|ensaio|roteiro|mensagem|message|copy(?!\s+(?:of|function|script|command|files?|folders?)\b)|description|descricao)\b)/
 // Languages: Portuguese (unaccented) + English.
 const DATA_NOUN = /\b(planilha|csv|xlsx|spreadsheet|dataset|dados|data|sql|tabela de vendas|metricas|metrics)\b/
 // Languages: Portuguese (unaccented) + English.
@@ -595,8 +627,8 @@ const COMPATIBLE = {
   workflow: ['implementation', 'plan'], answer: ['text', 'analysis']
 }
 
-function detect(goal) {
-  const text = fold(goal)
+function detect(goal, requirements) {
+  const text = fold(`${goal}\n${requirements}`)
   let best = null
   for (const [kind, re] of VERBS) {
     const m = re.exec(text)
@@ -604,9 +636,12 @@ function detect(goal) {
   }
   let kind = best?.kind ?? null
   // "Write/create a script that ... CSV": the artifact is code, whatever text or data words it mentions.
-  if ((kind === 'text' || kind === 'data' || kind === 'analysis') && MAKE_VERB.test(text) && CODE_ARTIFACT.test(text) && !TEXT_ARTIFACT.test(text)) kind = 'implementation'
+  // When both kinds are named, the first one decides ("Write a function that validates the description" is code).
+  const codeAt = text.search(CODE_ARTIFACT)
+  const textAt = text.search(TEXT_ARTIFACT)
+  if ((kind === 'text' || kind === 'data' || kind === 'analysis') && MAKE_VERB.test(text) && codeAt >= 0 && (textAt < 0 || codeAt < textAt)) kind = 'implementation'
   if (kind === 'analysis' && DATA_NOUN.test(text) && !/\b(pesquis|research|compar)/.test(text)) kind = 'data'
-  const fallback = text.trim().endsWith('?') || !CODE_NOUN.test(text) ? 'answer' : 'implementation'
+  const fallback = fold(goal).trim().endsWith('?') || !CODE_NOUN.test(text) ? 'answer' : 'implementation'
   return { detected: kind, resolved: kind ?? fallback, text }
 }
 
@@ -620,7 +655,7 @@ const WANT_SUBAGENTS = /\b(use subagentes?|com subagentes?|use subagents?|with s
 const FORMAT_HINTS = [['json', /\bjson\b/], ['table', /\b(tabela|table)\b/], ['steps', /\b(passo a passo|step by step|numbered steps|passos)\b/]]
 
 function analyzeSafe(b) {
-  const { detected, resolved, text } = detect(b.goal)
+  const { detected, resolved, text } = detect(b.goal, b.requirements)
   const explicit = pick(b.deliverable, DELIVERABLES, 'auto')
   const deliverable = explicit === 'auto' ? resolved : explicit
   let category = CATEGORY[deliverable]
@@ -993,32 +1028,43 @@ function fold(text) {
 
 // Languages: Portuguese (unaccented) + English; tested on normalize()/fold() output (lower-cased, NFD diacritics stripped).
 const CATEGORY_RULES = [
-  ['agent', /\b(automati[sz]\w*|automate\w*|agentes?|agents?|workflows?|cron\w*|pipelines?|bots?)\b/],
-  ['code', /\b(react|vue|angular|svelte|api|rest|codigo|code|bugs?|func(ao|oes)|functions?|scripts?|dashboards?|apps?|aplicativos?|frontend|front-end|backend|css|html|typescript|javascript|python|node|repos?|repositorio|pull request|pr|sites?|website|landing|pagina|page|componentes?|components?|login|deploy|endpoints?|refator\w*|refactor\w*)\b/],
+  ['agent', /\b(automati[sz]\w*|automate\w*|agentes?|agents?|workflows?|pipelines?|bots?)\b/],
+  ['code', /\b(react|vue|angular|svelte|api|codigo|code|bugs?|func(ao|oes)|functions?|scripts?|dashboards?|apps?|aplicativos?|frontend|front-end|backend|css|html|typescript|javascript|python|node|repos?|repositorio|pull request|pr|sites?|website|landing|pagina|page|componentes?|components?|login|deploy|endpoints?|refator\w*|refactor\w*)\b/],
   ['data', /\b(planilhas?|csv|datasets?|sql|excel|spreadsheets?|dados|data)\b/],
   ['research', /\b(pesquis\w*|research\w*|compar\w*|benchmark\w*|estudo|survey|investig\w*)\b/],
   ['writing', /(\be-?mails?\b|\b(artigos?|articles?|posts?|blog|texto|carta|letter|copy|redacao|newsletter|essay|ensaio|roteiro|script de video)\b)/],
   ['business', /\b(plano de|lancamento|launch|vendas|sales|marketing|proposta|proposal|pricing|precos?|estrategia|strategy|negocios?|business|trimestre|quarter|clientes?|customers?)\b/]
 ]
 
-// Verb signals: an explicit request in the draft. Order matters.
+// A make verb whose object is a plan, a data file or an automation names that deliverable, whatever verb rule it
+// also matches ("Create a plan", "Crie uma planilha"). Languages: Portuguese (unaccented) + English.
+const PLAN_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija|redigir|monte|montar|gere|gerar|elabore|elaborar|write|create|build|make|draft|develop)\s+(?:(?:a|an|the|um|uma|o|os|as|our|nosso|nossa|new|novo|nova|detailed|detalhado|detalhada|simple|simples)\s+){0,2}(?:\w+\s+)?(?:plan|plano|planos|roadmap|cronograma|strategy|estrategia)\b/
+const DATA_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija|redigir|monte|montar|gere|gerar|elabore|elaborar|write|create|build|make|draft|develop)\s+(?:(?:a|an|the|um|uma|o|os|as|our|nosso|nossa|new|novo|nova|detailed|detalhado|detalhada|simple|simples)\s+){0,2}(?:\w+\s+)?(?:planilhas?|spreadsheets?|csv|datasets?)\b/
+const WORKFLOW_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija|redigir|monte|montar|gere|gerar|elabore|elaborar|write|create|build|make|draft|develop)\s+(?:(?:a|an|the|um|uma|o|os|as|our|nosso|nossa|new|novo|nova|detailed|detalhado|detalhada|simple|simples)\s+){0,2}(?:\w+\s+)?(?:workflows?|pipelines?)\b/
+
+// Verb signals: an explicit request in the draft. The first match in the text decides; on a tie the earlier rule wins.
 // Languages: Portuguese (unaccented) + English; tested on normalize()/fold() output (lower-cased, NFD diacritics stripped).
 const DELIVERABLE_RULES = [
+  ['plan', PLAN_OBJECT],
+  ['data', DATA_OBJECT],
+  ['workflow', WORKFLOW_OBJECT],
   ['review', /\b(revise|revisar|revisao|review|reviews|audite|auditar|audit)\b/],
-  ['workflow', /\b(automati[sz]\w*|automate\w*|agende|schedule|workflows?|pipelines?|cron)\b/],
+  ['workflow', /\b(automati[sz]\w*|automate\w*|agende|schedule|workflows?|pipelines?|configure|configurar|instale|instalar)\b/],
   ['data', /\b(planilhas?|csv|datasets?|spreadsheets?|limpe os dados|clean the data|extraia|extract)\b/],
-  ['implementation', /\b(crie|criar|implemente|implementar|implement|build|construa|desenvolva|develop|corrija|corrigir|fix|refatore|refactor|programe|create|make|adicione|add)\b/],
+  ['implementation', /\b(crie|criar|implemente|implementar|implement|build|construa|desenvolva|develop|corrija|corrigir|fix|refatore|refactor|programe|create|make|adicione|add|gere|gerar|monte|montar)\b/],
   ['text', /\b(escreva|escrever|redija|write|draft|reescreva|rewrite|traduza|translate)\b/],
-  ['analysis', /\b(pesquise|pesquisar|research|compare|comparar|analise|analisar|analyze|analyse|investigue|investigate|avalie|evaluate)\b/],
+  ['analysis', /\b(pesquise|pesquisar|research|compare|comparar|analise|analisar|analyze|analyse|investigue|investigate|avalie|evaluate|resuma|resumir)\b/],
   ['plan', /\b(plano|planeje|planejar|plan|roadmap|cronograma|estrategia|strategy)\b/]
 ]
 // Languages: Portuguese (unaccented) + English.
-const MAKE_VERB = /\b(crie|criar|escreva|escrever|write|create|build|construa|desenvolva|develop|implemente|implement|programe)\b/
+const MAKE_VERB = /\b(crie|criar|escreva|escrever|write|create|build|construa|desenvolva|develop|implemente|implement|programe|gere|gerar|monte|montar)\b/
 // Languages: Portuguese (unaccented) + English.
-const CODE_ARTIFACT = /\b(scripts?|func(ao|oes)|functions?|apis?|endpoints?|cli|clis|apps?|aplicativos?|modul[oe]s?|class(e|es)?|programas?|programs?|bots?)\b/
+const CODE_ARTIFACT = /\b(scripts?|func(ao|oes)|functions?|apis?|endpoints?|cli|clis|apps?|aplicativos?|modul[oe]s?|class(e|es)?|programas?|programs?|bots?|tests?|testes?|quer(y|ies)|regex(es)?|readme|dockerfile)\b/
 // Languages: Portuguese (unaccented) + English.
-const TEXT_ARTIFACT = /(\be-?mails?\b|\b(posts?|artigos?|articles?|blog|carta|letter|newsletter|texto|essay|ensaio|roteiro|mensagem|message)\b)/
+const TEXT_ARTIFACT = /((?<!\b(?:and|then|also|e|depois|por|via|by)\s)\be-?mails?\b(?!\s+(?:me|us|him|her|them|you)\b)|\b(posts?|artigos?|articles?|blog|carta|letter|newsletter|texto|essay|ensaio|roteiro|mensagem|message|copy(?!\s+(?:of|function|script|command|files?|folders?)\b)|description|descricao)\b)/
 // Languages: Portuguese (unaccented) + English.
+// "Analise a planilha" stays a data task: the analysis verb with a data file as its subject.
+const DATA_NOUN = /\b(planilhas?|csv|datasets?|spreadsheets?)\b/
 const QUESTION_START = /^(qual|quais|como|o que|por que|porque|quando|onde|quem|quanto|what|how|why|which|who|when|where|is|are|does|do|can)\b/
 
 const CATEGORY_DEFAULT = { code: 'implementation', research: 'analysis', writing: 'text', data: 'data', agent: 'workflow', business: 'plan', general: 'answer' }
@@ -1041,11 +1087,19 @@ function detect(b) {
   let category = 'general'
   for (const [id, re] of CATEGORY_RULES) if (re.test(text)) { category = id; break }
   let signal = null
-  for (const [id, re] of DELIVERABLE_RULES) if (re.test(text)) { signal = id; break }
+  let at = Infinity
+  for (const [id, re] of DELIVERABLE_RULES) {
+    const m = re.exec(text)
+    if (m && m.index < at) { signal = id; at = m.index }
+  }
+  if (signal === 'analysis' && DATA_NOUN.test(text)) signal = 'data'
   // "Create/write a script that ... CSV": the artifact is code, whatever data words it mentions.
   // "Write an e-mail about the new app": the artifact is text, whatever product words it mentions.
+  // When both kinds are named, the first one decides ("Write a function that validates the description" is code).
   if (signal === 'text' && TEXT_ARTIFACT.test(text)) category = 'writing'
-  if ((signal === 'data' || signal === 'text') && MAKE_VERB.test(text) && CODE_ARTIFACT.test(text) && !TEXT_ARTIFACT.test(text)) { signal = 'implementation'; category = 'code' }
+  const codeAt = text.search(CODE_ARTIFACT)
+  const textAt = text.search(TEXT_ARTIFACT)
+  if ((signal === 'data' || signal === 'text') && MAKE_VERB.test(text) && codeAt >= 0 && (textAt < 0 || codeAt < textAt)) { signal = 'implementation'; category = 'code' }
   if (!signal) {
     const goal = fold(b.goal).trim()
     if (goal.endsWith('?') || QUESTION_START.test(goal)) signal = 'answer'

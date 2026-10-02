@@ -58,6 +58,9 @@ format hints) and `desktop/src/engine-opus.js` and `desktop/src/engine-sonnet.js
 `normalize()`), so the Portuguese words are written without accents. The dashboard's
 `REQUIRED_LINES` proof words and `_AUTONOMY_HEADERS` in `dashboard/suggest_engine.py` are also
 English + Portuguese. Each pattern carries a `Languages:` comment; other languages fall back to defaults.
+The first verb in the draft decides the deliverable, and the Opus and Sonnet detection blocks must stay identical:
+`tests/desktop/draft-recognition.test.mjs` holds the draft table all three engines must agree on, and fails when
+the detection constants drift apart.
 
 ## Keyboard
 

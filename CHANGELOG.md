@@ -40,6 +40,13 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   the preview says so in the Studio's language (following a language switch), on both versions (with or without
   AI). The visual-design step and rules follow the chosen deliverable: an answer or plan about an app no longer
   gets them, in the prompt or in what the AI writer receives.
+- Fix: common drafts are read the same way on Opus, Sonnet and Astra. Unit tests, SQL queries, regexes, READMEs and
+  Dockerfiles are code; "Create a plan" is a plan and "Crie uma planilha" is data (Astra now has the data
+  deliverable); the first verb in the draft decides ("Build a review dashboard" is a build); `cron` and `rest` no
+  longer force workflow or code; "email me" is a verb, not a text; Portuguese *gerar, montar, resumir,
+  configurar, instalar* are recognised. Astra also reads the requirements, trims and lower-cases the deliverable
+  and accepts Windows line endings. Marketing copy ("Write the copy for the landing page", "Redija a descrição do
+  app") is text: the Studio asks for examples, not design patterns.
 - New target: **Claude Sonnet 5.5** (Alt+T, or pick **Sonnet**), next to Opus and Astra. It has its own prompt engine,
   question help and AI writer rules from Anthropic's Sonnet 5.5 prompting guide, and is the default when the
   session's model is a Sonnet. Opus and Astra prompts do not change.
