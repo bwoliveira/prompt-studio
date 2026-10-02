@@ -147,6 +147,8 @@ const LOOKUP_MODIFIER = /\b(?:existing|available|good|better|best|recommended|po
 // API named for a purpose is a thing to be found, not written.
 const REFERENCE_NOUN_END = /\b(?:modul[oe]s?|apis?|librar(?:y|ies)|packages?|frameworks?|sdks?|bibliotecas?|pacotes?)\s*$/
 const FOR_PURPOSE = /^\s+(?:for|para)\b/
+// "Could you tell me an API that already exists for weather data?": the same qualifiers, said after the noun.
+const LOOKUP_AFTER = /^\s+(?:that|which|que)\s+(?:(?:already|ja)\s+)?(?:exists?|existe|existem|(?:is|are|esta|estao)\s+(?:already\s+|ja\s+)?(?:the\s+)?(?:available|existing|recommended|popular|best|good|better|disponivel|disponiveis|recomendad[ao]s?|existentes?)(?=\s+(?:for|para)\b|\s*[.,;:!?]|\s*$))\b/
 // "Can you show me a script? Why does it fail?", "... and tell me how it works": a clause or sentence after the artifact
 // that asks to understand it makes the draft a question, whatever the artifact. It opens a clause (the start, a
 // sentence or comma mark, or a coordinator), so "a script that explains how it works" still asks for the script.
@@ -418,7 +420,7 @@ function createDetector(profile = {}) {
       if (EXPLAIN_TAIL.test(tail)) signal = 'answer'
       else if (CODE_ARTIFACT_END.test(head) && pickArtifact(rest.split(/[.!?\n]/, 1)[0]) === 'code') {
         // Asking about an existing artifact, or for a recommendation, is a question; asking for one to be made is a task.
-        if (LOOKUP_MODIFIER.test(head) || (REFERENCE_NOUN_END.test(head) && FOR_PURPOSE.test(rest.slice(head.length)))) signal = 'answer'
+        if (LOOKUP_MODIFIER.test(head) || LOOKUP_AFTER.test(rest.slice(head.length)) || (REFERENCE_NOUN_END.test(head) && FOR_PURPOSE.test(rest.slice(head.length)))) signal = 'answer'
         else { signal = 'implementation'; category = 'code' }
       }
     }
