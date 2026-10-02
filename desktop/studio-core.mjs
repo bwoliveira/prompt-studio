@@ -520,8 +520,11 @@ const LENGTH_LINES = {
 // DONE WHEN evidence lines. [review] E1: [opus5] "Claude Opus 5 verifies its own work without being told to";
 // [pe] "remove these instructions rather than rewriting them"; [cc] "Have Claude show evidence rather than
 // asserting success". Plan, text and answer get no line. Data and workflow name what to get right.
+// Implementation is two sentences: the generic "behavior works" one, and the evidence one. After a user
+// criterion only the evidence sentence follows, so the criterion is not trailed by a weaker restatement of it.
+const IMPLEMENTATION_EVIDENCE = 'show the commands you ran and what they returned.'
 const DONE_LINES = {
-  implementation: 'Done when the affected behavior works; in your report, show the commands you ran and what they returned.',
+  implementation: `Done when the affected behavior works; in your report, ${IMPLEMENTATION_EVIDENCE}`,
   review: 'Give each finding with its location and the evidence for it; label untested hypotheses.',
   analysis: 'Back each conclusion with the source or data it rests on.',
   data: 'Units, totals and record counts match the source; report any rows dropped and why.',
@@ -689,7 +692,7 @@ function buildNormalized(b) {
   }
 
   add('output', 'OUTPUT', [LANGUAGE_LINE, FORMAT_LINES[b.format], LENGTH_LINES[b.length]])
-  add('done', 'DONE WHEN', [b.success, DONE_LINES[deliverable]])
+  add('done', 'DONE WHEN', [b.success, b.success && deliverable === 'implementation' ? `In your report, ${IMPLEMENTATION_EVIDENCE}` : DONE_LINES[deliverable]])
 
   if (a.conflicts.deliverable) notes.push(`The draft reads as ${detect(b).signal} work, but the deliverable is set to ${deliverable}.`)
   if (a.conflicts.format) notes.push('JSON output was chosen for a piece of writing.')

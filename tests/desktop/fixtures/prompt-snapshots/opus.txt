@@ -44,4 +44,4 @@ Keep the response focused, brief, and concise. Keep disclaimers and caveats shor
 
 DONE WHEN
 O dashboard abre e o total do mês confere com o CSV de exemplo.
-Done when the affected behavior works; in your report, show the commands you ran and what they returned.
+In your report, show the commands you ran and what they returned.

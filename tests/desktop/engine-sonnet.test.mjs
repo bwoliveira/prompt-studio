@@ -376,3 +376,12 @@ test('#38: the team paragraph is one rule per line, like Astra (Sonnet)', () => 
   assert.deepEqual(lines.map(line => line.split(' ').slice(0, 3).join(' ')), ['Use subagents. Split', 'Work directly on', 'The user asks', 'Only report delegation'])
   assert.ok(lines[0].endsWith('with the lead agent.') && lines[2].endsWith('treats the rest as optional.'))
 })
+
+test('#38: after a user done-criterion Sonnet adds the verification paragraph only, never a "behavior works" sentence', () => {
+  const body = ENGINE.build({ goal: 'Crie um app', success: 'Login funciona' }).sections.find(s => s.id === 'done').body
+  const lines = body.split('\n')
+  assert.equal(lines[0], 'Login funciona')
+  assert.equal(lines.length, 2, body)
+  assert.ok(lines[1].startsWith('When you change code that can be run, built, or type-checked, run a real check'))
+  assert.ok(!/behaviou?r works/i.test(body))
+})

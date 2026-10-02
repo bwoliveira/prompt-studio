@@ -270,3 +270,12 @@ test('#38: the team paragraph is one rule per line, like Astra (Opus)', () => {
   assert.deepEqual(lines.map(line => line.split(' ').slice(0, 3).join(' ')), ['Use subagents. Split', 'Work directly on', 'Name one subagent', 'Only report delegation', 'Time matters here:'])
   assert.ok(lines[0].endsWith('with the lead agent.') && lines[2].endsWith('treats the rest as optional.'))
 })
+
+test('#38: a user done-criterion is followed only by the evidence line, not the generic "behavior works" sentence', () => {
+  const done = brief => ENGINE.build({ goal: 'Crie um app', ...brief }).sections.find(s => s.id === 'done').body
+  assert.equal(done({ success: 'Login funciona' }), 'Login funciona\nIn your report, show the commands you ran and what they returned.')
+  assert.equal(done({}), 'Done when the affected behavior works; in your report, show the commands you ran and what they returned.', 'without a criterion the full line stays')
+  assert.ok(!done({ success: 'Login funciona' }).includes('behavior works'))
+  // The other deliverables' lines are already evidence only and stay after a criterion.
+  assert.ok(ENGINE.build({ goal: 'Revise o código', success: 'Sem falsos positivos' }).prompt.includes('DONE WHEN\nSem falsos positivos\nGive each finding with its location'))
+})
