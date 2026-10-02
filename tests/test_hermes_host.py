@@ -519,6 +519,14 @@ def test_a_changed_not_found_classifier_is_host_incompatible_before_the_provider
     assert calls == []
 
 
+def test_verify_raises_host_incompatible_when_the_task_config_getter_stopped_returning_a_dict(monkeypatch):
+    _fake_hermes(monkeypatch, **_override("agent.auxiliary_client", "_get_auxiliary_task_config", lambda task: None))
+    with pytest.raises(host.HostIncompatible, match="dict"):
+        host.verify()
+    with pytest.raises(host.HostIncompatible):
+        adapter.check_host()
+
+
 def test_a_provider_error_with_a_changed_classifier_still_gets_the_fixed_text_through_an_injected_model(monkeypatch):
     _fake_hermes(monkeypatch, **_override("agent.auxiliary_client", "_is_model_not_found_error", lambda: False))
     se = _engine()

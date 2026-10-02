@@ -219,12 +219,13 @@ def _verify_auxiliary(task: str) -> None:
     check_after_call_helpers()
     _check_call(_symbol(_AUX, "_get_auxiliary_task_config"), f"{_AUX}._get_auxiliary_task_config", "task")
     _check_call(_symbol(_AUX, "_resolve_task_provider_model"), f"{_AUX}._resolve_task_provider_model", "task")
-    try:
-        resolve_route(task)  # the shape of the answer: only a config read
-    except HostIncompatible:
-        raise
-    except Exception:  # noqa: BLE001 - a config problem is not a changed Hermes
-        pass
+    for read in (auxiliary_task_config, resolve_route):  # the shape of the answers: only config reads
+        try:
+            read(task)
+        except HostIncompatible:
+            raise
+        except Exception:  # noqa: BLE001 - a config problem is not a changed Hermes
+            pass
 
 
 def _verify_redact(task: str) -> None:
