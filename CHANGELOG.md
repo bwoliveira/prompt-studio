@@ -27,7 +27,8 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
   plano para configurar o nginx" is a plan, as "Tell me a plan to configure nginx" is; and "Do a code review of the API"
   is a review on Astra too, not an implementation (Opus and Sonnet already said review).
   Asking about an existing module or API ("Can you tell me an existing Python module for parsing ISO dates?") stays a
-  question, in English and Portuguese.
+  question, in English and Portuguese. So does a request to be shown a script that also asks to understand it ("Can you
+  show me a script? Why does it fail?", "... and tell me how it works"): the three engines agree it is a question.
 - Feature: a provider failure now says what happened. A wrong or expired API key (401) is `auth_failed`, a model or plan
   the provider refuses (403) stays `provider_refused` (its text no longer mentions the key), a rate limit (429) is
   `rate_limited` and a provider call that timed out on its own (client timeout, 408, 504) is `provider_timeout`; each has its own
