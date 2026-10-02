@@ -123,22 +123,23 @@ export function briefFromLadder(target, intent, ladder) {
   return brief
 }
 
-// Options of an enum step the engine does not flag as a conflict for this draft + other answers.
-// A conflicting choice is never offered, so neither the user nor the AI can pick it.
+// Options offered for an enum step. The deliverable step always lists every option: the engine's guess from
+// the draft can be wrong, and a choice that contradicts it is kept and noted by the engine (never hidden here).
+// The other enum steps do not offer an option the engine flags as a conflict for this draft + other answers.
 function acceptedValues(step, target, intent, ladder) {
   const engine = engineOf(target)
+  const options = engine.options[step.id] || []
+  if (step.id === 'deliverable') return options
   const base = briefFromLadder(target, intent, (ladder || []).filter(rung => rung.category !== step.id))
-  return (engine.options[step.id] || []).filter(value => {
+  return options.filter(value => {
     const conflicts = engine.analyze({ ...base, [step.id]: value }).conflicts?.[step.id] || []
     return !conflicts.includes(value)
   })
 }
 
-// Subagent recommendation: the engine's own (Opus: always 'auto'), else a team except for a single text or answer.
+// Subagent recommendation: every engine owns it (Opus, Sonnet and Astra: 'auto').
 function recommendSubagents(target, brief) {
-  const engine = engineOf(target)
-  if (typeof engine.recommend === 'function') return engine.recommend(brief)
-  return ['text', 'answer'].includes(engine.analyze(brief).deliverable) ? 'auto' : 'team'
+  return engineOf(target).recommend(brief)
 }
 
 function recommendedValue(step, target, brief, accepted) {
@@ -148,13 +149,9 @@ function recommendedValue(step, target, brief, accepted) {
 
 // An enum step is asked only when it offers a real choice: more than one accepted option besides
 // the default (for subagents, which has no fixed default, more than one accepted option).
-// The deliverable step is also skipped when the draft already names the deliverable (the engine flags
-// some options as conflicts): the remaining options are close variants of what the draft asks, so the
-// step could only confirm the detected value ("detected: …" is still shown if the step is reopened).
 function hasRealChoice(step, target, intent, ladder) {
   if (step.kind !== 'enum') return true
   const accepted = acceptedValues(step, target, intent, ladder)
-  if (step.id === 'deliverable' && accepted.length < (engineOf(target).options.deliverable || []).length) return false
   const fallback = engineOf(target).defaults[step.id]
   return (fallback == null ? accepted : accepted.filter(value => value !== fallback)).length > 1
 }

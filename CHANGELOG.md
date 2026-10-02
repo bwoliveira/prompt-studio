@@ -32,6 +32,11 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   re-ran them on every request, creating new thread pools each time, so the suggest (6), compose (3) and context (2)
   worker caps and the suggest/compose separation did not hold. A reload also skips the cached bytecode, so an edit
   of the same size within the same second runs the new code.
+- Fix: the "What do you want to get at the end?" step is now always asked and always lists all nine deliverables
+  for Opus, Sonnet and Astra. Before, a draft the engine had misread (for example "Como funciona o cron do Linux?"
+  as an executed workflow, or "Create a plan for the product launch" as an implementation) hid the right option,
+  so the guess could not be corrected. A choice that contradicts the draft's verb is kept: the prompt is built for
+  it and the notes mention the conflict.
 - New target: **Claude Sonnet 5.5** (Alt+T, or pick **Sonnet**), next to Opus and Astra. It has its own prompt engine,
   question help and AI writer rules from Anthropic's Sonnet 5.5 prompting guide, and is the default when the
   session's model is a Sonnet. Opus and Astra prompts do not change.

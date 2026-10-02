@@ -42,8 +42,8 @@ test('targets, default target, SKIPPED', () => {
 
 test('step order and conditions, both targets', () => {
   const pasted = q => (q.paste ? 'Some pasted mail' : q.recommended || SKIPPED)
-  assert.deepEqual(walk('opus', CODE, 'en', pasted).order, ['thirdPartyText', 'thirdPartySource', 'context', 'requirements', 'success', 'designAvoid', 'autonomy', 'subagents', 'format', 'length'])
-  assert.deepEqual(walk('astra', CODE, 'en', pasted).order, ['thirdPartyText', 'thirdPartySource', 'context', 'requirements', 'success', 'autonomy', 'subagents', 'format', 'length'], 'no design step on Astra')
+  assert.deepEqual(walk('opus', CODE, 'en', pasted).order, ['deliverable', 'thirdPartyText', 'thirdPartySource', 'context', 'requirements', 'success', 'designAvoid', 'autonomy', 'subagents', 'format', 'length'])
+  assert.deepEqual(walk('astra', CODE, 'en', pasted).order, ['deliverable', 'thirdPartyText', 'thirdPartySource', 'context', 'requirements', 'success', 'autonomy', 'subagents', 'format', 'length'], 'no design step on Astra')
   for (const target of ['opus', 'astra']) assert.equal(walk(target, VAGUE).order[0], 'deliverable', 'vague draft: deliverable asked first')
   const opusWrite = walk('opus', WRITE).order
   assert.ok(!opusWrite.includes('thirdPartySource'), 'no source step without a paste')
@@ -102,23 +102,67 @@ test('question object shape, locale text and detected deliverable', () => {
   assert.equal(nextQuestion('opus', CODE, walk('opus', CODE).ladder, 'en').done, true)
 })
 
-test('an enum step with no real choice is skipped', () => {
-  // A draft that names its deliverable (some options conflict) skips the step; a vague one asks it.
-  for (const target of ['opus', 'astra']) {
-    assert.ok(!walk(target, WRITE).order.includes('deliverable'), target)
-    assert.ok(!walk(target, CODE).order.includes('deliverable'), target)
+test('an enum step with no real choice is skipped; the deliverable step is always asked', () => {
+  // The deliverable is asked even when the draft names it, so a wrong guess can be corrected (#23).
+  for (const target of ['opus', 'astra', 'sonnet']) {
+    assert.equal(walk(target, WRITE).order[0], 'deliverable', target)
+    assert.equal(walk(target, CODE).order[0], 'deliverable', target)
   }
   // Opus on a writing draft: JSON conflicts, the other formats remain a real choice.
   assert.ok(walk('opus', WRITE).order.includes('format'))
   assert.equal(stepCount('opus', WRITE, []), walk('opus', WRITE).order.length)
 })
 
-test('options analyze() reports as a conflict are never offered', () => {
+// Drafts the engines read as the wrong deliverable ("Como funciona o cron do Linux?" -> workflow, "Create a plan
+// for the product launch" -> implementation): the user must still see every deliverable and be able to correct it.
+const CRON = 'Como funciona o cron do Linux?'
+const PLAN = 'Create a plan for the product launch'
+
+test('deliverable step lists every deliverable for every target, even for a misread draft', () => {
+  for (const target of ['opus', 'astra', 'sonnet']) {
+    for (const intent of [CRON, PLAN, CODE, WRITE, VAGUE]) {
+      for (const locale of ['en', 'pt']) {
+        const q = nextQuestion(target, intent, [], locale)
+        assert.equal(q.category, 'deliverable', `${target} ${intent}`)
+        const values = q.options.map(label => answerToValue('deliverable', label, target))
+        assert.deepEqual(values, ENGINES[target].options.deliverable, `${target} ${locale} ${intent}`)
+        assert.equal(new Set(q.options).size, 9)
+        assert.ok(q.options.includes(q.recommended), 'recommended is one of the options')
+        assert.deepEqual(questionFor(target, intent, [], 'deliverable', locale).options, q.options)
+      }
+    }
+  }
+})
+
+test('picking a deliverable that contradicts the draft keeps the choice and notes the conflict', () => {
+  // Opus and Sonnet read the cron question as a workflow and the plan draft as an implementation; Astra already
+  // reads the cron question as an answer. Whatever each engine guesses, a conflicting pick must reach the prompt.
+  assert.equal(OPUS.analyze({ goal: CRON }).deliverable, 'workflow')
+  assert.equal(OPUS.analyze({ goal: PLAN }).deliverable, 'implementation')
+  for (const target of ['opus', 'astra', 'sonnet']) {
+    const engine = ENGINES[target]
+    for (const intent of [CRON, PLAN]) {
+      const picked = ['answer', 'plan', 'text', 'implementation', 'workflow'].find(value => (engine.analyze({ goal: intent, deliverable: value }).conflicts.deliverable || []).includes(value))
+      assert.ok(picked, `${target}: some deliverable contradicts "${intent}"`)
+      const label = nextQuestion(target, intent, [], 'en').options.find(l => answerToValue('deliverable', l, target) === picked)
+      assert.ok(label, `${target}: ${picked} is offered`)
+      const ladder = [{ category: 'deliverable', question: 'q', answer: label }]
+      assert.equal(briefFromLadder(target, intent, ladder).deliverable, picked)
+      const chosen = studioPrompt(target, intent, ladder)
+      assert.equal(chosen.prompt, engine.build({ goal: intent, deliverable: picked }).prompt, `${target}: prompt built for ${picked}`)
+      assert.ok(chosen.notes.some(n => /deliverable/i.test(n) && /conflict|reads as|contradict/i.test(n)), `${target} ${picked}: ${chosen.notes.join(' | ')}`)
+      const detected = studioPrompt(target, intent, [])
+      assert.ok(!detected.notes.some(n => /deliverable/i.test(n)), `${target}: no conflict note for the detected value`)
+    }
+  }
+})
+
+test('options analyze() reports as a conflict are never offered, except for the deliverable', () => {
   const cases = [['opus', WRITE], ['opus', CODE], ['astra', CODE], ['astra', 'Revise este código antes do merge, pergunte antes de mudar algo, sem subagentes, em tabela']]
   for (const [target, intent] of cases) {
     const engine = ENGINES[target]
     const { ladder } = walk(target, intent)
-    for (const fieldId of ['deliverable', 'autonomy', 'subagents', 'format', 'length']) {
+    for (const fieldId of ['autonomy', 'subagents', 'format', 'length']) {
       const rest = ladder.filter(r => r.category !== fieldId)
       const q = questionFor(target, intent, rest, fieldId, 'en')
       const base = briefFromLadder(target, intent, rest)
