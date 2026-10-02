@@ -109,6 +109,17 @@ const TABLE = [
   ['Write a review summary for the team', 'text', 'summary heads the phrase'],
   ['Create a plan for Q3', 'plan', 'near miss: plan followed by a preposition'],
   ['Create a launch plan.', 'plan', 'near miss: plan followed by punctuation'],
+  // context before the writing verb does not name its object (Codex P2)
+  ['For our app, write a blog post announcing the release', 'text', 'app before the verb is context'],
+  ['Para o nosso app, escreva um post anunciando o lançamento', 'text', 'pt'],
+  ['Our API is ready. Write an email to the customers about it', 'text', 'code noun in an earlier sentence'],
+  ['Our app is slow. Write a script that profiles it', 'implementation', 'near miss: the script follows the verb'],
+  ['Using the app API, write a function that lists users', 'implementation', 'near miss: function after the verb'],
+  // a question closed by a period is still a question (Codex P2)
+  ['How to create an app.', 'answer', 'trailing period'],
+  ['Como criar um app.', 'answer', 'pt trailing period'],
+  ['Como instalar o Docker no servidor.', 'answer', 'pt long, trailing period'],
+  ['How do I write a script. ', 'answer', 'trailing period and space'],
 ]
 
 for (const [draft, expected, why] of TABLE) {

@@ -48,6 +48,8 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   and accepts Windows line endings. Marketing copy ("Write the copy for the landing page", "Redija a descrição do
   app") is text: the Studio asks for examples, not design patterns. "Write a review of the API" is a review, not
   code; "Write a plan summary" or "a strategy memo" is text, since the summary or memo is what is asked for.
+  Context before the verb does not name its object ("For our app, write a blog post" is text), and a question
+  closed by a period ("How to create an app.") stays an answer.
 - Fix: *Gere um e-mail*, *Monte uma mensagem* and the like stay text, reports and summaries are text even when they
   mention tests ("Write a summary of the test results", "Escreva um relatório dos testes"), and a question such as
   "Como instalar o Docker?" or "Como resumir um livro?" stays an answer on Opus, Sonnet and Astra.

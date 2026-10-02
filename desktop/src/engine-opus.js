@@ -219,8 +219,8 @@ const TEXT_ARTIFACT = /((?<!\b(?:and|then|also|e|depois|por|via|by)\s)\be-?mails
 const GENERATE_VERB = /^(gere|gerar|monte|montar)\b/
 // Languages: Portuguese (unaccented) + English.
 // A question: the draft opens with a question word and its first sentence is a question (or one phrase without
-// punctuation). The verbs inside it ("Como instalar o Docker?") are what is asked about, not an order.
-const QUESTION_FORM = /^(?:como|o que|qual|quais|por que|porque|quando|onde|quem|quanto|how|what|why|which|who|when|where)\b(?:[^.!?\n]*\?|[^.!?,\n]*$)/
+// punctuation, a plain period included). The verbs inside it ("Como instalar o Docker?") are what is asked about, not an order.
+const QUESTION_FORM = /^(?:como|o que|qual|quais|por que|porque|quando|onde|quem|quanto|how|what|why|which|who|when|where)\b(?:[^.!?\n]*\?|[^.!?,\n]*\.?\s*$)/
 // Languages: Portuguese (unaccented) + English.
 // "Analise a planilha" stays a data task: the analysis verb with a data file as its subject.
 const DATA_NOUN = /\b(planilhas?|csv|datasets?|spreadsheets?)\b/
@@ -256,11 +256,13 @@ function detect(b) {
   // "Write an e-mail about the new app": the artifact is text, whatever product words it mentions.
   // When both kinds are named, the first one decides ("Write a function that validates the description" is code).
   if (signal === 'text' && TEXT_ARTIFACT.test(text)) category = 'writing'
-  const codeAt = text.search(CODE_ARTIFACT)
-  const textAt = text.search(TEXT_ARTIFACT)
-  if ((signal === 'data' || signal === 'text') && MAKE_VERB.test(text) && codeAt >= 0 && (textAt < 0 || codeAt < textAt)) { signal = 'implementation'; category = 'code' }
+  // Only what follows the verb names its object: context before it ("For our app, write a blog post") does not.
+  const request = Number.isFinite(at) ? text.slice(at) : text
+  const codeAt = request.search(CODE_ARTIFACT)
+  const textAt = request.search(TEXT_ARTIFACT)
+  if ((signal === 'data' || signal === 'text') && MAKE_VERB.test(request) && codeAt >= 0 && (textAt < 0 || codeAt < textAt)) { signal = 'implementation'; category = 'code' }
   // "Gere um e-mail", "Monte uma mensagem": the verb does not say what is made, the first artifact named does.
-  if (signal === 'implementation' && GENERATE_VERB.test(text.slice(at)) && textAt >= 0 && (codeAt < 0 || textAt < codeAt)) { signal = 'text'; category = 'writing' }
+  if (signal === 'implementation' && GENERATE_VERB.test(request) && textAt >= 0 && (codeAt < 0 || textAt < codeAt)) { signal = 'text'; category = 'writing' }
   const goal = fold(b.goal).trim()
   // A question stays an answer, whatever verbs it contains; only an order is a task.
   if (QUESTION_FORM.test(goal)) signal = 'answer'
