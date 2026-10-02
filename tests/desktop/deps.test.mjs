@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 
 const repo = fileURLToPath(new URL('../../', import.meta.url))
 const pkg = JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8'))
-const REQUIRED = ['react', 'react-dom', 'jsdom', 'nanostores', '@nanostores/react', 'esbuild']
+const REQUIRED = ['react', 'react-dom', 'jsdom', 'nanostores', '@nanostores/react', 'esbuild', 'acorn']
 
 test('package.json pins every UI-test dependency to an exact version', () => {
   assert.equal(pkg.private, true, 'never published')

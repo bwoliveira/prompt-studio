@@ -16,6 +16,8 @@ node scripts/build.mjs            # inline desktop/src/* into desktop/plugin.js,
 node scripts/build.mjs --check    # fails if plugin.js, studio-core.mjs or the README shortcut table is out of date
 ```
 
+The build parses the sources with `acorn`, a pinned dev dependency, so run `npm ci` once before the first build.
+
 The keyboard table in `README.md` sits between the `shortcut-table` marker comments and is generated from the
 `SHORTCUTS` map and the `shortcuts.*` labels of `desktop/src/i18n-ui.js`. Never edit it by hand: change the map or the
 label and rebuild. The file that holds the map is named once, as `SHORTCUTS_SOURCE` in `scripts/build.mjs`.

@@ -11,6 +11,7 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { realpathSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
+import { Parser } from 'acorn'
 
 const url = path => new URL(`../${path}`, import.meta.url)
 const read = path => readFile(url(path), 'utf8')
@@ -20,215 +21,67 @@ const readIfPresent = path => read(path).catch(error => (error.code === 'ENOENT'
 const IMPORT_LINE = /^import\s[^\n]*\n/gm
 export const stripImports = source => source.replace(IMPORT_LINE, '')
 
+// JavaScript is read with acorn, a real parser: it knows from the grammar whether a `/` divides or opens a regular
+// expression, so strings, template literals, comments and regex literals are never guessed at (the hand-written reader
+// this replaced found a new misread context in every review round: ticket #52). Only syntax is read, so the parser is
+// lenient about what the syntax check of the generated module (assertValidModule) judges anyway: sources are read one
+// file at a time, so `export { name }` of a name the fragment does not declare, or exported twice, is accepted here.
+class SourceParser extends Parser {
+  checkLocalExport() {}
+  checkExport() {}
+}
+function parseSource(source, label) {
+  try {
+    return SourceParser.parse(source, { ecmaVersion: 'latest', sourceType: 'module' })
+  } catch (error) {
+    if (error instanceof SyntaxError) throw new Error(`${label ? `${label}: ` : ''}${error.message}`)
+    throw error
+  }
+}
+
 // `export const|let|var|function|class|async function` loses its keyword; `export default function|class` too;
 // `export { a, b }` (one or many lines) is dropped. Re-exports and `export default <expression>` cannot be inlined.
-// Only real statements count: text that looks like an export inside a string, template literal or comment is kept.
+// Only real top-level statements count: text that looks like an export inside a string, template literal or comment
+// is kept.
 export function stripExports(source) {
-  if (codeMatches(source, /^export\s*(?:\*|\{[^}]*\})\s*(?:as\s+[\w$]+\s*)?from\b/gm)) throw new Error('re-export (`export ... from`) cannot be inlined into the single-scope build')
-  const defaults = replaceInCode(source, /^export default (?=(?:async function|function|class)\b)/gm, '')
-  if (codeMatches(defaults, /^export\s+default\b/gm)) throw new Error('`export default` is only supported before a named function or class')
-  const lists = replaceInCode(defaults, /^export\s*\{[^}]*\}[ \t]*;?[ \t]*(?:\r?\n|$)/gm, '')
-  return replaceInCode(lists, /^export (?=(?:const|let|var|function|class|async function)\b)/gm, '')
-}
-
-// Spans walk() skips (strings, template literals, comments, regex literals), as sorted [start, end) pairs.
-function skippedSpans(source) {
-  const spans = []
-  walk(source, () => false, 0, (start, end) => spans.push([start, end]))
-  return spans
-}
-const inSpan = (spans, i) => spans.some(([start, end]) => start <= i && i < end)
-// pattern must be global: a match that starts inside a skipped span is not code.
-function codeMatches(source, pattern) {
-  const spans = skippedSpans(source)
-  for (const m of source.matchAll(pattern)) if (!inSpan(spans, m.index)) return true
-  return false
-}
-function replaceInCode(source, pattern, replacement) {
-  const spans = skippedSpans(source)
-  return source.replace(pattern, (match, ...rest) => {
-    const offset = rest.find(value => typeof value === 'number')
-    return inSpan(spans, offset) ? match : replacement
-  })
-}
-
-// Walk source code, skipping strings, template literals, comments and regex literals. visit(i, ch, depth, prev) sees
-// every other character with the ([{ nesting depth before it and the previous significant character; returning true
-// stops the walk. onSkip(start, end), when given, sees every skipped span (string, template, comment, regex). Returns
-// the index where it stopped.
-// A slash after one of these words opens a regex literal (`return /'/.test(s)`), not a division. The word is the
-// previous significant token, so a comment between them (`return /* note */ /'/`) changes nothing; after a dot it is
-// a property name (`a.in / 2`), not the keyword.
-const REGEX_KEYWORDS = new Set(['return', 'typeof', 'instanceof', 'in', 'of', 'new', 'delete', 'void', 'throw', 'case', 'do', 'else', 'yield', 'await'])
-// A slash right after the closing parenthesis of one of these conditions starts a statement: a regex (`if (s) /'/`).
-const CONTROL_WORDS = new Set(['if', 'while', 'for', 'with'])
-// `count++ / 2`: a `++` or `--` right after a value (a name, `)` or `]`) is postfix, so the slash after it divides.
-function postfixBefore(source, prev, prevAt) {
-  if ((prev !== '+' && prev !== '-') || prevAt < 1 || source[prevAt - 1] !== prev) return false
-  let k = prevAt - 2
-  while (k >= 0 && /\s/.test(source[k])) k--
-  return k >= 0 && /[\w$)\]]/.test(source[k])
-}
-function walk(source, visit, from = 0, onSkip = () => {}) {
-  const quoted = new Set(['"', "'", '`'])
-  let depth = 0
-  let prev = ''
-  let word = ''
-  let wordEnd = -1
-  let wordAfterDot = false
-  const parens = []
-  let afterControl = false
-  let prevAt = -1
-  let i = from
-  // A '…' or "…" string cannot cross a line break (JavaScript forbids it), so a quote misread inside a regex hides at
-  // most the rest of its own line, never the declarations after it.
-  const skipString = (start) => {
-    const quote = source[start]
-    let j = start + 1
-    while (j < source.length && source[j] !== quote) {
-      if (quote !== '`' && source[j] === '\n') return j
-      if (source[j] === '\\') j++
-      else if (quote === '`' && source[j] === '$' && source[j + 1] === '{') {
-        let nest = 1
-        j += 2
-        while (j < source.length && nest) {
-          if (quoted.has(source[j])) { j = skipString(j); continue }
-          if (source[j] === '{') nest++
-          else if (source[j] === '}') nest--
-          j++
-        }
-        continue
-      }
-      j++
+  const edits = []
+  for (const node of parseSource(source).body) {
+    if (node.type === 'ExportAllDeclaration' || (node.type === 'ExportNamedDeclaration' && node.source)) throw new Error('re-export (`export ... from`) cannot be inlined into the single-scope build')
+    if (node.type === 'ExportDefaultDeclaration') {
+      if (!(node.declaration.id && /^(?:Function|Class)Declaration$/.test(node.declaration.type))) throw new Error('`export default` is only supported before a named function or class')
+      edits.push([node.start, node.declaration.start, ''])
+    } else if (node.type === 'ExportNamedDeclaration' && node.declaration) {
+      edits.push([node.start, node.declaration.start, ''])
+    } else if (node.type === 'ExportNamedDeclaration') {
+      // An export list goes with the spaces after it and its line break, when nothing else follows on that line.
+      const tail = /^[ \t]*(?:\r?\n|$)/.exec(source.slice(node.end))
+      edits.push([node.start, node.end + (tail ? tail[0].length : 0), ''])
     }
-    return j + 1
   }
-  while (i < source.length) {
-    const ch = source[i]
-    if (ch === '/' && source[i + 1] === '/') { const start = i; while (i < source.length && source[i] !== '\n') i++; onSkip(start, i); continue }
-    if (ch === '/' && source[i + 1] === '*') { const start = i; const close = source.indexOf('*/', i + 2); i = close < 0 ? source.length : close + 2; onSkip(start, i); continue }
-    if (quoted.has(ch)) { const start = i; i = skipString(i); onSkip(start, i); prev = 'x'; word = ''; continue }
-    if (ch === '/' && !postfixBefore(source, prev, prevAt) && (prev === '' || '=(,:[!&|?{};+-*%<>~^'.includes(prev) || (!wordAfterDot && REGEX_KEYWORDS.has(word)) || (prev === ')' && afterControl))) {
-      let j = i + 1
-      let inClass = false
-      while (j < source.length && source[j] !== '\n' && (inClass || source[j] !== '/')) {
-        if (source[j] === '\\') j++
-        else if (source[j] === '[') inClass = true
-        else if (source[j] === ']') inClass = false
-        j++
-      }
-      onSkip(i, j + 1)
-      i = j + 1
-      prev = 'x'
-      word = ''
-      continue
-    }
-    if (visit(i, ch, depth, prev)) return i
-    if ('([{'.includes(ch)) depth++
-    else if (')]}'.includes(ch)) depth--
-    if (ch === '(') parens.push(!wordAfterDot && CONTROL_WORDS.has(word))
-    if (!/\s/.test(ch)) afterControl = ch === ')' && parens.pop() === true
-    if (/[\w$]/.test(ch)) {
-      if (wordEnd !== i - 1) { wordAfterDot = prev === '.'; word = '' }
-      word += ch
-      wordEnd = i
-    } else if (!/\s/.test(ch)) word = ''
-    if (!/\s/.test(ch)) { prev = ch; prevAt = i }
-    i++
-  }
-  return i
+  return edits.reduceRight((text, [start, end, replacement]) => text.slice(0, start) + replacement + text.slice(end), source)
 }
 
-// The source with comments blanked and each string, template literal or regex literal reduced to a lone `0`; line
-// breaks and offsets are kept. Name scanning then cannot be fooled by declaration-looking text inside them.
-function maskNonCode(source) {
-  // UTF-16 code units, the offsets walk() reports: code points would shift every mask after an emoji.
-  const chars = source.split('')
-  walk(source, () => false, 0, (start, end) => {
-    const isComment = source[start] === '/' && (source[start + 1] === '/' || source[start + 1] === '*')
-    for (let k = start; k < Math.min(end, chars.length); k++) if (chars[k] !== '\n') chars[k] = ' '
-    if (!isComment) chars[start] = '0'
-  })
-  return chars.join('')
+// The names a binding pattern declares: `a`, `{a, b: c, d = 1, ...e}`, `[p, , q = 2, ...r]`, nested.
+function bindingNames(pattern, out) {
+  if (!pattern) return
+  if (pattern.type === 'Identifier') out.add(pattern.name)
+  else if (pattern.type === 'ObjectPattern') for (const property of pattern.properties) bindingNames(property.type === 'RestElement' ? property.argument : property.value, out)
+  else if (pattern.type === 'ArrayPattern') for (const element of pattern.elements) bindingNames(element, out)
+  else if (pattern.type === 'AssignmentPattern') bindingNames(pattern.left, out)
+  else if (pattern.type === 'RestElement') bindingNames(pattern.argument, out)
 }
 
-// Split text at top-level (depth 0, outside strings and comments) occurrences of sep.
-function splitTop(text, sep) {
-  const parts = []
-  let last = 0
-  walk(text, (i, ch, depth) => {
-    if (depth === 0 && ch === sep) { parts.push(text.slice(last, i)); last = i + 1 }
-  })
-  parts.push(text.slice(last))
-  return parts
-}
-
-// Names bound by a declarator target: `a`, `{a, b: c, d = 1, ...e}`, `[p, , q = 2, ...r]`, nested.
-function bindingNames(target, out) {
-  const text = target.trim()
-  if (!text) return
-  if (text[0] === '{' || text[0] === '[') {
-    for (const element of splitTop(text.slice(1, -1), ',')) {
-      let item = element.trim()
-      if (item.startsWith('...')) item = item.slice(3)
-      else if (text[0] === '{') item = splitTop(item, ':').slice(1).join(':').trim() || item
-      bindingNames(splitTop(item, '=')[0], out)
-    }
-  } else if (/^[A-Za-z_$][\w$]*$/.test(text)) {
-    out.add(text)
-  }
-}
-
-// Does the declaration continue on the next line? It does after an operator or comma, and before a leading operator.
-function continuesAfterNewline(source, at, prev) {
-  if (prev && ',=+-*/%&|^?:<>!~'.includes(prev)) return true
-  let j = at
-  for (;;) {
-    while (j < source.length && /\s/.test(source[j])) j++
-    if (source[j] === '/' && source[j + 1] === '/') { while (j < source.length && source[j] !== '\n') j++ }
-    else if (source[j] === '/' && source[j + 1] === '*') { const close = source.indexOf('*/', j + 2); j = close < 0 ? source.length : close + 2 }
-    else break
-  }
-  return j < source.length && ',.?:&|*%^<>=+-'.includes(source[j])
-}
-
-// Names declared by one const/let/var statement starting right after the keyword: every comma-separated declarator.
-function declaredNames(source, from, out) {
-  const declarators = []
-  let last = from
-  const stop = walk(source, (i, ch, depth, prev) => {
-    if (depth !== 0) return false
-    if (ch === ',') { declarators.push(source.slice(last, i)); last = i + 1 }
-    else if (ch === ';') return true
-    else if (ch === '\n' && !continuesAfterNewline(source, i, prev)) return true
-    return false
-  }, from)
-  declarators.push(source.slice(last, stop))
-  for (const declarator of declarators) {
-    const [binding] = splitTop(declarator, '=')
-    bindingNames(binding, out)
-  }
-}
-
-// Top-level declared names (column 0), to prove the inlined code cannot collide with plugin.js.
-export function topLevelNames(code) {
-  const source = maskNonCode(code)
+// Top-level declared names, to prove the inlined code cannot collide with plugin.js.
+export function topLevelNames(code, label) {
   const names = new Set()
-  for (const m of source.matchAll(/^(?:export\s+)?(?:class|function\s*\*?|async\s+function\s*\*?)\s*([A-Za-z_$][\w$]*)/gm)) names.add(m[1])
-  for (const m of source.matchAll(/^(?:export\s+)?(?:const|let|var)\s+/gm)) declaredNames(source, m.index + m[0].length, names)
-  for (const m of source.matchAll(/^import\s*\{([^}]*)\}/gm)) {
-    for (const part of m[1].split(',')) {
-      const name = part.trim().split(/\s+as\s+/).pop()
-      if (name) names.add(name)
-    }
+  const declared = node => {
+    if (node.type === 'VariableDeclaration') for (const declarator of node.declarations) bindingNames(declarator.id, names)
+    else if (node.type === 'FunctionDeclaration' || node.type === 'ClassDeclaration') bindingNames(node.id, names)
   }
-  for (const m of source.matchAll(/^import\s+([A-Za-z_$][\w$]*)\s*(?:,|from\b)/gm)) names.add(m[1])
-  for (const m of source.matchAll(/^import\s+(?:[A-Za-z_$][\w$]*\s*,\s*)?\*\s+as\s+([A-Za-z_$][\w$]*)/gm)) names.add(m[1])
-  for (const m of source.matchAll(/^import\s+[A-Za-z_$][\w$]*\s*,\s*\{([^}]*)\}/gm)) {
-    for (const part of m[1].split(',')) {
-      const name = part.trim().split(/\s+as\s+/).pop()
-      if (name) names.add(name)
-    }
+  for (const node of parseSource(code, label).body) {
+    if (node.type === 'ImportDeclaration') for (const specifier of node.specifiers) names.add(specifier.local.name)
+    else if (node.type === 'ExportNamedDeclaration' || node.type === 'ExportDefaultDeclaration') declared(node.declaration ?? {})
+    else declared(node)
   }
   return names
 }
@@ -238,7 +91,7 @@ export function topLevelNames(code) {
 export function findCollisions(entries) {
   const seen = new Map()
   for (const [label, source] of entries) {
-    for (const name of topLevelNames(source)) {
+    for (const name of topLevelNames(source, label)) {
       if (seen.has(name)) throw new Error(`name collision: ${name} declared by both ${seen.get(name)} and ${label}`)
       seen.set(name, label)
     }
@@ -309,12 +162,11 @@ const PC_NAMES = { alt: 'Alt', shift: 'Shift', ctrl: 'Ctrl', mod: 'Ctrl' }
 // The SHORTCUTS map and the Desktop binding that opens the studio, read from the source of SHORTCUTS_SOURCE.
 // The map is an object literal that uses only TARGETS (the target registry), so it is evaluated with that.
 export function readShortcutMap(source, targets) {
-  const head = /^export const SHORTCUTS = (?=\{)/m.exec(source)
-  if (!head) throw new Error(`no \`export const SHORTCUTS = {\` map in ${SHORTCUTS_SOURCE}`)
-  const open = head.index + head[0].length
-  const close = walk(source, (i, ch, depth) => ch === '}' && depth === 1, open)
-  if (close >= source.length) throw new Error(`the SHORTCUTS map in ${SHORTCUTS_SOURCE} is not closed`)
-  const shortcuts = new Function('TARGETS', `return (${source.slice(open, close + 1)})`)(targets)
+  const declaration = parseSource(source, SHORTCUTS_SOURCE).body.find(node => node.type === 'ExportNamedDeclaration' && node.declaration?.type === 'VariableDeclaration' && node.declaration.kind === 'const'
+    && node.declaration.declarations.some(declarator => declarator.id.name === 'SHORTCUTS' && declarator.init?.type === 'ObjectExpression'))
+  if (!declaration) throw new Error(`no \`export const SHORTCUTS = {\` map in ${SHORTCUTS_SOURCE}`)
+  const map = declaration.declaration.declarations.find(declarator => declarator.id.name === 'SHORTCUTS').init
+  const shortcuts = new Function('TARGETS', `return (${source.slice(map.start, map.end)})`)(targets)
   const binding = /^const OPEN_BINDING = '([^']+)'/m.exec(source)
   if (!binding) throw new Error(`no \`const OPEN_BINDING = '...'\` in ${SHORTCUTS_SOURCE}`)
   return { shortcuts, openBinding: binding[1] }

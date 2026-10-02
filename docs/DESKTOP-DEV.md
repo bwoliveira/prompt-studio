@@ -33,7 +33,9 @@ node scripts/build.mjs --check  # exit 1 if plugin.js, studio-core.mjs or the RE
 
 The same build writes the keyboard table of `README.md` between its `shortcut-table` marker comments, from the `SHORTCUTS`
 map (named once, as `SHORTCUTS_SOURCE` in `scripts/build.mjs`) and the `shortcuts.*` labels of `i18n-ui.js`. Never edit that
-table by hand. Why the build is a concatenation with isolated engine scopes: `docs/adr/0005-concatenation-build-with-isolated-engine-scopes.md`.
+table by hand. The build reads the sources with `acorn` (a pinned dev dependency: run `npm ci` once before the first build),
+so export stripping and the name-collision check work on the parsed program, never on a guess about strings, regexes or
+template literals. Why the build is a concatenation with isolated engine scopes: `docs/adr/0005-concatenation-build-with-isolated-engine-scopes.md`.
 
 ## Tests and validation
 

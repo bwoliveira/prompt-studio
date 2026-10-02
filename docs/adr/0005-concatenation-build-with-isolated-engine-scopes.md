@@ -26,8 +26,11 @@ translation bundles and the UI. The engines are written in the same shape, so th
 
 ## Consequences
 
-- No build dependency beyond Node; the generated file is reviewable and CI checks that it is current.
-- The build script carries its own export-stripping and name-collision logic, which has its own tests.
+- The build needs one dev dependency, `acorn` (pinned in `package.json`, installed by `npm ci`; only developers and CI run the
+  build, the installer never does). It reads the sources as a real parser, so a `/` is never guessed to be a division or
+  a regex: the hand-written reader the build used first misread a new context in every review round (ticket #52). The
+  generated file is reviewable and CI checks that it is current.
+- The build script carries its own export-stripping and name-collision logic, on top of the parse, which has its own tests.
 - Engines share no code through imports except the detection core above, so a recognition fix lands once; any other
   shared logic has to live in the one scope or be copied under a parity test.
 
