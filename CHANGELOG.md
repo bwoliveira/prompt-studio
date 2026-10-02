@@ -96,7 +96,8 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   flaws in the API." and "Revisão e auditoria da API antes de configurar nginx". "Can you recommend a design and build
   a React dashboard?" is the build and "Can you explain cron and then review it?" is the review, while "Can you explain
   why we first configure nginx and then build the app?" stays a question. "I need a script. Write it in Python" and
-  "Write a script for video processing in Python" are code.
+  "Write a script for video processing in Python" are code, as is "I need a React app. Write it in TypeScript with
+  documentation."; "Tell me how to configure nginx!" stays a question.
 - Fix: *Gere um e-mail*, *Monte uma mensagem* and the like stay text, reports and summaries are text even when they
   mention tests ("Write a summary of the test results", "Escreva um relatório dos testes"), and a question such as
   "Como instalar o Docker?" or "Como resumir um livro?" stays an answer on Opus, Sonnet and Astra.
