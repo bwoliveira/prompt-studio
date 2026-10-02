@@ -22,6 +22,13 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
   through CSS (`display:none`, `visibility:hidden`) does not block the keys. The key listener now reads which dialogs,
   menus and listboxes are open (ARIA roles and visibility; it changes nothing in the app's DOM); README and
   DESKTOP-DEV say so.
+- New: `scripts/push-desktop.sh user@app-machine` copies `desktop/plugin.js` to the app machine's
+  `desktop-plugins/prompt-studio/plugin.js` over one `ssh` call, for a Hermes backend that runs on another machine
+  (`--dir` for another desktop-plugins folder, `--dry-run` to see the plan). README and `install.sh` now say the same,
+  checked against Hermes Desktop's sources: Desktop copies the desktop half only from the plugins folder of the
+  Hermes home on the machine where the app runs and never fetches it from a remote backend. The old wording
+  ("Desktop copies the desktop half out") held only when app and backend share a machine; the installer's final
+  message and the README remote section now give the push step and the per-OS `desktop-plugins` folder.
 - Fix: a reply with no answer text and JSON only inside the model's thinking no longer becomes the suggestion; it is
   treated as an empty reply (retried once, unless it ended on the token limit). On choice steps an AI value that is
   not exactly one of the options (for example "Not applicable here" with options Yes/No) is now reported as an

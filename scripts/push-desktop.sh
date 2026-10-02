@@ -15,6 +15,7 @@ set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 SOURCE="$(cd "$SCRIPT_DIR/.." && pwd -P)/desktop/plugin.js"
+# shellcheck disable=SC2088  # a literal ~ on purpose: it is expanded on the remote side
 DEFAULT_DIR='~/.hermes/desktop-plugins'
 DIR="$DEFAULT_DIR"
 HOST=""
@@ -59,6 +60,7 @@ if [[ "$HOST" == -* || "$HOST" =~ [[:space:]] ]]; then
   usage_die "Invalid HOST '$HOST': use user@machine or an ssh config alias, with no spaces and no leading '-'"
 fi
 DIR="${DIR%/}"
+# shellcheck disable=SC2088  # literal ~ is what the user types
 if [[ "$DIR" != "~" && "$DIR" != "~/"* && "$DIR" != /* ]]; then
   usage_die "--dir must be an absolute path or start with ~/ (got '$DIR')"
 fi
@@ -66,6 +68,7 @@ fi
 
 TARGET="$DIR/prompt-studio/plugin.js"
 
+# shellcheck disable=SC2088  # literal ~ is what the user types
 if [[ "$DIR" == "~" || "$DIR" == "~/"* ]]; then
   REMOTE_DIR="\"\$HOME\"$(shq "${DIR#\~}/prompt-studio")"
 else
