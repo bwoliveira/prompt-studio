@@ -1,6 +1,7 @@
 """Contract of dashboard/hermes_host.py against the REAL Hermes install (#31).
 
-Skipped when Hermes is not importable (CI, a laptop without Hermes). The signatures the plugin relies on are:
+Skipped only when Hermes is not installed (no ``agent`` / ``hermes_cli`` package: CI, a laptop without Hermes); an
+installed Hermes whose module fails to import FAILS here. The signatures the plugin relies on are:
 auxiliary ``call_llm`` keywords, the 5-tuple of ``_resolve_task_provider_model``, ``redact_sensitive_text(force=)``,
 ``parse_reasoning_effort``, the core session helper ``_open_session_db_for_profile(profile, read_only=)`` and the
 ``SessionDB`` methods the reader calls. A Hermes update that changes one fails here (and answers
@@ -24,6 +25,7 @@ messages into its throwaway store: ``SessionDB.append_message`` triggers that re
 """
 from __future__ import annotations
 
+import importlib
 import inspect
 import sys
 from pathlib import Path
@@ -33,14 +35,17 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "dashboard"))
 import hermes_host as host  # noqa: E402
 
-try:
-    import agent.auxiliary_client  # noqa: F401
-    import agent.redact  # noqa: F401
-    import hermes_cli.web_server_sessions  # noqa: F401
-    import hermes_constants  # noqa: F401
-    import hermes_state
-except Exception as exc:  # noqa: BLE001 - any failure to import means "no usable Hermes here"
-    pytest.skip(f"Hermes is not importable here ({type(exc).__name__}: {exc})", allow_module_level=True)
+# Only "no Hermes at all" skips. Hermes installed but a module the plugin uses failing to import is the breakage
+# this file exists to catch: it fails (test_every_module_the_plugin_imports_loads), it is never a skip.
+if not host.installed():
+    pytest.skip("Hermes is not installed here (no agent / hermes_cli package)", allow_module_level=True)
+
+_MODULES = ("agent.auxiliary_client", "agent.redact", "hermes_cli.web_server_sessions", "hermes_constants", "hermes_state")
+
+
+def test_every_module_the_plugin_imports_loads():
+    for name in _MODULES:
+        importlib.import_module(name)
 
 
 def test_verify_passes_and_every_capability_is_present():
@@ -90,6 +95,8 @@ def test_the_core_session_helper_takes_the_profile_and_read_only():
 def test_session_store_reads_a_real_database_through_the_reader(tmp_path):
     """A throwaway SessionDB in tmp_path (never the user's state.db), read back through the plugin's reader."""
     import importlib.util
+
+    import hermes_state
 
     db_path = tmp_path / "state.db"
     writer = hermes_state.SessionDB(db_path=db_path)

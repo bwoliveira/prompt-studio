@@ -3,9 +3,11 @@
 Every Hermes-internal symbol the plugin uses (the auxiliary client, the redactor, the reasoning-effort parser, the
 session store) is imported here, at call time, and its signature is checked right before the call. When a Hermes
 update changed one of them, the call raises ``HostIncompatible`` (stable code ``host_incompatible``) with a message
-naming the symbol, instead of a ``TypeError`` or a wrong answer somewhere deep in a request. When Hermes cannot be
-imported at all (tests, a standalone checkout) the call raises ``HostUnavailable``, an ``ImportError``: callers keep
-their offline fallbacks for that case only.
+naming the symbol, instead of a ``TypeError`` or a wrong answer somewhere deep in a request. When Hermes is not
+installed at all (the top-level packages ``agent`` and ``hermes_cli`` are not importable: tests, a standalone checkout)
+the call raises ``HostUnavailable``, an ``ImportError``: callers keep their offline fallbacks for that case only. A
+module that fails to import while Hermes IS installed (moved, removed, a dependency gone, an ``ImportError`` inside it)
+is a changed Hermes: ``HostIncompatible``.
 
 Nothing imports Hermes at module load, so the module loads without it, and a test that swaps ``sys.modules`` entries
 is picked up on the next call. ``tests/test_hermes_host_enforcement.py`` fails when any other file under ``dashboard/``
@@ -14,7 +16,9 @@ imports Hermes; ``tests/test_hermes_host_contract.py`` checks all of this agains
 from __future__ import annotations
 
 import importlib
+import importlib.util
 import inspect
+import sys
 from typing import Any
 
 CODE = "host_incompatible"
@@ -45,11 +49,32 @@ class HostUnavailable(ImportError):
     """Hermes (or the part of it asked for) cannot be imported here."""
 
 
+_ROOTS = ("agent", "hermes_cli")  # a Hermes install has at least one of these top-level packages
+
+
+def _importable(top_level: str) -> bool:
+    """The top-level module can be found (without importing it)."""
+    if top_level in sys.modules:
+        return sys.modules[top_level] is not None  # ``None`` is how a test (or an import hook) blocks a module
+    try:
+        return importlib.util.find_spec(top_level) is not None
+    except Exception:  # noqa: BLE001 - a broken finder still means something is there
+        return True
+
+
+def installed(*extra_top_level: str) -> bool:
+    """Hermes is installed here: ``agent`` or ``hermes_cli`` (or one of ``extra_top_level``) can be found."""
+    return any(_importable(name) for name in (*_ROOTS, *extra_top_level))
+
+
 def _module(name: str) -> Any:
     try:
         return importlib.import_module(name)
     except ImportError as exc:
-        raise HostUnavailable(f"{name} is not importable: {exc}") from exc
+        if not installed(name.partition(".")[0]):
+            raise HostUnavailable(f"{name} is not importable: {exc}") from exc
+        # Hermes is installed but this module (or something it imports) is not there: Hermes changed under us
+        raise HostIncompatible(f"{name} failed to import ({type(exc).__name__}: {exc})") from exc
     except Exception as exc:  # the module is there but no longer loads: Hermes changed under us
         raise HostIncompatible(f"{name} failed to import ({type(exc).__name__})") from exc
 
@@ -225,7 +250,7 @@ def verify(task: str = "prompt_studio") -> dict[str, str]:
     """Check every signature the plugin relies on, plus the shape of the task resolution (a config read).
     Never calls a provider and never opens a database.
 
-    Returns ``{capability: "ok" | "absent"}`` (``absent``: that part of Hermes is not importable here) and raises
+    Returns ``{capability: "ok" | "absent"}`` (``absent``: Hermes is not installed here) and raises
     ``HostIncompatible`` for the first one that changed.
     """
     status: dict[str, str] = {}

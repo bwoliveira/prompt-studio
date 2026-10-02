@@ -87,3 +87,26 @@ def test_health_stays_ok_on_a_compatible_host(monkeypatch):
     body = TestClient(app).get("/health").json()
     plugin_api._MODULES.clear()
     assert body == {"ok": True, "model": "p/m"}
+
+
+def test_context_answers_host_incompatible_when_the_redactor_module_is_gone_not_the_local_fallback(monkeypatch):
+    _fake_hermes(monkeypatch)
+    monkeypatch.setitem(sys.modules, "agent.redact", None)
+    sc = _context()
+    called = []
+    out = sc.context({"session_id": "s1"}, llm=lambda **kw: called.append(1) or ('{"summary": "x"}', "m"), opener=lambda p: _Db())
+    assert out["ok"] is False and out["code"] == "host_incompatible" and not called
+
+
+def test_health_reports_host_incompatible_when_an_installed_hermes_lost_a_module(monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    _fake_hermes(monkeypatch)
+    monkeypatch.setitem(sys.modules, "agent.auxiliary_client", None)
+    plugin_api._MODULES.clear()
+    app = FastAPI()
+    app.include_router(plugin_api.router)
+    body = TestClient(app).get("/health").json()
+    plugin_api._MODULES.clear()
+    assert body["ok"] is False and body["code"] == "host_incompatible"

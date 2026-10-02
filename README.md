@@ -367,7 +367,7 @@ python3 scripts/docs_sources.py check --docs-dir <snapshot dir>   # every doc qu
 ```
 
 - `tests/test_hermes_host_contract.py` checks the Hermes signatures the backend relies on against the installed
-  Hermes and is skipped where Hermes is not importable; its docstring has the command that runs it with Hermes' own
+  Hermes and is skipped only where Hermes is not installed (an installed Hermes whose module fails to import fails it); its docstring has the command that runs it with Hermes' own
   interpreter. After a Hermes update, run it: a failure there is what `host_incompatible` reports to users.
 - The UI flow tests (`tests/desktop/studio-flow.test.mjs`) need react, react-dom, jsdom, nanostores,
   @nanostores/react and esbuild. They are taken from `PROMPT_STUDIO_NODE_MODULES`, the repo's `node_modules`

@@ -182,9 +182,12 @@ signature it is about to use, so a Hermes update fails in one place with a stabl
 | `hermes_cli.web_server_sessions._open_session_db_for_profile(profile, read_only=True)` (else `hermes_state.SessionDB(read_only=True)` for the default profile) and the store methods `resolve_session_id`, `resolve_resume_session_id` (optional), `get_messages(session_id, limit=, latest=)`, `close` | when a store is opened |
 
 A symbol that is gone, a keyword that is no longer accepted, a new required argument, a resolution of another length or
-a Hermes module that fails to import all raise `HostIncompatible` (`code: "host_incompatible"`): /suggest and /compose
+a Hermes module that fails to import while Hermes is installed (moved or removed, a missing dependency, an
+`ImportError` inside it) all raise `HostIncompatible` (`code: "host_incompatible"`): /suggest and /compose
 answer `code: host_incompatible` (HTTP 200, `ok: false`), /context answers the same code, /health reports it. Hermes
-not being importable at all is a different case (`HostUnavailable`, an `ImportError`): the model routes answer
+not being installed at all (neither the `agent` nor the `hermes_cli` package can be found) is a different case
+(`HostUnavailable`, an `ImportError`): the model routes answer
 `unavailable` as before and the session reader keeps its local redaction fallback. `host.verify()` runs every check
 without calling a provider or opening a database; `tests/test_hermes_host_contract.py` runs it against the installed
-Hermes (skipped when Hermes is not importable; the docstring has the command).
+Hermes (skipped only when Hermes is not installed; an installed Hermes that fails to import fails it; the docstring has
+the command).

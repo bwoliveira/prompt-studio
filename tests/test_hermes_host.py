@@ -195,6 +195,74 @@ def test_an_import_that_crashes_is_host_incompatible(monkeypatch, tmp_path):
         host.redact_sensitive_text("x")
 
 
+# --- R4: no Hermes at all is not the same as an installed Hermes that fails to import -----------------------------
+def test_installed_is_false_without_hermes_and_true_with_it(monkeypatch):
+    _hermes_absent(monkeypatch)
+    assert host.installed() is False
+    _fake_hermes(monkeypatch)
+    assert host.installed() is True
+
+
+@pytest.mark.parametrize("module, call", [
+    ("agent.auxiliary_client", lambda: host.resolve_route("t")),
+    ("agent.redact", lambda: host.redact_sensitive_text("x")),
+    ("hermes_constants", lambda: host.parse_reasoning_effort("low")),
+])
+def test_a_module_removed_from_an_installed_hermes_is_host_incompatible_not_unavailable(monkeypatch, module, call):
+    _fake_hermes(monkeypatch)
+    monkeypatch.setitem(sys.modules, module, None)  # agent / hermes_cli are still there: the module is gone
+    with pytest.raises(host.HostIncompatible, match=module):
+        call()
+
+
+@pytest.mark.parametrize("module, capability", [
+    ("agent.auxiliary_client", "auxiliary_client"),
+    ("agent.redact", "redact"),
+    ("hermes_constants", "reasoning_effort"),
+    ("hermes_state", "session_store"),
+    ("hermes_cli.web_server_sessions", "session_store"),
+])
+def test_verify_raises_host_incompatible_when_an_installed_hermes_lost_a_module(monkeypatch, module, capability):
+    _fake_hermes(monkeypatch)
+    monkeypatch.setitem(sys.modules, module, None)
+    with pytest.raises(host.HostIncompatible, match=module):
+        host.verify()
+
+
+def test_a_dependency_missing_inside_an_installed_hermes_module_is_host_incompatible(monkeypatch, tmp_path):
+    package = tmp_path / "agent"
+    package.mkdir()
+    (package / "__init__.py").write_text("")
+    (package / "redact.py").write_text("import prompt_studio_test_dependency_that_does_not_exist\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    for name in ("agent", "agent.redact"):
+        monkeypatch.setitem(sys.modules, name, types.ModuleType(name))
+        del sys.modules[name]
+    with pytest.raises(host.HostIncompatible, match="agent.redact"):
+        host.redact_sensitive_text("x")
+
+
+def test_a_nested_import_error_raised_by_an_installed_module_is_host_incompatible(monkeypatch, tmp_path):
+    package = tmp_path / "agent"
+    package.mkdir()
+    (package / "__init__.py").write_text("")
+    (package / "redact.py").write_text("from agent import nothing_here_either\n")  # ImportError, not ModuleNotFoundError
+    monkeypatch.syspath_prepend(str(tmp_path))
+    for name in ("agent", "agent.redact"):
+        monkeypatch.setitem(sys.modules, name, types.ModuleType(name))
+        del sys.modules[name]
+    with pytest.raises(host.HostIncompatible, match="agent.redact"):
+        host.redact_sensitive_text("x")
+
+
+def test_without_the_session_helper_module_an_installed_hermes_is_host_incompatible_not_a_fallback(monkeypatch):
+    calls = _fake_hermes(monkeypatch)
+    monkeypatch.setitem(sys.modules, "hermes_cli.web_server_sessions", None)
+    with pytest.raises(host.HostIncompatible, match="web_server_sessions"):
+        host.open_session_store("")
+    assert calls["opened"] == []
+
+
 # --- the session store ----------------------------------------------------------------------------------------------
 def test_the_store_opens_read_only_through_the_core_helper(monkeypatch):
     calls = _fake_hermes(monkeypatch)
@@ -206,9 +274,9 @@ def test_the_store_opens_read_only_through_the_core_helper(monkeypatch):
 
 
 def test_without_the_core_helper_the_default_profile_opens_the_state_db_read_only(monkeypatch):
-    monkeypatch.setitem(sys.modules, "hermes_cli.web_server_sessions", None)
     calls = _fake_hermes(monkeypatch)
-    monkeypatch.setitem(sys.modules, "hermes_cli.web_server_sessions", None)
+    for name in ("agent", "hermes_cli", "hermes_cli.web_server_sessions"):  # only hermes_state is importable
+        monkeypatch.setitem(sys.modules, name, None)
     host.open_session_store("")
     host.open_session_store("default")
     assert calls["opened"] == [("SessionDB", True), ("SessionDB", True)]
