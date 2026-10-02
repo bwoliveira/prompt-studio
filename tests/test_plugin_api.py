@@ -299,3 +299,52 @@ def test_new_request_models_are_bounded():
 
 def test_real_loader_finds_the_context_reader():
     assert hasattr(plugin_api._load("session_context", "context"), "context")
+
+
+# ---- #25: over-limit text is reported, not cut silently (real engine, stub model) ----
+def engine_client(monkeypatch, reply):
+    import json
+
+    spec = importlib.util.spec_from_file_location("suggest_engine_api_test", Path(plugin_api.__file__).with_name("suggest_engine.py"))
+    engine = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(engine)
+    calls = []
+
+    def llm(messages, max_tokens, timeout, is_json=False):
+        calls.append(messages)
+        return json.dumps(reply), "stub/model"
+
+    class Bound:
+        suggest = staticmethod(lambda payload: engine.suggest(payload, llm=llm))
+        compose = staticmethod(lambda payload: engine.compose(payload, llm=llm))
+
+    monkeypatch.setattr(plugin_api, "_load", lambda name, attr: Bound if name == "suggest_engine" else FakeEngine())
+    app = FastAPI()
+    app.include_router(plugin_api.router)
+    return TestClient(app), calls, engine
+
+
+TEXT_FIELD = {"id": "context", "kind": "text", "question": "Contexto?"}
+
+
+def test_suggest_improve_over_the_model_limit_returns_too_long_over_http(monkeypatch):
+    api, calls, engine = engine_client(monkeypatch, {"value": "- Casa", "reason": "ok"})
+    body = {"intent": "Crie um app", "field": TEXT_FIELD, "mode": "improve", "answer": "x" * (engine.TEXT_LIMIT + 1)}
+    response = api.post("/suggest", json=body)
+    assert response.status_code == 200
+    assert response.json()["ok"] is False and response.json()["code"] == "too_long"
+    assert response.json()["limit"] == engine.TEXT_LIMIT
+    assert calls == []
+    ok = api.post("/suggest", json={**body, "answer": "x" * engine.TEXT_LIMIT}).json()
+    assert ok["ok"] is True and "truncated" not in ok
+
+
+def test_routes_carry_truncated_when_the_engine_cut_the_text(monkeypatch):
+    api, calls, engine = engine_client(monkeypatch, {"value": "Equilibrada", "reason": "ok", "prompt": "Improved prompt text long enough to pass.", "notes": ""})
+    suggest = {"intent": "d" * (engine.INTENT_LIMIT + 1), "field": FIELD}
+    assert api.post("/suggest", json=suggest).json()["truncated"] is True
+    assert "truncated" not in api.post("/suggest", json={**suggest, "intent": "d" * engine.INTENT_LIMIT}).json()
+    compose = {"intent": "Crie um app", "baseline": "b" * (engine.COMPOSE_LIMIT + 1)}
+    assert api.post("/compose", json=compose).json()["truncated"] is True
+    compose["baseline"] = "b" * engine.COMPOSE_LIMIT
+    assert "truncated" not in api.post("/compose", json=compose).json()

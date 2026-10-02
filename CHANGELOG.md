@@ -22,6 +22,11 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   redactor as the transcript before it is returned (and so before it reaches the suggestions). Answers and field texts
   placed on single lines of the suggestion prompt have their line breaks collapsed, so an answer cannot pose as a new
   section such as `Field to fill:`.
+- Fix: **Improve my text** no longer sends only the first 1,200 characters of a longer answer to the AI and then
+  replaces your text with a rewrite of that fragment. An answer over the limit now shows "Your text is too long to
+  improve" (backend `code: too_long`, en/pt). Any other cut the backend makes to your text (a draft over 6,000
+  characters, an answer over 3,000, an earlier answer or default text over 600, a baseline over 30,000, or a model
+  reply cut to its limit) is reported with `truncated: true` in the /suggest and /compose response, and `docs/CONTRACT.md` lists the effective limit of each field.
 - New target: **Claude Sonnet 5.5** (Alt+T, or pick **Sonnet**), next to Opus and Astra. It has its own prompt engine,
   question help and AI writer rules from Anthropic's Sonnet 5.5 prompting guide, and is the default when the
   session's model is a Sonnet. Opus and Astra prompts do not change.

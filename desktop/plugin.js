@@ -1698,6 +1698,7 @@ const UI_MESSAGES = {
       failed: 'Could not reach the AI right now.',
       tooSlow: 'The AI took too long.',
       noAnswer: 'The model did not answer.',
+      tooLong: 'Your text is too long to improve.',
       retry: 'Try again',
       agrees: value => `✨ The AI agrees with the recommended choice: ${value}`,
       theDefault: 'the recommended choice',
@@ -1772,6 +1773,7 @@ const UI_MESSAGES = {
       empty_reply: 'The model returned an empty reply; a provider filter may have blocked it.',
       bad_request: 'The request was incomplete.',
       nothing_to_improve: 'There is no text of yours to improve here.',
+      too_long: 'Your text is longer than the AI can improve at once (1,200 characters). Shorten it and try again.',
       invalid_prompt: 'The model reply was not a usable prompt.',
       no_session: 'This session was not found.',
       empty_session: 'This session has no conversation yet.',
@@ -1912,6 +1914,7 @@ const UI_MESSAGES = {
       failed: 'Não foi possível usar a IA agora.',
       tooSlow: 'A IA demorou demais.',
       noAnswer: 'O modelo não respondeu.',
+      tooLong: 'Seu texto é longo demais para melhorar.',
       retry: 'Tentar de novo',
       agrees: value => `✨ A IA concorda com o recomendado: ${value}`,
       theDefault: 'o recomendado',
@@ -1986,6 +1989,7 @@ const UI_MESSAGES = {
       empty_reply: 'O modelo devolveu uma resposta vazia; um filtro do provedor pode tê-la barrado.',
       bad_request: 'O pedido estava incompleto.',
       nothing_to_improve: 'Não há texto seu para melhorar aqui.',
+      too_long: 'Seu texto é maior do que a IA consegue melhorar de uma vez (1.200 caracteres). Encurte-o e tente de novo.',
       invalid_prompt: 'A resposta do modelo não era um prompt utilizável.',
       no_session: 'Esta sessão não foi encontrada.',
       empty_session: 'Esta sessão ainda não tem conversa.',
@@ -2988,7 +2992,7 @@ async function requestSuggestion(mode = 'suggest') {
     }), SUGGEST_CLIENT_TIMEOUT_MS)
     next = response?.ok
       ? { key, mode, status: 'ready', value: response.value || '', reason: response.reason || '', agrees: response.agrees, model: response.model || '', latency: response.latency_ms }
-      : { key, mode, status: 'error', errorKey: response?.error && !response?.empty ? 'failed' : 'noAnswer', detail: errorDetail(response) }
+      : { key, mode, status: 'error', errorKey: response?.code === 'too_long' ? 'tooLong' : response?.error && !response?.empty ? 'failed' : 'noAnswer', detail: errorDetail(response) }
   } catch (error) {
     next = { key, mode, status: 'error', ...describeFailure(error) }
   }

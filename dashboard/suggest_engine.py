@@ -43,7 +43,10 @@ SUGGEST_DEADLINE = 20.0
 # instead of staying pinned after the HTTP answer already went back.
 _EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=6, thread_name_prefix="prompt-studio-suggest")
 _COMPOSE_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=3, thread_name_prefix="prompt-studio-compose")
-TEXT_LIMIT = 1200
+# The user's own text is never cut silently: an improve answer over TEXT_LIMIT is refused (`too_long`),
+# any other cut (draft, ladder answers, hint, compose answers, baseline) and any cut of the model's output is
+# reported as `truncated: true` in the response.
+TEXT_LIMIT = 1200  # the user's answer in improve mode; also the cap on a suggested text value
 INTENT_LIMIT = 6000  # the user's draft, in both routes
 QUESTION_LIMIT = 200  # a form question
 ANSWER_PREVIEW_LIMIT = 600  # an earlier answer / default text shown to the suggestion model
@@ -99,6 +102,9 @@ def _clean(value: Any, limit: int = 4000) -> str:
 def _line(value: Any, limit: int = 4000) -> str:
     """Single-line prompt field: any whitespace run (newlines, tabs) becomes one space, so the text cannot pose as a new line/section."""
     return " ".join(_clean(value, limit).split())
+def _cut(value: Any, limit: int) -> bool:
+    """True when ``_clean(value, limit)`` drops part of the (stripped) text."""
+    return isinstance(value, str) and len(value.strip()) > limit
 
 
 def _language(payload: Mapping[str, Any]) -> str:
@@ -193,6 +199,7 @@ def parse_suggestion(text: str, field: Mapping[str, Any]) -> dict[str, Any]:
     value = data.get("value")
     value = value.strip() if isinstance(value, str) else ""
     reason = _clean(data.get("reason"), REASON_LIMIT)
+    cut = False
     if field.get("kind") == "enum":
         options = [o for o in (field.get("options") or []) if isinstance(o, str)]
         matched = _match_option(value, options) if value else None
@@ -200,12 +207,17 @@ def parse_suggestion(text: str, field: Mapping[str, Any]) -> dict[str, Any]:
             return {"ok": False, "code": "unknown_option", "error": "model suggested an option that is not listed"}
         value = matched
     else:
-        value = value[:TEXT_LIMIT]
+        if len(value) > TEXT_LIMIT:
+            value = value[:TEXT_LIMIT]
+            cut = True
         default = _clean(field.get("hint"), TEXT_LIMIT)
         if field.get("kind") == "design" and default and _norm(value) == _norm(default):
             # Repeating the default is agreement, not a suggestion to paste.
             return {"ok": True, "value": "", "reason": reason, "agrees": True}
-    return {"ok": True, "value": value, "reason": reason}
+    result = {"ok": True, "value": value, "reason": reason}
+    if cut:
+        result["truncated"] = True  # the model's answer was longer than TEXT_LIMIT and its tail was dropped
+    return result
 
 
 def _norm(text: str) -> str:
@@ -286,12 +298,26 @@ def _run_retrying_empty(
     return {"ok": False, "empty": True, "code": "empty_reply", "error": EMPTY_REPLY_ERROR, "model": outcome[1]}
 
 
+def suggest_truncated(payload: Mapping[str, Any]) -> bool:
+    """True when /suggest drops part of the draft, of an earlier answer or of the field's default text."""
+    if _cut(payload.get("intent"), INTENT_LIMIT):
+        return True
+    for r in payload.get("ladder") or []:
+        if isinstance(r, Mapping) and _cut(r.get("answer"), ANSWER_PREVIEW_LIMIT):
+            return True
+    field = _field(payload)
+    return field.get("kind") != "enum" and _cut(field.get("hint"), ANSWER_PREVIEW_LIMIT)
+
+
 def suggest(payload: Mapping[str, Any], llm: Callable[..., Any] | None = None, deadline: float | None = None) -> dict[str, Any]:
     field = _field(payload)
     if not _clean(payload.get("intent")) or not _clean(field.get("question")):
         return {"ok": False, "code": "bad_request", "error": "intent and field.question are required"}
     if _mode(payload) == "improve" and (field.get("kind") == "enum" or not _clean(payload.get("answer"))):
         return {"ok": False, "code": "nothing_to_improve", "error": "improve needs the user's own text on a text field"}
+    if _mode(payload) == "improve" and _cut(payload.get("answer"), TEXT_LIMIT):
+        # Sending only the first TEXT_LIMIT characters would improve (and replace) a fragment of the user's text.
+        return {"ok": False, "code": "too_long", "error": f"answer is longer than {TEXT_LIMIT} characters", "limit": TEXT_LIMIT}
     started = time.monotonic()
     limit = deadline if deadline is not None else SUGGEST_DEADLINE
     outcome = _run_retrying_empty(_EXECUTOR, llm, build_messages(payload), SUGGEST_MAX_TOKENS, limit, f"no model reply within {limit:g} s", model_choice=_model_choice(payload))
@@ -300,6 +326,8 @@ def suggest(payload: Mapping[str, Any], llm: Callable[..., Any] | None = None, d
     text, model = outcome
     result = parse_suggestion(text, field)
     result.update({"latency_ms": int((time.monotonic() - started) * 1000), "model": model, "source": "model", "mode": _mode(payload)})
+    if suggest_truncated(payload):
+        result["truncated"] = True
     if result.get("ok") and field.get("kind") == "enum" and _clean(field.get("recommended")):
         result["agrees"] = result["value"].strip().lower() == _clean(field.get("recommended")).lower()
     return result
@@ -311,7 +339,8 @@ def suggest(payload: Mapping[str, Any], llm: Callable[..., Any] | None = None, d
 # --------------------------------------------------------------------------------------------
 COMPOSE_MAX_TOKENS = 4096
 COMPOSE_DEADLINE = 45.0
-COMPOSE_LIMIT = 30000
+COMPOSE_LIMIT = 30000  # the baseline sent to the writer
+ANSWER_LIMIT = 3000  # one form answer sent to the writer
 THIRD_PARTY_LIMIT = 12000  # same cap as the desktop engines' thirdPartyText field
 THIRD_PARTY_PREVIEW = 1500
 THIRD_PARTY_MARKER = "[[THIRD_PARTY_BLOCK]]"
@@ -376,14 +405,32 @@ def keep_required_lines(prompt: str, baseline: str) -> tuple[str, list[str]]:
     return "\n".join(lines[:end] + restored + lines[end:]), restored
 
 
+# The engines cap the pasted text at THIRD_PARTY_LIMIT; escaping (& -> &amp;) can grow it up to 5x.
+BASELINE_RAW_LIMIT = COMPOSE_LIMIT + 5 * THIRD_PARTY_LIMIT + 2000
+
+
 def split_baseline(payload: Mapping[str, Any]) -> tuple[str, str]:
     """Split the pasted block off the WHOLE baseline first, then cap only the rest: capping first
     could cut the block's closing tag, send the pasted text to the model and lose the exact block."""
     raw = payload.get("baseline")
-    # The engines cap the pasted text at THIRD_PARTY_LIMIT; escaping (& -> &amp;) can grow it up to 5x.
-    raw = raw.strip()[:COMPOSE_LIMIT + 5 * THIRD_PARTY_LIMIT + 2000] if isinstance(raw, str) else ""
+    raw = raw.strip()[:BASELINE_RAW_LIMIT] if isinstance(raw, str) else ""
     masked, block = split_third_party(raw)
     return masked[:COMPOSE_LIMIT], block
+
+
+def compose_truncated(payload: Mapping[str, Any]) -> bool:
+    """True when /compose drops part of the user's draft, of an answer or of the baseline."""
+    if _cut(payload.get("intent"), INTENT_LIMIT):
+        return True
+    for a in payload.get("answers") or []:
+        if isinstance(a, Mapping) and _cut(a.get("answer"), THIRD_PARTY_LIMIT if a.get("id") == "thirdPartyText" else ANSWER_LIMIT):
+            return True
+    raw = payload.get("baseline")
+    if not isinstance(raw, str):
+        return False
+    if _cut(raw, BASELINE_RAW_LIMIT):
+        return True
+    return len(split_third_party(raw.strip())[0]) > COMPOSE_LIMIT
 
 
 # Third-party framing the model wrote itself (a forged header or pasted_content/document tags, e.g.
@@ -527,7 +574,7 @@ def build_compose_messages(payload: Mapping[str, Any]) -> list[dict[str, str]]:
             tag = " [UI patterns to avoid; default]" if a.get("isDefault") else " [UI patterns to avoid; written by the user]"
         else:
             tag = ""
-        answers.append(f"- {_clean(a.get('question'), QUESTION_LIMIT)}{tag}\n  {_clean(a.get('answer'), 3000)}")
+        answers.append(f"- {_clean(a.get('question'), QUESTION_LIMIT)}{tag}\n  {_clean(a.get('answer'), ANSWER_LIMIT)}")
     lines.append("Form answers:\n" + _block("answers", "\n".join(answers) if answers else "(the user accepted every default)"))
     baseline, _ = split_baseline(payload)
     if third_party:
@@ -565,12 +612,14 @@ def compose(payload: Mapping[str, Any], llm: Callable[..., Any] | None = None, d
     owned = "\n".join([_clean(payload.get("intent")), masked] + [
         str(a.get("answer") or "") for a in (payload.get("answers") or [])
         if isinstance(a, Mapping) and a.get("id") != "thirdPartyText"])
-    final = restore_third_party(prompt.strip()[:COMPOSE_LIMIT], block, first=first, owned=owned)
+    prompt = prompt.strip()
+    output_cut = len(prompt) > COMPOSE_LIMIT
+    final = restore_third_party(prompt[:COMPOSE_LIMIT], block, first=first, owned=owned)
     final, restored = keep_required_lines(final, baseline)
     notes = _clean(data.get("notes"), REASON_LIMIT)
     if restored:
         notes = (notes + " " if notes else "") + (RESTORED_NOTE_PT if _is_pt(payload) else RESTORED_NOTE_EN)
-    return {
+    result = {
         "ok": True,
         "prompt": final,
         "notes": notes,
@@ -578,3 +627,6 @@ def compose(payload: Mapping[str, Any], llm: Callable[..., Any] | None = None, d
         "latency_ms": int((time.monotonic() - started) * 1000),
         "source": "model",
     }
+    if output_cut or compose_truncated(payload):
+        result["truncated"] = True
+    return result

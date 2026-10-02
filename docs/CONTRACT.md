@@ -107,9 +107,27 @@ Provider and store exceptions are logged with `logger.warning(exc_info=…)`; th
 `{ "ok": true, "model": "provider/model resolved for task prompt_studio" }`; if the model adapter cannot load:
 `{ "ok": false, "error": "llm adapter unavailable" }` (logged server-side).
 
-Size limits on both routes: draft, answers and `baseline` up to 250 000 characters each, questions/hints/guidance
-20 000, ids/kinds/target/mode/locale 200; `ladder`, `answers` and `options` at most 50 items. Over the limit: FastAPI
-422 (the desktop treats it as "no AI"). The configured `auxiliary.prompt_studio.timeout` can lower the /suggest
+Size limits on both routes (request validation): draft, answers and `baseline` up to 250 000 characters each,
+questions/hints/guidance 20 000, ids/kinds/target/mode/locale 200; `ladder`, `answers` and `options` at most 50 items.
+Over the limit: FastAPI 422 (the desktop treats it as "no AI"). Inside those bounds the engine sends the model only
+part of a long text; the effective limits are below, and the user's text is never cut without telling:
+
+| Field | Route | Effective limit (characters, after trimming) | Over the limit |
+|---|---|---|---|
+| `answer` (mode `improve`) | /suggest | 1 200 | `ok: false`, `code: too_long`, `limit: 1200`; nothing is sent to the model |
+| `intent` (draft) | both | 6 000 | the tail is dropped; response carries `truncated: true` |
+| `answers[].answer` | /compose | 3 000 (12 000 when `id` is `thirdPartyText`) | the tail is dropped; `truncated: true` |
+| `thirdPartyText` preview shown to the model | /compose | 1 500 | the model reads only the first 1 500 characters plus ` […]` as untrusted reference; the pasted block itself is put back whole in the final prompt, so this is not a cut and `truncated` stays absent |
+| `baseline` | /compose | 30 000, not counting the pasted third-party block (which is kept whole and put back) | the tail is dropped; `truncated: true` |
+| `ladder[].answer`, `field.hint` | /suggest | 600 (context shown to the model) | the tail is dropped; `truncated: true` |
+| model `value` (text field) | /suggest | 1 200 | the tail is dropped; `truncated: true` |
+| model `prompt` | /compose | 30 000 | the tail is dropped; `truncated: true` |
+| `session_context` | /suggest | 3 000 | 422 over 3 000 |
+
+`truncated: true` is present on a successful /suggest or /compose response whenever any cut above happens (the draft,
+an answer, a ladder answer, a hint or the baseline sent to the model, or the model's own `value`/`prompt` cut to its
+limit); otherwise the key is absent. The desktop engines already cap their own fields (for example the
+pasted text at 12 000), so the flag is for other clients and for oversized drafts. The configured `auxiliary.prompt_studio.timeout` can lower the /suggest
 provider timeout; /compose always gets its full 45 s.
 
 Errors on every route: `ok: false` with `error`; nothing is ever replaced by a made-up answer.
@@ -123,6 +141,7 @@ back to `error` when the code is unknown or absent.
 |---|---|---|---|
 | `bad_request` | both | draft (or /suggest field question) missing | `intent and field.question are required` / `intent is required` |
 | `nothing_to_improve` | /suggest | `improve` on a choice field or with no `answer` | fixed sentence |
+| `too_long` | /suggest | `improve` with an `answer` over 1 200 characters (also `limit`); the model is not called | `answer is longer than 1200 characters` |
 | `invalid_suggestion` | /suggest | reply is not JSON with `value` | fixed sentence |
 | `unknown_option` | /suggest | enum `value` is not one of `field.options` | fixed sentence |
 | `invalid_prompt` | /compose | reply has no `prompt` of at least 20 characters | fixed sentence |

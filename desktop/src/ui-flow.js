@@ -467,7 +467,7 @@ async function requestSuggestion(mode = 'suggest') {
     }), SUGGEST_CLIENT_TIMEOUT_MS)
     next = response?.ok
       ? { key, mode, status: 'ready', value: response.value || '', reason: response.reason || '', agrees: response.agrees, model: response.model || '', latency: response.latency_ms }
-      : { key, mode, status: 'error', errorKey: response?.error && !response?.empty ? 'failed' : 'noAnswer', detail: errorDetail(response) }
+      : { key, mode, status: 'error', errorKey: response?.code === 'too_long' ? 'tooLong' : response?.error && !response?.empty ? 'failed' : 'noAnswer', detail: errorDetail(response) }
   } catch (error) {
     next = { key, mode, status: 'error', ...describeFailure(error) }
   }

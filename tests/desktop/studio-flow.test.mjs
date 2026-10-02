@@ -1204,6 +1204,28 @@ test('CT-01: an error code from the backend shows a localized tooltip; unknown o
   assert.equal($('[data-studio-ai-error]').getAttribute('title'), 'raw detail 1')
 })
 
+test('#25: a too_long reply shows its own localized message, not the generic "could not reach the AI"', { skip }, async () => {
+  backend.suggest = () => ({ ok: false, code: 'too_long', error: 'answer is longer than 1200 characters', limit: 1200 })
+  await openStudio()
+  await pasteStep('')
+  await waitFor(() => $('[data-studio-ai-error]'))
+  const error = $('[data-studio-ai-error]')
+  assert.equal(error.textContent, ui.i18n.bundles.en.ai.tooLong)
+  assert.equal(error.getAttribute('title'), ui.i18n.bundles.en.errors.too_long)
+  assert.ok(!/Could not reach/.test(error.textContent))
+  await click('[data-studio-cancel]')
+  ui.i18n.locale = 'pt'
+  await ui.act(async () => { ui.$locale.set('pt') })
+  await openStudio()
+  await pasteStep('')
+  await waitFor(() => $('[data-studio-ai-error]'))
+  assert.equal($('[data-studio-ai-error]').textContent, ui.i18n.bundles.pt.ai.tooLong)
+  assert.equal($('[data-studio-ai-error]').getAttribute('title'), ui.i18n.bundles.pt.errors.too_long)
+  await click('[data-studio-cancel]')
+  ui.i18n.locale = 'en'
+  await ui.act(async () => { ui.$locale.set('en') })
+})
+
 test('SP-2: in Auto, clicking through steps fast sends one /suggest, for the step the user stops on, after the delay', { skip }, async () => {
   globalThis.__promptStudioAutoSuggestDelayMs = 400
   try {

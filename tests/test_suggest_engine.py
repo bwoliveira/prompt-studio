@@ -988,3 +988,137 @@ def test_model_call_keeps_the_request_profile_scope():
     finally:
         scope.reset(token)
     assert seen == ["secondary", "secondary"]
+
+
+# ---- #25: the user's text is never cut silently ----
+OK_SUGGEST = json.dumps({"value": "Equilibrada", "reason": "ok"})
+OK_IMPROVE = json.dumps({"value": "- Casa", "reason": "Separei."})
+OK_COMPOSE = json.dumps({"prompt": "Improved prompt text long enough to pass.", "notes": ""})
+
+
+def test_improve_over_the_limit_is_too_long_and_never_reaches_the_model():
+    se = _load()
+    llm, calls = _llm(OK_IMPROVE)
+    out = se.suggest({**BASE, "field": TEXT, "mode": "improve", "answer": "x" * (se.TEXT_LIMIT + 1)}, llm=llm)
+    _assert_code(out, "too_long")
+    assert out["limit"] == se.TEXT_LIMIT == 1200
+    assert calls == []
+
+
+def test_improve_at_the_limit_goes_through_untruncated():
+    se = _load()
+    llm, calls = _llm(OK_IMPROVE)
+    answer = "x" * se.TEXT_LIMIT
+    out = se.suggest({**BASE, "field": TEXT, "mode": "improve", "answer": "  " + answer + "  "}, llm=llm)
+    assert out["ok"] and not out.get("truncated")
+    assert answer in calls[0]["messages"][1]["content"]
+
+
+def test_suggest_reports_a_cut_draft_and_only_then():
+    se = _load()
+    for mode, reply, extra in (("suggest", OK_SUGGEST, {}), ("improve", OK_IMPROVE, {"answer": "casa"})):
+        field = ENUM if mode == "suggest" else TEXT
+        llm, calls = _llm(reply)
+        out = se.suggest({**BASE, "field": field, "mode": mode, **extra, "intent": "d" * se.INTENT_LIMIT}, llm=llm)
+        assert out["ok"] and not out.get("truncated"), mode
+        out = se.suggest({**BASE, "field": field, "mode": mode, **extra, "intent": "d" * (se.INTENT_LIMIT + 1)}, llm=llm)
+        assert out["ok"] and out["truncated"] is True, mode
+        assert "d" * se.INTENT_LIMIT in calls[-1]["messages"][1]["content"]
+        assert "d" * (se.INTENT_LIMIT + 1) not in calls[-1]["messages"][1]["content"]
+
+
+def test_compose_reports_every_cut_of_the_users_text():
+    se = _load()
+    answer = {"id": "context", "question": "Contexto?", "answer": "ok"}
+    cases = {
+        "intent": {"intent": "d" * (se.INTENT_LIMIT + 1)},
+        "answer": {"answers": [{**answer, "answer": "a" * (se.ANSWER_LIMIT + 1)}]},
+        "third-party answer": {"answers": [{"id": "thirdPartyText", "question": "T", "answer": "t" * (se.THIRD_PARTY_LIMIT + 1)}]},
+        "baseline": {"baseline": "TASK\n" + "b" * (se.COMPOSE_LIMIT + 1)},
+    }
+    for name, change in cases.items():
+        llm, _ = _llm(OK_COMPOSE)
+        assert se.compose({**COMPOSE, **change}, llm=llm)["truncated"] is True, name
+    # At the limits nothing is cut and the key is absent.
+    exact = {
+        "intent": "d" * se.INTENT_LIMIT,
+        "answers": [{**answer, "answer": "a" * se.ANSWER_LIMIT}, {"id": "thirdPartyText", "question": "T", "answer": "t" * se.THIRD_PARTY_LIMIT}],
+        "baseline": "b" * se.COMPOSE_LIMIT,
+    }
+    llm, _ = _llm(OK_COMPOSE)
+    out = se.compose({**COMPOSE, **exact}, llm=llm)
+    assert out["ok"] and not out.get("truncated")
+
+
+def test_compose_reports_a_cut_baseline_that_carries_a_pasted_block():
+    import json as _json
+    from pathlib import Path
+    se = _load()
+    shapes = _json.loads(Path(__file__).with_name("fixtures_pasted_blocks.json").read_text(encoding="utf-8"))
+    shape = next(iter(shapes.values()))
+    _, block = se.split_third_party(shape)
+    llm, _ = _llm(OK_COMPOSE)
+    short = se.compose({**COMPOSE, "answers": [], "baseline": "TASK\n" + shape}, llm=llm)
+    assert short["ok"] and not short.get("truncated")
+    long = se.compose({**COMPOSE, "answers": [], "baseline": "x" * (se.COMPOSE_LIMIT + 10) + "\n\n" + shape}, llm=llm)
+    assert long["ok"] and long["truncated"] is True and block in long["prompt"]
+
+
+def test_suggest_reports_a_cut_ladder_answer_or_hint_and_only_then():
+    se = _load()
+    llm, calls = _llm(OK_SUGGEST)
+    limit = se.ANSWER_PREVIEW_LIMIT
+    for name, payload in {
+        "ladder answer": {"field": ENUM, "ladder": [{"question": "Q?", "answer": "a" * (limit + 1)}]},
+        "third-party ladder answer": {"field": ENUM, "ladder": [{"question": "Q?", "category": "thirdPartyText", "answer": "t" * (limit + 1)}]},
+        "field hint": {"field": {**TEXT, "hint": "h" * (limit + 1)}},
+    }.items():
+        out = se.suggest({**BASE, **payload}, llm=llm)
+        assert out["ok"] and out["truncated"] is True, name
+    for name, payload in {
+        "ladder answer": {"field": ENUM, "ladder": [{"question": "Q?", "answer": "  " + "a" * limit + "  "}]},
+        "field hint": {"field": {**TEXT, "hint": "h" * limit}},
+    }.items():
+        out = se.suggest({**BASE, **payload}, llm=llm)
+        assert out["ok"] and not out.get("truncated"), name
+    assert "a" * limit in calls[-2]["messages"][1]["content"]
+
+
+def test_improve_reports_a_model_answer_cut_to_the_limit():
+    se = _load()
+    long_value = json.dumps({"value": "v" * (se.TEXT_LIMIT + 50), "reason": "r"})
+    llm, _ = _llm(long_value)
+    out = se.suggest({**BASE, "field": TEXT, "mode": "improve", "answer": "casa"}, llm=llm)
+    assert out["ok"] and out["truncated"] is True and out["value"] == "v" * se.TEXT_LIMIT
+    exact = json.dumps({"value": "v" * se.TEXT_LIMIT, "reason": "r"})
+    llm, _ = _llm(exact)
+    out = se.suggest({**BASE, "field": TEXT, "mode": "improve", "answer": "casa"}, llm=llm)
+    assert out["ok"] and not out.get("truncated")
+
+
+def test_compose_reports_a_model_prompt_cut_to_the_limit():
+    se = _load()
+    llm, _ = _llm(json.dumps({"prompt": "p" * (se.COMPOSE_LIMIT + 100), "notes": ""}))
+    out = se.compose(COMPOSE, llm=llm)
+    assert out["ok"] and out["truncated"] is True and len(out["prompt"]) <= se.COMPOSE_LIMIT + 200
+    llm, _ = _llm(json.dumps({"prompt": "p" * se.COMPOSE_LIMIT, "notes": ""}))
+    out = se.compose(COMPOSE, llm=llm)
+    assert out["ok"] and not out.get("truncated")
+
+
+def test_third_party_preview_is_not_a_cut_and_the_contract_documents_it():
+    # Codex P2: the model sees only a preview of the pasted text; the whole block is put back in the final prompt,
+    # so nothing of the user's text is lost and `truncated` must stay absent. The contract has to say so.
+    from pathlib import Path
+    se = _load()
+    pasted = "t" * (se.THIRD_PARTY_PREVIEW + 500)
+    payload = {**COMPOSE, "answers": [{"id": "thirdPartyText", "question": "T", "answer": pasted}]}
+    llm, calls = _llm(OK_COMPOSE)
+    out = se.compose(payload, llm=llm)
+    sent = calls[0]["messages"][1]["content"]
+    assert "t" * se.THIRD_PARTY_PREVIEW + " […]" in sent and "t" * (se.THIRD_PARTY_PREVIEW + 1) not in sent
+    assert out["ok"] and not out.get("truncated")
+    contract = Path(__file__).resolve().parents[1].joinpath("docs", "CONTRACT.md").read_text(encoding="utf-8")
+    preview_row = next((line for line in contract.splitlines() if line.startswith("|") and "preview" in line.lower()), None)
+    assert preview_row, "CONTRACT.md has no limits-table row for the third-party preview"
+    assert f"{se.THIRD_PARTY_PREVIEW:,}".replace(",", " ") in preview_row and "truncated" in preview_row
