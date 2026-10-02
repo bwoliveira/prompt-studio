@@ -308,6 +308,19 @@ test('OP-3: designAvoid step not asked for an interface bugfix, asked for new in
   assert.ok(ids('Corrija o bug de login no app React').includes('subagents'), 'OP-1: subagents step still asked')
 })
 
+test('the design step follows the chosen deliverable: not asked for an answer or plan about an app (Codex P2)', () => {
+  const goal = 'Create a React app to manage product launches'
+  for (const target of ['opus', 'sonnet']) {
+    const ids = value => {
+      const seen = []
+      walk(target, goal, 'en', q => { seen.push(q.category); return q.category === 'deliverable' ? CORE_MESSAGES.en.core.fields.deliverable.options[value] : (q.recommended || SKIPPED) })
+      return seen
+    }
+    assert.ok(ids('implementation').includes('designAvoid'), `${target}: asked when the app is built`)
+    for (const value of ['answer', 'plan']) assert.ok(!ids(value).includes('designAvoid'), `${target}: not asked for ${value}`)
+  }
+})
+
 
 // /review P3: provider_refused also covers 401 (a wrong or expired key), so the message must point to the key too.
 test('provider_refused tells the user to check the key as well as the plan (en and pt)', () => {

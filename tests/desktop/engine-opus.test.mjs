@@ -80,6 +80,17 @@ test('explicit deliverable wins and conflicts are reported', () => {
   assert.ok(ENGINE.build({ goal: 'Crie e implemente um app', deliverable: 'analysis' }).notes.length > 0)
 })
 
+test('interface rules follow the chosen deliverable, not the draft alone (Codex P2)', () => {
+  const goal = 'Create a React app to manage product launches'
+  assert.equal(ENGINE.analyze({ goal }).interface, true)
+  for (const deliverable of ['answer', 'plan', 'analysis', 'review', 'text']) {
+    assert.equal(ENGINE.analyze({ goal, deliverable }).interface, false, deliverable)
+    const prompt = ENGINE.build({ goal, deliverable, designAvoid: 'purple gradients' }).prompt
+    assert.ok(!prompt.includes('Visual design') && !prompt.includes('purple gradients'), `${deliverable}: ${prompt}`)
+  }
+  assert.ok(ENGINE.build({ goal, deliverable: 'implementation' }).prompt.includes('Visual design'))
+})
+
 test('an explicit deliverable the draft does not read as survives a custom success criterion (Codex P2)', () => {
   const goal = 'Create a React app to manage product launches'
   const success = 'The result is ready for our launch meeting.'

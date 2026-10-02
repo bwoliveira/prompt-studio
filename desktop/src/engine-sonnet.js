@@ -274,7 +274,9 @@ function analyzeNormalized(b) {
   const conflicts = {}
   if (b.deliverable !== 'auto' && signal && GROUP[signal] !== GROUP[b.deliverable]) conflicts.deliverable = [b.deliverable]
   if (b.format === 'json' && (deliverable === 'text')) conflicts.format = ['json']
-  return { category, deliverable, conflicts, interface: (category === 'code' || deliverable === 'implementation') && INTERFACE.test(text) && (MAKE_VERB.test(text) || REDESIGN_VERB.test(text)) && !FIX_VERB.test(text) && !OPS_TERM.test(text) }
+  // Interface rules only when an interface is being built or redesigned: the deliverable in effect (explicit
+  // choice first) must be the implementation, not an answer, plan or analysis about a draft that mentions an app.
+  return { category, deliverable, conflicts, interface: deliverable === 'implementation' && INTERFACE.test(text) && (MAKE_VERB.test(text) || REDESIGN_VERB.test(text)) && !FIX_VERB.test(text) && !OPS_TERM.test(text) }
 }
 
 const escapePasted = text => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;')
