@@ -503,3 +503,29 @@ def test_the_context_route_keeps_host_incompatible_when_the_not_found_classifier
 
     out = sc.context({"session_id": "s1", "profile": ""}, llm=llm, opener=lambda profile: Store())
     assert out["ok"] is False and out["code"] == "host_incompatible"
+
+
+def test_a_changed_not_found_classifier_is_host_incompatible_before_the_provider_is_called(monkeypatch):
+    calls = []
+
+    def call_llm(**kwargs):
+        calls.append(kwargs)
+        raise RuntimeError("provider down")
+
+    _fake_hermes(monkeypatch, **_override("agent.auxiliary_client", "call_llm", call_llm),
+                 **_override("agent.auxiliary_client", "_is_model_not_found_error", lambda: False))
+    with pytest.raises(host.HostIncompatible):
+        adapter._default_llm(messages=[], max_tokens=10, timeout=5)
+    assert calls == []
+
+
+def test_a_provider_error_with_a_changed_classifier_still_gets_the_fixed_text_through_an_injected_model(monkeypatch):
+    _fake_hermes(monkeypatch, **_override("agent.auxiliary_client", "_is_model_not_found_error", lambda: False))
+    se = _engine()
+
+    def llm(**_):
+        raise RuntimeError("provider down")
+
+    field = {"id": "a", "kind": "enum", "question": "Q?", "options": ["Yes", "No"]}
+    out = se.suggest({"target": "opus", "intent": "Build a thing", "field": field}, llm=llm)
+    assert out["code"] == "host_incompatible" and out["error"] == adapter.HOST_INCOMPATIBLE_ERROR

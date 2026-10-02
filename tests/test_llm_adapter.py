@@ -45,6 +45,7 @@ def test_hard_timeout_caps_the_configured_timeout(monkeypatch):
     fake.extract_content_or_reasoning = lambda r: "{}"
     fake._get_auxiliary_task_config = lambda task: {"timeout": 60}
     fake._resolve_task_provider_model = lambda *a, **k: ("p", "m", None, None, None)
+    fake._is_model_not_found_error = lambda exc: False  # checked before the call, like the extractor
     monkeypatch.setitem(sys.modules, "agent.auxiliary_client", fake)
     monkeypatch.setitem(sys.modules, "agent", types.ModuleType("agent"))
     hc = types.ModuleType("hermes_constants")
@@ -71,6 +72,7 @@ def _fake_hermes(monkeypatch, provider, config, effort_parse=lambda v: {"enabled
     fake.extract_content_or_reasoning = lambda r: "out"
     fake._get_auxiliary_task_config = lambda task: config
     fake._resolve_task_provider_model = lambda *a, **k: (provider, "m", None, None, None)
+    fake._is_model_not_found_error = lambda exc: False  # checked before the call, like the extractor
     monkeypatch.setitem(sys.modules, "agent.auxiliary_client", fake)
     monkeypatch.setitem(sys.modules, "agent", types.ModuleType("agent"))
     hc = types.ModuleType("hermes_constants")
@@ -218,6 +220,7 @@ def test_default_llm_reports_the_finish_reason_and_still_unpacks_as_text_and_mod
     fake.extract_content_or_reasoning = lambda r: ""
     fake._get_auxiliary_task_config = lambda task: {}
     fake._resolve_task_provider_model = lambda *a, **k: ("p", "m", None, None, None)
+    fake._is_model_not_found_error = lambda exc: False  # checked before the call, like the extractor
     monkeypatch.setitem(sys.modules, "agent.auxiliary_client", fake)
     monkeypatch.setitem(sys.modules, "agent", types.ModuleType("agent"))
     hc = types.ModuleType("hermes_constants")
@@ -460,6 +463,7 @@ def _fake_with_host_fallback(monkeypatch, response):
     fake.extract_content_or_reasoning = extract
     fake._get_auxiliary_task_config = lambda task: {}
     fake._resolve_task_provider_model = lambda *a, **k: ("p", "m", None, None, None)
+    fake._is_model_not_found_error = lambda exc: False  # checked before the call, like the extractor
     monkeypatch.setitem(sys.modules, "agent.auxiliary_client", fake)
     monkeypatch.setitem(sys.modules, "agent", types.ModuleType("agent"))
     hc = types.ModuleType("hermes_constants")

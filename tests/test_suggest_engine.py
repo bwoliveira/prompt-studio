@@ -624,6 +624,7 @@ def test_compose_provider_timeout_is_not_lowered_by_the_config_timeout(monkeypat
     fake.extract_content_or_reasoning = lambda r: json.dumps({"prompt": "x" * 40, "value": "Equilibrada", "reason": "ok"})
     fake._get_auxiliary_task_config = lambda task: {"timeout": 20}
     fake._resolve_task_provider_model = lambda *a, **k: ("p", "m", None, None, None)
+    fake._is_model_not_found_error = lambda exc: False  # checked before the call, with the extractor
     monkeypatch.setitem(sys.modules, "agent.auxiliary_client", fake)
     monkeypatch.setitem(sys.modules, "agent", types.ModuleType("agent"))
     hc = types.ModuleType("hermes_constants")
