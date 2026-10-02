@@ -297,14 +297,16 @@ def _rejects_json_mode(exc: BaseException) -> bool:
 
 
 def is_model_not_found(exc: BaseException) -> bool:
-    """The provider does not know the model name (404 / "model not found"), e.g. a mistyped pick in Settings."""
+    """The provider does not know the model name (404 / "model not found"), e.g. a mistyped pick in Settings.
+
+    Raises ``host.HostIncompatible`` when Hermes' own classifier changed: callers answer ``host_incompatible``.
+    """
     if getattr(exc, "status_code", None) == 404 or type(exc).__name__ == "NotFoundError":
         return True
     try:
         return host.is_model_not_found_error(exc)
     except host.HostIncompatible:
-        logger.warning("Prompt Studio: Hermes changed, cannot tell a missing model from other errors", exc_info=True)
-        return False
+        raise
     except Exception:
         return False
 
@@ -363,8 +365,12 @@ def provider_error_code(exc: BaseException) -> str:
     """Error code for a failed provider call, most specific first; the provider text is never returned."""
     if is_host_incompatible(exc):
         return host.CODE
-    if is_model_not_found(exc):
-        return "model_not_found"
+    try:
+        if is_model_not_found(exc):
+            return "model_not_found"
+    except host.HostIncompatible:
+        logger.warning("Prompt Studio: Hermes changed, cannot tell a missing model from other errors", exc_info=True)
+        return host.CODE
     if is_provider_refused(exc):
         return "provider_refused"
     if is_provider_payment(exc):

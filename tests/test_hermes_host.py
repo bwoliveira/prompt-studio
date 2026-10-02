@@ -465,3 +465,40 @@ def test_a_missing_response_extractor_is_host_incompatible_before_the_provider_i
     with pytest.raises(host.HostIncompatible):
         adapter._default_llm(messages=[], max_tokens=10, timeout=5)
     assert calls == []  # the contract: this code means no provider call was made
+
+
+def test_a_changed_not_found_classifier_keeps_host_incompatible_after_a_provider_error(monkeypatch):
+    def call_llm(**kwargs):
+        raise RuntimeError("provider down")
+
+    _fake_hermes(monkeypatch, **_override("agent.auxiliary_client", "call_llm", call_llm),
+                 **_override("agent.auxiliary_client", "_is_model_not_found_error", lambda: False))
+    se = _engine()
+    field = {"id": "a", "kind": "enum", "question": "Q?", "options": ["Yes", "No"]}
+    out = se.suggest({"target": "opus", "intent": "Build a thing", "field": field})
+    assert out["ok"] is False and out["code"] == "host_incompatible"
+    assert adapter.provider_error_code(RuntimeError("provider down")) == "host_incompatible"
+
+
+def test_the_context_route_keeps_host_incompatible_when_the_not_found_classifier_changed(monkeypatch):
+    _fake_hermes(monkeypatch, **_override("agent.auxiliary_client", "_is_model_not_found_error", lambda: False))
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("session_context_host_test", DASHBOARD / "session_context.py")
+    sc = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(sc)
+
+    class Store:
+        def resolve_session_id(self, sid):
+            return sid
+
+        def get_messages(self, sid, **kw):
+            return [{"role": "user", "content": "hello there"}]
+
+        def close(self):
+            pass
+
+    def llm(**_):
+        raise RuntimeError("provider down")
+
+    out = sc.context({"session_id": "s1", "profile": ""}, llm=llm, opener=lambda profile: Store())
+    assert out["ok"] is False and out["code"] == "host_incompatible"

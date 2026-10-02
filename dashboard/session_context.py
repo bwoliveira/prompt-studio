@@ -178,8 +178,11 @@ def context(payload: Mapping[str, Any], llm: Callable[..., Any] | None = None, d
             return _host_incompatible(exc, model=label)
         # Provider text can carry request fragments: log it, return only a fixed sentence.
         logger.warning("Prompt Studio context model call failed: %s", type(exc).__name__, exc_info=exc)
-        if _llm.is_model_not_found(exc):
-            return _error("model_not_found", "model not found", model=label)
+        try:
+            if _llm.is_model_not_found(exc):
+                return _error("model_not_found", "model not found", model=label)
+        except _host.HostIncompatible as changed:
+            return _host_incompatible(changed, model=label)
         if _llm.is_provider_refused(exc):
             return _error("provider_refused", "provider refused", model=label)
         if _llm.is_provider_payment(exc):
