@@ -16,7 +16,7 @@ are in `AGENTS.md`; the standing decisions are in `docs/adr/`; the vocabulary is
 | `desktop/src/i18n-ui.js` | Every string `plugin.js` shows (buttons, notes, errors, shortcut help), `en` and `pt`. |
 | `desktop/src/plugin-head.js` | The plugin's imports and `ID`; the only hand-written file allowed to import. |
 | `desktop/src/studio-state.js` | The `@core` state machine (reducer) plus the studio atom. No imports. |
-| `desktop/src/ui-locale.js`, `ui-prefs.js`, `ui-flow.js`, `ui-components.js` | The rest of the Desktop UI (locale helpers, preferences and context, flow and keys, components and `export default`), concatenated in this order into `plugin.js`'s single module scope. No imports. |
+| `desktop/src/ui-locale.js`, `ui-keys.js`, `ui-settings.js`, `ui-suggestions.js`, `ui-steps.js`, `ui-composer.js` | The rest of the Desktop UI, one module per responsibility: locale helpers and the composer adapter; the shortcut map, key display and keydown listener; preferences, Settings and the model picker; the suggestion machine; the strip and the step flow; opening from the composer, host calls, placing, closing and `export default`. Concatenated in this order into `plugin.js`'s single module scope. No imports. |
 | `desktop/plugin.js` | Generated whole by `scripts/build.mjs`; the single file Hermes Desktop loads. Imports only `@hermes/plugin-sdk`, `react` and `react/jsx-runtime`. |
 | `desktop/studio-core.mjs` | Generated ESM bundle of `src/*` for the Node tests. |
 
@@ -77,14 +77,14 @@ rule of its own, and the build allows an engine no import but the core (`node sc
 - Never taken by the key listener: Tab, Enter, Esc, and any Ctrl or Super chord. F-keys with a modifier are ignored.
   The answer textarea stops propagation of its own keys so typing never reaches the composer's handlers.
 - Capture phase, so keys work with the cursor in the answer field; IME composition is left alone.
-- F1 shows the full map. The `SHORTCUTS` map in `desktop/src/ui-components.js` is the only place a key is written; the `shortcuts.*` labels in `i18n-ui.js` name each entry (they are also the Action column of the README table). The reasons are in `docs/adr/0004-f-keys-plus-alt-letters-never-enter.md`.
+- F1 shows the full map. The `SHORTCUTS` map in `desktop/src/ui-keys.js` is the only place a key is written; the `shortcuts.*` labels in `i18n-ui.js` name each entry (they are also the Action column of the README table). The reasons are in `docs/adr/0004-f-keys-plus-alt-letters-never-enter.md`.
 
 The full key table, for Linux/Windows and for a Mac, is the generated table in `README.md` (the same keys as the F1 list).
 
 Either Alt works, except where the right Alt is AltGr. Alt+digits follow the physical number row.
 
 The map holds the canonical combos (`aria-keyshortcuts`, `data-studio-shortcut`, tests). What the user reads
-goes through `displayCombo` in `ui-components.js`: on a Mac `Alt+Shift+1…9` shows as ⌥⇧1…9 and `F4` as plain F4 (never "fn F4"), with the
+goes through `displayCombo` in `ui-keys.js`: on a Mac `Alt+Shift+1…9` shows as ⌥⇧1…9 and `F4` as plain F4 (never "fn F4"), with the
 modifier glyphs from the SDK's `formatModifierToken` when the Desktop exports it (0.21.4+) and a local table otherwise.
 The key listener reads an Alt chord on a `Key*`/`Digit*` code even when the event is `key: 'Dead'`, `keyCode: 229` or
 `isComposing` (macOS Option dead keys); other composition is ignored. It never handles Enter, Tab, Esc or Ctrl/Super chords.

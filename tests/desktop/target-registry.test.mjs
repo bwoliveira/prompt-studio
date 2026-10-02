@@ -2,7 +2,7 @@
 // switch, the default-target rule, the design-avoid step and the build's engine list.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import { readdir, readFile } from 'node:fs/promises'
 import * as core from '../../desktop/studio-core.mjs'
 import { CORE_MESSAGES } from '../../desktop/src/i18n-core.js'
 
@@ -82,7 +82,10 @@ test('no second table of target ids, names or keys outside the registry', async 
   assert.equal(idLines.length, TARGETS.length, 'target ids appear only on the registry entries')
   assert.ok(idLines.every(line => /^\s*\{ id: /.test(line)), idLines.join('\n'))
   assert.doesNotMatch(await read('desktop/src/studio-core.js'), /TARGET_NAME|STUDIO_ENGINES/)
-  const ui = await read('desktop/src/ui-components.js')
+  // The hand-written UI is split into desktop/src/ui-*.js: none of them may hold a second table.
+  const uiFiles = (await readdir(new URL('../../desktop/src', import.meta.url))).filter(name => /^ui-.*\.js$/.test(name))
+  assert.ok(uiFiles.includes('ui-keys.js') && uiFiles.includes('ui-steps.js'), uiFiles.join())
+  const ui = (await Promise.all(uiFiles.map(name => read(`desktop/src/${name}`)))).join('\n')
   assert.doesNotMatch(ui, /['"](opus|astra|sonnet)['"]/)
   assert.doesNotMatch(ui, /Alt\+[OAT]['"]/)
 })

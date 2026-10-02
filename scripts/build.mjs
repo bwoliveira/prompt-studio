@@ -299,10 +299,10 @@ export function studioEngines(coreSource) {
 
 // README keyboard table. SHORTCUTS_SOURCE is the one file that holds the SHORTCUTS map and OPEN_BINDING: when the map
 // moves to another file, this line is the only change.
-export const SHORTCUTS_SOURCE = 'desktop/src/ui-components.js'
+export const SHORTCUTS_SOURCE = 'desktop/src/ui-keys.js'
 export const SHORTCUT_TABLE_START = '<!-- shortcut-table:start -->'
 export const SHORTCUT_TABLE_END = '<!-- shortcut-table:end -->'
-// What the Studio draws on a Mac (displayCombo in ui-components.js): modifiers as glyphs, F-keys as plain F4.
+// What the Studio draws on a Mac (displayCombo in ui-keys.js): modifiers as glyphs, F-keys as plain F4.
 const MAC_GLYPHS = { alt: '⌥', shift: '⇧', ctrl: '⌃', mod: '⌘' }
 const PC_NAMES = { alt: 'Alt', shift: 'Shift', ctrl: 'Ctrl', mod: 'Ctrl' }
 
@@ -361,7 +361,7 @@ export function replaceShortcutTable(readme, table) {
 const importSource = source => import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`)
 
 // Hand-written plugin code, in plugin.js order. They share plugin.js's single module scope.
-const UI_FILES = ['studio-state.js', 'ui-locale.js', 'ui-prefs.js', 'ui-flow.js', 'ui-components.js']
+const UI_FILES = ['studio-state.js', 'ui-locale.js', 'ui-keys.js', 'ui-settings.js', 'ui-suggestions.js', 'ui-steps.js', 'ui-composer.js']
 
 async function main() {
   const check = process.argv.includes('--check')
