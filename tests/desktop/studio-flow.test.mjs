@@ -1006,6 +1006,49 @@ for (const role of ['dialog', 'menu', 'listbox']) {
   })
 }
 
+// R1: F1 and F3 toggle the studio's own help and Settings only; behind a FOREIGN overlay (a dialog, a
+// menu, the command palette's listbox) nothing the studio owns reacts, F1 and F3 included.
+for (const role of ['dialog', 'menu', 'listbox']) {
+  for (const combo of ['help', 'settings']) {
+    test(`overlay guard: ${combo === 'help' ? 'F1' : 'F3'} behind a foreign role=${role} opens no Settings and toggles no help`, { skip }, async () => {
+      await openStudio(INTENT, 'off')
+      const overlay = document.createElement('div')
+      overlay.setAttribute('role', role)
+      document.body.appendChild(overlay)
+      try {
+        const event = await press(K()[combo])
+        assert.equal(event.defaultPrevented, false, 'the key is left to the foreign overlay')
+        assert.ok($('[data-studio-settings-dialog]') === null, 'no studio Settings dialog opened')
+        assert.ok($('[data-studio-shortcuts-list]') === null, 'studio help not toggled')
+      } finally {
+        overlay.remove()
+      }
+      // Overlay gone: the same key works again.
+      await press(K()[combo])
+      assert.ok(combo === 'help' ? $('[data-studio-shortcuts-list]') : $('[data-studio-settings-dialog]'), 'works once nothing is in front')
+      await press(K()[combo])
+    })
+  }
+}
+
+test('overlay guard: a foreign dialog in front of the open Settings keeps F1 and F3 from reaching the studio', { skip }, async () => {
+  await openStudio(INTENT, 'off')
+  await openSettings()
+  const overlay = document.createElement('div')
+  overlay.setAttribute('role', 'dialog')
+  document.body.appendChild(overlay)
+  try {
+    await press(K().help)
+    assert.ok($('[data-studio-shortcuts-list]') === null, 'F1 does not toggle the help')
+    await press(K().settings)
+    assert.ok($('[data-studio-settings-dialog]'), 'F3 does not close Settings')
+  } finally {
+    overlay.remove()
+  }
+  await press(K().settings)
+  assert.ok($('[data-studio-settings-dialog]') === null, 'F3 closes Settings again once the foreign overlay is gone')
+})
+
 test('overlay guard: F4 does not open the studio behind an open menu', { skip }, async () => {
   const overlay = document.createElement('div')
   overlay.setAttribute('role', 'menu')

@@ -4104,15 +4104,18 @@ function keyCombo(event) {
 // the code is the only thing that says which shortcut it was.
 const isAltCodeChord = event => event.altKey && !event.ctrlKey && !event.metaKey && /^(Key[A-Z]|Digit[1-9])$/.test(event.code || '')
 
-// Behind an open overlay (the Settings dialog, a model menu, the command palette or any other
-// dialog/menu/listbox in the document) the studio's keys do nothing, except the two that toggle
-// their own overlay (F1 help, F3 Settings). A hidden element does not count, nor one that holds the studio.
+// Behind an open overlay the studio's keys do nothing. Two kinds: the studio's own Settings dialog
+// ($settingsOpen), where only F1 (help) and F3 (closes Settings) still work, and a FOREIGN overlay (a model
+// menu, the command palette or any other dialog/menu/listbox in the document), behind which nothing the
+// studio owns reacts, F1 and F3 included. A hidden element does not count, nor one that holds the studio,
+// nor the studio's own Settings dialog.
 const OVERLAY_KEYS = [SHORTCUTS.help, SHORTCUTS.settings]
 const OVERLAY_SELECTOR = '[role="dialog"],[role="alertdialog"],[role="menu"],[role="listbox"]'
-function overlayOpen() {
-  if ($settingsOpen.get()) return true
+function foreignOverlayOpen() {
   const strip = document.querySelector('[data-studio-strip]')
-  return [...document.querySelectorAll(OVERLAY_SELECTOR)].some(el => !el.closest('[hidden],[aria-hidden="true"]') && !(strip && el.contains(strip)))
+  return [...document.querySelectorAll(OVERLAY_SELECTOR)].some(el =>
+    !el.closest('[hidden],[aria-hidden="true"]') && !(strip && el.contains(strip)) &&
+    !el.closest('[data-studio-settings-dialog]') && !el.querySelector('[data-studio-settings-dialog]'))
 }
 
 function shortcutTarget(root, combo) {
@@ -4134,7 +4137,7 @@ function installStudioKeys(ctx) {
     const combo = keyCombo(event)
     if (!combo) return
     const open = $studio.get().status !== 'idle'
-    const blocked = overlayOpen() && !OVERLAY_KEYS.includes(combo)
+    const blocked = foreignOverlayOpen() || ($settingsOpen.get() && !OVERLAY_KEYS.includes(combo))
     let target = null
     if (blocked) {
       // Nothing behind the overlay: F5-F10 are still swallowed below while the studio is open.
