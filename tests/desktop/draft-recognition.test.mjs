@@ -791,6 +791,12 @@ const TABLE = [
   ['Can you show me a script from scratch that extracts data?', 'implementation', 'Codex R4 F1 near miss: from scratch'],
   ['Você pode me mostrar um script do zero que leia datas?', 'implementation', 'Codex R4 F1 near miss: pt do zero'],
   ['Can you show me a function that reads data from PyPI?', 'implementation', 'Codex R4 F1 near miss: from inside the purpose'],
+  ['Can you show me a script that extracts data? Can you tell whether it is safe?', 'answer', 'Codex R4 F2: can you tell whether'],
+  ['Can you show me a script that extracts data? Do you know how it works?', 'answer', 'Codex R4 F2: do you know how'],
+  ['Can you show me a script that extracts data and can you explain the steps', 'answer', 'Codex R4 F2: and can you explain'],
+  ['Can you show me a script that extracts data, and do you know if it is safe?', 'answer', 'Codex R4 F2: and do you know if'],
+  ['Você pode me mostrar um script que extrai dados? Você sabe como funciona?', 'answer', 'Codex R4 F2: pt voce sabe'],
+  ['Você pode me mostrar um script que extrai dados? Você pode me explicar como funciona?', 'answer', 'Codex R4 F2: pt voce pode me explicar'],
   // #49 review F2: an explanation asked for in a later clause or sentence makes the draft a question
   ['Can you show me a script? Why does it fail?', 'answer', 'F2 a later question'],
   ['Can you show me a script that extracts data and tell me how it works?', 'answer', 'F2 tell me how, same sentence'],
