@@ -95,6 +95,20 @@ const TABLE = [
   ['Write a script that generates a report of the tests', 'implementation', 'near miss: script comes first'],
   ['Escreva um script para testes', 'implementation', 'near miss: script first'],
   ['Write tests for the report generator', 'implementation', 'near miss: tests are the artifact'],
+  // a review named as the object of a writing verb is a review, not code about the thing reviewed (Codex P2)
+  ['Write a review of the API', 'review', 'review object before the api promotion'],
+  ['Escreva uma revisão da API', 'review', 'pt revisao'],
+  ['Write a code review for the parser', 'review', 'code review'],
+  ['Escreva uma auditoria do backend', 'review', 'pt auditoria'],
+  ['Write an API client', 'implementation', 'near miss: no review object'],
+  // the object word must head its noun phrase: a summary, memo or guide about it is text (Codex P2)
+  ['Write a plan summary', 'text', 'summary heads the phrase'],
+  ['Write a strategy memo', 'text', 'memo heads the phrase'],
+  ['Write a workflow guide', 'text', 'guide heads the phrase'],
+  ['Escreva um resumo do plano', 'text', 'pt resumo'],
+  ['Write a review summary for the team', 'text', 'summary heads the phrase'],
+  ['Create a plan for Q3', 'plan', 'near miss: plan followed by a preposition'],
+  ['Create a launch plan.', 'plan', 'near miss: plan followed by punctuation'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
@@ -170,7 +184,7 @@ test('parity: Opus and Sonnet carry the identical detection block', async () => 
 
 test('parity: the artifact constants are the same text on all three engines', async () => {
   const sources = await Promise.all(['engine-opus.js', 'engine-sonnet.js', 'engine-astra.js'].map(src))
-  for (const name of ['MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'PLAN_OBJECT', 'DATA_OBJECT']) {
+  for (const name of ['MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'REVIEW_OBJECT', 'PLAN_OBJECT', 'DATA_OBJECT', 'WORKFLOW_OBJECT']) {
     const lines = sources.map(source => source.split('\n').find(line => line.startsWith(`const ${name} =`)))
     assert.ok(lines.every(Boolean), `${name} exists in every engine`)
     assert.equal(new Set(lines).size, 1, `${name} differs between engines:\n${lines.join('\n')}`)

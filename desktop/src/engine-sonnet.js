@@ -215,15 +215,19 @@ const CATEGORY_RULES = [
   ['business', /\b(plano de|lancamento|launch|vendas|sales|marketing|proposta|proposal|pricing|precos?|estrategia|strategy|negocios?|business|trimestre|quarter|clientes?|customers?)\b/]
 ]
 
-// A make verb whose object is a plan, a data file or an automation names that deliverable, whatever verb rule it
-// also matches ("Create a plan", "Crie uma planilha"). Languages: Portuguese (unaccented) + English.
-const PLAN_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija|redigir|monte|montar|gere|gerar|elabore|elaborar|write|create|build|make|draft|develop)\s+(?:(?:a|an|the|um|uma|o|os|as|our|nosso|nossa|new|novo|nova|detailed|detalhado|detalhada|simple|simples)\s+){0,2}(?:\w+\s+)?(?:plan|plano|planos|roadmap|cronograma|strategy|estrategia)\b/
-const DATA_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija|redigir|monte|montar|gere|gerar|elabore|elaborar|write|create|build|make|draft|develop)\s+(?:(?:a|an|the|um|uma|o|os|as|our|nosso|nossa|new|novo|nova|detailed|detalhado|detalhada|simple|simples)\s+){0,2}(?:\w+\s+)?(?:planilhas?|spreadsheets?|csv|datasets?)\b/
-const WORKFLOW_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija|redigir|monte|montar|gere|gerar|elabore|elaborar|write|create|build|make|draft|develop)\s+(?:(?:a|an|the|um|uma|o|os|as|our|nosso|nossa|new|novo|nova|detailed|detalhado|detalhada|simple|simples)\s+){0,2}(?:\w+\s+)?(?:workflows?|pipelines?)\b/
+// A make verb whose object is a review, a plan, a data file or an automation names that deliverable, whatever verb
+// rule it also matches ("Write a review of the API", "Create a plan", "Crie uma planilha"). The object must be the
+// head of its noun phrase (end, punctuation or a preposition follows): "Write a plan summary" asks for a summary.
+// Languages: Portuguese (unaccented) + English.
+const REVIEW_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija|redigir|monte|montar|gere|gerar|elabore|elaborar|write|create|build|make|draft|develop)\s+(?:(?:a|an|the|um|uma|o|os|as|our|nosso|nossa|new|novo|nova|detailed|detalhado|detalhada|simple|simples)\s+){0,2}(?:\w+\s+)?(?:reviews?|revisao|revisoes|audits?|auditoria|auditorias|diagnostico|diagnosticos|diagnosis|critique)\b(?=\s*$|\s*[.,;:!?\n]|\s+(?:for|para|of|de|do|da|dos|das|on|sobre|about|to|that|which|que|with|com|in|em|no|na|nos|nas|by|por|and|e|from|at|before|after|ate|until|covering|explaining|so)\b)/
+const PLAN_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija|redigir|monte|montar|gere|gerar|elabore|elaborar|write|create|build|make|draft|develop)\s+(?:(?:a|an|the|um|uma|o|os|as|our|nosso|nossa|new|novo|nova|detailed|detalhado|detalhada|simple|simples)\s+){0,2}(?:\w+\s+)?(?:plan|plano|planos|roadmap|cronograma|strategy|estrategia)\b(?=\s*$|\s*[.,;:!?\n]|\s+(?:for|para|of|de|do|da|dos|das|on|sobre|about|to|that|which|que|with|com|in|em|no|na|nos|nas|by|por|and|e|from|at|before|after|ate|until|covering|explaining|so)\b)/
+const DATA_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija|redigir|monte|montar|gere|gerar|elabore|elaborar|write|create|build|make|draft|develop)\s+(?:(?:a|an|the|um|uma|o|os|as|our|nosso|nossa|new|novo|nova|detailed|detalhado|detalhada|simple|simples)\s+){0,2}(?:\w+\s+)?(?:planilhas?|spreadsheets?|csv|datasets?)\b(?=\s*$|\s*[.,;:!?\n]|\s+(?:for|para|of|de|do|da|dos|das|on|sobre|about|to|that|which|que|with|com|in|em|no|na|nos|nas|by|por|and|e|from|at|before|after|ate|until|covering|explaining|so)\b)/
+const WORKFLOW_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija|redigir|monte|montar|gere|gerar|elabore|elaborar|write|create|build|make|draft|develop)\s+(?:(?:a|an|the|um|uma|o|os|as|our|nosso|nossa|new|novo|nova|detailed|detalhado|detalhada|simple|simples)\s+){0,2}(?:\w+\s+)?(?:workflows?|pipelines?)\b(?=\s*$|\s*[.,;:!?\n]|\s+(?:for|para|of|de|do|da|dos|das|on|sobre|about|to|that|which|que|with|com|in|em|no|na|nos|nas|by|por|and|e|from|at|before|after|ate|until|covering|explaining|so)\b)/
 
 // Verb signals: an explicit request in the draft. The first match in the text decides; on a tie the earlier rule wins.
 // Languages: Portuguese (unaccented) + English; tested on normalize()/fold() output (lower-cased, NFD diacritics stripped).
 const DELIVERABLE_RULES = [
+  ['review', REVIEW_OBJECT],
   ['plan', PLAN_OBJECT],
   ['data', DATA_OBJECT],
   ['workflow', WORKFLOW_OBJECT],
