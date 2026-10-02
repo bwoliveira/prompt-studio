@@ -55,7 +55,8 @@ def test_registers_the_prompt_studio_auxiliary_task():
     # Same default timeout as install.sh and the README (20 s, the step limit).
     assert calls[0][1]["defaults"] == {"timeout": 20}
     assert "auxiliary.prompt_studio.timeout 20 " in (ROOT / "install.sh").read_text(encoding="utf-8")
-    assert "      timeout: 20\n" in (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "    timeout: 20\n" in (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "      timeout: 20\n" in (ROOT / "docs" / "CONFIGURATION.md").read_text(encoding="utf-8")
 
 
 def test_desktop_plugin_uses_only_ctx_tracked_listeners_and_storage():

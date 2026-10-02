@@ -2382,6 +2382,27 @@ test('KEYS-MAC-CAPS: on a Mac every key cap, tooltip and F1 row reads ⌥E / ⇧
   else assert.equal(globalThis.__sdkModifierCalls, 0, 'no SDK formatModifierToken on this SDK: the local glyphs were used')
 })
 
+test('README-KEYS: the README keyboard table shows, per platform, the keys the F1 list shows, in the same order', { skip }, async () => {
+  const readme = readFileSync(join(repo, 'README.md'), 'utf8')
+  const start = readme.indexOf('<!-- shortcut-table:start -->')
+  const end = readme.indexOf('<!-- shortcut-table:end -->')
+  assert.ok(start >= 0 && end > start, 'README has the shortcut table markers')
+  const rows = readme.slice(start, end).split('\n').filter(line => line.startsWith('| ')).slice(1)
+    .map(line => line.split('|').slice(1, 3).map(cell => cell.trim().split(', or ')[0]))
+  assert.ok(rows.length > 15, 'the table has a row per shortcut')
+  for (const [platform, column] of [['Linux x86_64', 0], ['MacIntel', 1]]) {
+    await withPlatform(platform, async () => {
+      await openStudio(INTENT, 'manual')
+      await press(K().help)
+      const shown = [...$('[data-studio-shortcuts-list]').querySelectorAll('[data-studio-shortcut-row]')].map(row => row.textContent)
+      assert.deepEqual(rows.map(row => row[column]), shown, `README column of ${platform} equals the F1 rows`)
+      await press(K().help)
+      await press(K().close)
+    })
+  }
+  assert.ok(!/\bfn\b/i.test(readme.slice(start, end)), 'the table never says fn')
+})
+
 test('KEYS-MAC-CAPS: the done text, the empty-draft notice and Settings errors name the key as a Mac shows it; the F1 notes are en/pt', { skip }, async () => {
   const original = structuredClone(K())
   try {

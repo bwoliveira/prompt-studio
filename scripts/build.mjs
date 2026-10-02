@@ -4,6 +4,8 @@
 //   // @ui-i18n-start .. // @ui-i18n-end  desktop/src/i18n-ui.js
 //   UI_FILES (below), concatenated verbatim  studio-state.js holds the // @core-start .. // @core-end reducer
 // and desktop/studio-core.mjs (same code, with exports) is written for the Node tests.
+// The keyboard table of README.md, between its marker comments, is generated from the SHORTCUTS map (SHORTCUTS_SOURCE
+// below) and the `shortcuts.*` labels of i18n-ui.js; a plain build rewrites it, `--check` fails when it is stale.
 // Both outputs are syntax-checked as ES modules before anything is written or compared.
 // `node scripts/build.mjs --check` writes nothing and exits 1 when either output is stale.
 import { readFile, writeFile } from 'node:fs/promises'
@@ -295,6 +297,69 @@ export function studioEngines(coreSource) {
   return engines
 }
 
+// README keyboard table. SHORTCUTS_SOURCE is the one file that holds the SHORTCUTS map and OPEN_BINDING: when the map
+// moves to another file, this line is the only change.
+export const SHORTCUTS_SOURCE = 'desktop/src/ui-components.js'
+export const SHORTCUT_TABLE_START = '<!-- shortcut-table:start -->'
+export const SHORTCUT_TABLE_END = '<!-- shortcut-table:end -->'
+// What the Studio draws on a Mac (displayCombo in ui-components.js): modifiers as glyphs, F-keys as plain F4.
+const MAC_GLYPHS = { alt: '⌥', shift: '⇧', ctrl: '⌃', mod: '⌘' }
+const PC_NAMES = { alt: 'Alt', shift: 'Shift', ctrl: 'Ctrl', mod: 'Ctrl' }
+
+// The SHORTCUTS map and the Desktop binding that opens the studio, read from the source of SHORTCUTS_SOURCE.
+// The map is an object literal that uses only TARGETS (the target registry), so it is evaluated with that.
+export function readShortcutMap(source, targets) {
+  const head = /^export const SHORTCUTS = (?=\{)/m.exec(source)
+  if (!head) throw new Error(`no \`export const SHORTCUTS = {\` map in ${SHORTCUTS_SOURCE}`)
+  const open = head.index + head[0].length
+  const close = walk(source, (i, ch, depth) => ch === '}' && depth === 1, open)
+  if (close >= source.length) throw new Error(`the SHORTCUTS map in ${SHORTCUTS_SOURCE} is not closed`)
+  const shortcuts = new Function('TARGETS', `return (${source.slice(open, close + 1)})`)(targets)
+  const binding = /^const OPEN_BINDING = '([^']+)'/m.exec(source)
+  if (!binding) throw new Error(`no \`const OPEN_BINDING = '...'\` in ${SHORTCUTS_SOURCE}`)
+  return { shortcuts, openBinding: binding[1] }
+}
+
+// One combo in the canonical notation ('Alt+Shift+1…9', 'mod+shift+e') as a Linux/Windows key or as a Mac key.
+function showCombo(combo, mac) {
+  const parts = combo.split('+')
+  const base = parts.pop()
+  const modifiers = parts.map(part => {
+    const name = part.toLowerCase()
+    if (!(name in MAC_GLYPHS)) throw new Error(`unknown modifier ${part} in ${combo}: add it to the tables of scripts/build.mjs and displayCombo`)
+    return name
+  })
+  const key = base.length === 1 ? base.toUpperCase() : base
+  if (mac) return (/^F\d+$/.test(base) ? '' : modifiers.map(name => MAC_GLYPHS[name]).join('')) + key
+  return [...modifiers.map(name => PC_NAMES[name]), key].join('+')
+}
+
+// labels: the en `shortcuts` bundle of i18n-ui.js. Rows follow the map (the F1 order); an Alt twin shares its F-key row.
+export function renderShortcutTable({ shortcuts, openBinding }, labels) {
+  const rows = Object.entries(shortcuts).filter(([action]) => action !== 'alt').map(([action, value]) => {
+    const label = labels[action]
+    if (typeof label !== 'string' || !label) throw new Error(`no en label shortcuts.${action} in i18n-ui.js for the shortcut ${action}`)
+    const combos = [typeof value === 'string' ? value : Object.values(value).join(' / '), shortcuts.alt?.[action]].filter(Boolean).join(' / ')
+    const cell = mac => {
+      const keys = combos.split(' / ').map(combo => showCombo(combo, mac)).join(' / ')
+      return action === 'open' ? `${keys}, or ${showCombo(openBinding, mac)}` : keys
+    }
+    return `| ${cell(false)} | ${cell(true)} | ${label} |`
+  })
+  return ['| Linux and Windows | Mac | Action |', '|---|---|---|', ...rows].join('\n')
+}
+
+// The README with the text between the marker comments replaced by table; everything else is kept as written.
+export function replaceShortcutTable(readme, table) {
+  const start = readme.indexOf(SHORTCUT_TABLE_START)
+  const end = readme.indexOf(SHORTCUT_TABLE_END)
+  if (start < 0 || end < start) throw new Error(`README.md needs the marker comments ${SHORTCUT_TABLE_START} and ${SHORTCUT_TABLE_END}, in this order, around the keyboard table`)
+  return `${readme.slice(0, start + SHORTCUT_TABLE_START.length)}\n${table}\n${readme.slice(end)}`
+}
+
+// Import a self-contained generated ESM source (no imports of its own) to read what it exports.
+const importSource = source => import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`)
+
 // Hand-written plugin code, in plugin.js order. They share plugin.js's single module scope.
 const UI_FILES = ['studio-state.js', 'ui-locale.js', 'ui-prefs.js', 'ui-flow.js', 'ui-components.js']
 
@@ -346,15 +411,25 @@ async function main() {
   await assertValidModule('desktop/plugin.js', next)
   await assertValidModule('desktop/studio-core.mjs', mjs)
 
+  const readme = await readIfPresent('README.md')
+  if (readme === null) throw new Error('README.md is missing: it holds the generated keyboard table')
+  const shortcutSource = await read(SHORTCUTS_SOURCE)
+  const { TARGETS } = await importSource(mjs)
+  const { UI_MESSAGES } = await importSource(uiI18n)
+  const nextReadme = replaceShortcutTable(readme, renderShortcutTable(readShortcutMap(shortcutSource, TARGETS), UI_MESSAGES.en.shortcuts))
+
   if (check) {
     const { missing, stale } = compareOutputs({ 'desktop/plugin.js': next, 'desktop/studio-core.mjs': mjs }, { 'desktop/plugin.js': plugin, 'desktop/studio-core.mjs': oldMjs })
     if (missing.length) console.error(`missing build output: ${missing.join(', ')}. Run: node scripts/build.mjs`)
     if (stale.length) console.error(`stale build output: ${stale.join(', ')}. Run: node scripts/build.mjs`)
-    if (missing.length || stale.length) process.exit(1)
+    const readmeStale = nextReadme !== readme
+    if (readmeStale) console.error('stale README shortcut table: README.md does not match the SHORTCUTS map. Run: node scripts/build.mjs')
+    if (missing.length || stale.length || readmeStale) process.exit(1)
     console.log('build output is up to date')
   } else {
     await writeFile(url('desktop/plugin.js'), next, 'utf8')
     await writeFile(url('desktop/studio-core.mjs'), mjs, 'utf8')
+    if (nextReadme !== readme) await writeFile(url('README.md'), nextReadme, 'utf8')
     console.log(`studio block: ${studioBlock.length} chars; ui-i18n block: ${uiBlock.length} chars`)
   }
 }

@@ -148,9 +148,12 @@ def test_every_provider_code_is_documented_and_has_localized_text():
 
 
 def test_the_readme_troubleshooting_names_each_provider_failure_apart():
+    # The provider troubleshooting note lives in docs/CONFIGURATION.md; the README names the codes and links there.
     readme = " ".join((ROOT / "README.md").read_text().split())
-    start = readme.index("If suggestions fail with")
-    note = readme[start:start + 700]
+    assert "(401, 402, 403, 400, 429, timeouts)" in readme and "docs/CONFIGURATION.md" in readme
+    config = " ".join((ROOT / "docs" / "CONFIGURATION.md").read_text().split())
+    start = config.index("If suggestions fail with")
+    note = config[start:start + 700]
     assert "provider refused" in note and "(403" in note and "(401/403)" not in note
     assert re.search(r"API key not accepted\W+\(401\)", note), note
     assert "(429)" in note and "timed out" in note, note
