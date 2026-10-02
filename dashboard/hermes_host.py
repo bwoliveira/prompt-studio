@@ -111,6 +111,11 @@ def extract_content_or_reasoning(response: Any) -> Any:
     return fn(response)
 
 
+def check_extractor() -> None:
+    """The response extractor is there and takes a response: asked before a provider call, which it must not follow."""
+    _check_call(_symbol(_AUX, "extract_content_or_reasoning"), f"{_AUX}.extract_content_or_reasoning", None)
+
+
 def auxiliary_task_config(task: str) -> dict[str, Any]:
     fn = _symbol(_AUX, "_get_auxiliary_task_config")
     _check_call(fn, f"{_AUX}._get_auxiliary_task_config", task)
@@ -208,7 +213,7 @@ def open_session_store(profile: str) -> Any:
 def _verify_auxiliary(task: str) -> None:
     call = _symbol(_AUX, "call_llm")
     _check_call(call, f"{_AUX}.call_llm", **dict.fromkeys(CALL_LLM_KWARGS))
-    _check_call(_symbol(_AUX, "extract_content_or_reasoning"), f"{_AUX}.extract_content_or_reasoning", None)
+    check_extractor()
     _check_call(_symbol(_AUX, "_get_auxiliary_task_config"), f"{_AUX}._get_auxiliary_task_config", "task")
     _check_call(_symbol(_AUX, "_resolve_task_provider_model"), f"{_AUX}._resolve_task_provider_model", "task")
     _check_call(_symbol(_AUX, "_is_model_not_found_error"), f"{_AUX}._is_model_not_found_error", Exception())

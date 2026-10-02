@@ -223,6 +223,7 @@ def _default_llm(
     effort, max_tokens = _effort_and_cap(effort, provider_norm, max_tokens)
 
     reasoning_config = host.parse_reasoning_effort(effort) if effort else None
+    host.check_extractor()  # a changed extractor must not be found after the provider call has been paid for
 
     extra_body: dict[str, Any] = {}
     configured_extra = task_config.get("extra_body")

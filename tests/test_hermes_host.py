@@ -450,3 +450,18 @@ def test_an_opened_store_whose_close_needs_an_argument_is_host_incompatible_befo
     with pytest.raises(host.HostIncompatible, match="close"):
         host.check_session_store(Broken())
     assert used == []
+
+
+# --- Codex round 1 -------------------------------------------------------------------------------------------------
+def test_a_missing_response_extractor_is_host_incompatible_before_the_provider_is_called(monkeypatch):
+    calls = []
+
+    def call_llm(**kwargs):
+        calls.append(kwargs)
+        return {"choices": []}
+
+    _fake_hermes(monkeypatch, **_override("agent.auxiliary_client", "call_llm", call_llm),
+                 **_override("agent.auxiliary_client", "extract_content_or_reasoning", None))
+    with pytest.raises(host.HostIncompatible):
+        adapter._default_llm(messages=[], max_tokens=10, timeout=5)
+    assert calls == []  # the contract: this code means no provider call was made
