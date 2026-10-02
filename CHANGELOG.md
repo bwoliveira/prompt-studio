@@ -93,7 +93,8 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   is to write a Python script. Review the existing code."; "Do not install anything. How do I configure nginx?" and "Do I need to
   configure nginx" stay questions, "We have a plan to build the app. Review it." is the review, and "As a security
   expert, review API authentication before we configure nginx" is too, as are "Write a review highlighting security
-  flaws in the API." and "Revisão e auditoria da API antes de configurar nginx".
+  flaws in the API." and "Revisão e auditoria da API antes de configurar nginx". "Can you recommend a design and build
+  a React dashboard?" is the build and "Can you explain cron and then review it?" is the review.
 - Fix: *Gere um e-mail*, *Monte uma mensagem* and the like stay text, reports and summaries are text even when they
   mention tests ("Write a summary of the test results", "Escreva um relatório dos testes"), and a question such as
   "Como instalar o Docker?" or "Como resumir um livro?" stays an answer on Opus, Sonnet and Astra.

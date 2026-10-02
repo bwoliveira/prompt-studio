@@ -351,6 +351,8 @@ const REQUESTED_ARTIFACT = /((?:(?:i|we) (?:need|want|would like)|i'd like|we'd 
 const TOPIC_TAIL = /\b(?:how to|how|why|when|where|what|which|whether|como|por que|porque|quando|onde|o que|qual|quais|se)\s+\w+[^.!?,;]*$/
 const TOPIC_HEAD = /^\s*(?:how|what|why|when|where|which|whether|como|o que|por que|quando|onde|qual|quais)\b/
 // "and fix the login bug": the order verb opens right after the coordinator, at most behind please/then/an adverb.
+// "Can you recommend a design and build a React dashboard?": a yes/no question addressed to the assistant may carry an order.
+const ADDRESSED = /^(?:(?:can|could|would|will|should|may|might|do|does|did)\s+you\b|(?:voce|voces)\b|(?:pode|podem|poderia|poderiam|consegue|conseguem|da|daria)\s+(?:para\s+)?(?:voce|voces|me|nos)?\b)/
 const ORDER_LEAD = /^\s*(?:(?:please|por favor|then|depois|also|tambem|now|agora|\w+ly|\w+mente)\s+){0,2}$/
 const ORDER_JOIN = /\b(?:and|then|e|depois|entao)\s+(?:then\s+|depois\s+)?/g
 function coordinatedOrder(text) {
@@ -362,7 +364,8 @@ function coordinatedOrder(text) {
     const sequence = /\b(?:then|depois|entao)\b/.test(m[0])
     if (TOPIC_HEAD.test(rest) || (!sequence && TOPIC_TAIL.test(before))) continue
     const next = firstSignal(rest)
-    if (next.verb && ORDER_LEAD.test(rest.slice(0, next.at))) return m.index
+    // The offset of the order verb itself, so the rest starts a sentence ("review it?") and is read as an order.
+    if (next.verb && ORDER_LEAD.test(rest.slice(0, next.at))) return m.index + m[0].length + next.at
   }
   return -1
 }
@@ -454,7 +457,10 @@ function questionAt(goal) {
     return order < 0 ? explain : [explain[0].slice(0, order)]
   }
   const yesNo = YESNO_FORM.exec(goal)
-  if (yesNo && (yesNo[0].includes('?') || UNMARKED_YESNO.test(yesNo[0]))) return yesNo
+  if (yesNo && (yesNo[0].includes('?') || UNMARKED_YESNO.test(yesNo[0]))) {
+    const order = ADDRESSED.test(yesNo[0]) ? coordinatedOrder(yesNo[0]) : -1
+    return order < 0 ? yesNo : [yesNo[0].slice(0, order)]
+  }
   const m = QUESTION_FORM.exec(goal)
   if (!m) return null
   // "What I need is for you to build a React dashboard, can you do that?": a declarative request, with or without the mark.
@@ -997,6 +1003,8 @@ const REQUESTED_ARTIFACT = /((?:(?:i|we) (?:need|want|would like)|i'd like|we'd 
 const TOPIC_TAIL = /\b(?:how to|how|why|when|where|what|which|whether|como|por que|porque|quando|onde|o que|qual|quais|se)\s+\w+[^.!?,;]*$/
 const TOPIC_HEAD = /^\s*(?:how|what|why|when|where|which|whether|como|o que|por que|quando|onde|qual|quais)\b/
 // "and fix the login bug": the order verb opens right after the coordinator, at most behind please/then/an adverb.
+// "Can you recommend a design and build a React dashboard?": a yes/no question addressed to the assistant may carry an order.
+const ADDRESSED = /^(?:(?:can|could|would|will|should|may|might|do|does|did)\s+you\b|(?:voce|voces)\b|(?:pode|podem|poderia|poderiam|consegue|conseguem|da|daria)\s+(?:para\s+)?(?:voce|voces|me|nos)?\b)/
 const ORDER_LEAD = /^\s*(?:(?:please|por favor|then|depois|also|tambem|now|agora|\w+ly|\w+mente)\s+){0,2}$/
 const ORDER_JOIN = /\b(?:and|then|e|depois|entao)\s+(?:then\s+|depois\s+)?/g
 function coordinatedOrder(text) {
@@ -1008,7 +1016,8 @@ function coordinatedOrder(text) {
     const sequence = /\b(?:then|depois|entao)\b/.test(m[0])
     if (TOPIC_HEAD.test(rest) || (!sequence && TOPIC_TAIL.test(before))) continue
     const next = firstSignal(rest)
-    if (next.verb && ORDER_LEAD.test(rest.slice(0, next.at))) return m.index
+    // The offset of the order verb itself, so the rest starts a sentence ("review it?") and is read as an order.
+    if (next.verb && ORDER_LEAD.test(rest.slice(0, next.at))) return m.index + m[0].length + next.at
   }
   return -1
 }
@@ -1100,7 +1109,10 @@ function questionAt(goal) {
     return order < 0 ? explain : [explain[0].slice(0, order)]
   }
   const yesNo = YESNO_FORM.exec(goal)
-  if (yesNo && (yesNo[0].includes('?') || UNMARKED_YESNO.test(yesNo[0]))) return yesNo
+  if (yesNo && (yesNo[0].includes('?') || UNMARKED_YESNO.test(yesNo[0]))) {
+    const order = ADDRESSED.test(yesNo[0]) ? coordinatedOrder(yesNo[0]) : -1
+    return order < 0 ? yesNo : [yesNo[0].slice(0, order)]
+  }
   const m = QUESTION_FORM.exec(goal)
   if (!m) return null
   // "What I need is for you to build a React dashboard, can you do that?": a declarative request, with or without the mark.
@@ -1707,6 +1719,8 @@ const REQUESTED_ARTIFACT = /((?:(?:i|we) (?:need|want|would like)|i'd like|we'd 
 const TOPIC_TAIL = /\b(?:how to|how|why|when|where|what|which|whether|como|por que|porque|quando|onde|o que|qual|quais|se)\s+\w+[^.!?,;]*$/
 const TOPIC_HEAD = /^\s*(?:how|what|why|when|where|which|whether|como|o que|por que|quando|onde|qual|quais)\b/
 // "and fix the login bug": the order verb opens right after the coordinator, at most behind please/then/an adverb.
+// "Can you recommend a design and build a React dashboard?": a yes/no question addressed to the assistant may carry an order.
+const ADDRESSED = /^(?:(?:can|could|would|will|should|may|might|do|does|did)\s+you\b|(?:voce|voces)\b|(?:pode|podem|poderia|poderiam|consegue|conseguem|da|daria)\s+(?:para\s+)?(?:voce|voces|me|nos)?\b)/
 const ORDER_LEAD = /^\s*(?:(?:please|por favor|then|depois|also|tambem|now|agora|\w+ly|\w+mente)\s+){0,2}$/
 const ORDER_JOIN = /\b(?:and|then|e|depois|entao)\s+(?:then\s+|depois\s+)?/g
 function coordinatedOrder(text) {
@@ -1718,7 +1732,8 @@ function coordinatedOrder(text) {
     const sequence = /\b(?:then|depois|entao)\b/.test(m[0])
     if (TOPIC_HEAD.test(rest) || (!sequence && TOPIC_TAIL.test(before))) continue
     const next = firstSignal(rest)
-    if (next.verb && ORDER_LEAD.test(rest.slice(0, next.at))) return m.index
+    // The offset of the order verb itself, so the rest starts a sentence ("review it?") and is read as an order.
+    if (next.verb && ORDER_LEAD.test(rest.slice(0, next.at))) return m.index + m[0].length + next.at
   }
   return -1
 }
@@ -1810,7 +1825,10 @@ function questionAt(goal) {
     return order < 0 ? explain : [explain[0].slice(0, order)]
   }
   const yesNo = YESNO_FORM.exec(goal)
-  if (yesNo && (yesNo[0].includes('?') || UNMARKED_YESNO.test(yesNo[0]))) return yesNo
+  if (yesNo && (yesNo[0].includes('?') || UNMARKED_YESNO.test(yesNo[0]))) {
+    const order = ADDRESSED.test(yesNo[0]) ? coordinatedOrder(yesNo[0]) : -1
+    return order < 0 ? yesNo : [yesNo[0].slice(0, order)]
+  }
   const m = QUESTION_FORM.exec(goal)
   if (!m) return null
   // "What I need is for you to build a React dashboard, can you do that?": a declarative request, with or without the mark.
