@@ -260,7 +260,7 @@ const NOUN_SIGNAL = /^(plano|planos|plan|roadmap|cronograma|estrategia|strategy|
 // one-word opener and its comma ("First, plan ..."), a polite prefix ("Please plan ...", "Por favor, planeje") or a
 // request prefix ("Can you plan ...", "I need you to plan ...", "Preciso que voce planeje ...").
 // A noun-signal word there names the request ("Plan the steps ...", "Plano de acao para ..."), not context.
-const SENTENCE_START = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:can|could|would|will) you|(?:i|we) (?:need|want) you to|voce pode|preciso que voce|precisamos que voce|quero que voce|queremos que voce)\s+(?:please\s+)?)?(?:(?:help (?:me|us)(?: to)?|(?:me|nos) (?:ajude|ajudem|ajuda) a|(?:ajude|ajudem)(?:-| )(?:me|nos) a)\s+(?:please\s+)?)?(?:(?:\w+ly|\w+mente|first|then|now|next|also|just|again|primeiro|depois|agora|entao|tambem|so|ja)\s+)?$/
+const SENTENCE_START = /(?:^|[.!?;:\n])\s*(?:(?:\w+|(?:as|como|enquanto)\s+(?:an?\s+|um\s+|uma\s+)?[^,.!?;:\n]{1,40}),\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:can|could|would|will) you|(?:i|we) (?:need|want) you to|voce pode|preciso que voce|precisamos que voce|quero que voce|queremos que voce)\s+(?:please\s+)?)?(?:(?:help (?:me|us)(?: to)?|(?:me|nos) (?:ajude|ajudem|ajuda) a|(?:ajude|ajudem)(?:-| )(?:me|nos) a)\s+(?:please\s+)?)?(?:(?:\w+ly|\w+mente|first|then|now|next|also|just|again|primeiro|depois|agora|entao|tambem|so|ja)\s+)?$/
 // A noun-signal word after an infinitive or modal marker is the verb ("we need to plan before ...", "let's plan").
 const INFINITIVE_MARK = /\b(?:(?:need|needs|needed|want|wants|wanted|have|has|had|going|ought|able|like|try|trying|time|ready|how)\s+to|let'?s|let us|(?:we|you|i|they)\s+(?:should|must|will|can|could|shall|may|might)(?:\s+(?:also|first|then|now|just))?|precisamos|devemos|vamos|queremos|preciso|quero|devo|vou)\s*$/
 // A noun-signal word that heads a requested noun phrase ("A plan to configure nginx", "Preciso de um plano para ...")
@@ -327,7 +327,7 @@ const INTRO_CLAUSE = /^([^.!?,:;\n]{1,60}),\s+/
 const PT_INFINITIVE = /(?:ar|er|ir)$/
 const AFTER_A = /\ba\s+$/
 // "The goal is to write a Python script. Review the existing code.": the stated goal is context for the order after it.
-const STATED_GOAL = /\b(?:goal|aim|objective|purpose|idea|plan|objetivo|meta|ideia|proposito|intencao)\s+(?:is|was|e|era|foi)\s+(?:to\s+|de\s+)?$/
+const STATED_GOAL = /\b(?:(?:goal|aim|objective|purpose|idea|plan|objetivo|meta|ideia|proposito|intencao)\s+(?:is|was|e|era|foi)\s+(?:to\s+|de\s+)?|(?:have|has|had|there is|there are|wrote|drafted|made|got|temos|tem|tenho|tinha|ha|existe|escrevi|escrevemos|fiz|fizemos)\s+(?:(?:a|an|the|some|um|uma|o|os|as)\s+)?(?:[\w-]+\s+){1,3}(?:to|that|which|para|que)\s+)$/
 function orderAfterSentence(text, from) {
   const m = /[.!?;:\n]/.exec(text.slice(from, from + CONTEXT_WINDOW))
   return !!m && firstSignal(text.slice(from + m.index + 1, from + m.index + 1 + CONTEXT_WINDOW)).verb
@@ -384,7 +384,10 @@ function prohibited(text, at, hops = 0) {
 // "Voce pode ..." are requests, not questions, unless they ask what the reader thinks, knows or can tell; "help me
 // understand" asks, "help me fix" orders; "Do you / did you / have you ..." only ask; "Do not ..." is a
 // prohibition, and the question ends at its own sentence, so a later request is read on its own.
-const YESNO_FORM = /^(?:(?:voce|voces)\s+(?:pode|podem|poderia|poderiam|consegue|conseguem|sabe|sabem)\s+(?:por favor\s+)?(?:me\s+)?(?:dizer|explicar|mostrar|contar|descrever|esclarecer|ajudar a (?:entender|compreender|saber|decidir|escolher)|orientar|indicar)|(?:(?:should|must|do|does|did|is|are|was|were|am|have|has|posso|podemos|devo|devemos|consigo|conseguimos|preciso|precisamos|existe|existem|ha|tem como|da para|e possivel|e preciso|e necessario|e seguro|e melhor|sera que|vale)\b|(?:can|could|would|will|may|might|shall)(?!\s+(?:you|voce|voces)\b(?!(?:\s+(?:please|kindly|por favor|gentilmente))?\s+(?:think|know|believe|recommend|suggest|mean|see|tell|say|explain|describe|clarify|show|walk|help (?:me |us )?(?:to )?(?:understand|figure out|learn|know|see|grasp|decide|choose)|acha|sabe|recomenda|sugere|conhece|me dizer|me explicar|me mostrar|me contar|me descrever|me esclarecer|me ajudar a (?:entender|compreender|saber|decidir|escolher)|me orientar|dizer|explicar|mostrar|contar|descrever|esclarecer)\b)))(?!\s+not\b|n't\b))\b(?:[^.?!\n]|\.(?=\S)|\n(?![ \t]*\n))*\?/
+// "Do I need to configure nginx", "Posso configurar o nginx.": only a modal or auxiliary opener reads as a question
+// without its mark; "Preciso de um plano" or "Existe um script" is a statement until a "?" closes it.
+const UNMARKED_YESNO = /^(?:should|must|do|does|did|is|are|was|were|am|have|has|can|could|would|will|may|might|shall|posso|podemos|devo|devemos|consigo|conseguimos|sera que)\b/
+const YESNO_FORM = /^(?:(?:voce|voces)\s+(?:pode|podem|poderia|poderiam|consegue|conseguem|sabe|sabem)\s+(?:por favor\s+)?(?:me\s+)?(?:dizer|explicar|mostrar|contar|descrever|esclarecer|ajudar a (?:entender|compreender|saber|decidir|escolher)|orientar|indicar)|(?:(?:should|must|do|does|did|is|are|was|were|am|have|has|posso|podemos|devo|devemos|consigo|conseguimos|preciso|precisamos|existe|existem|ha|tem como|da para|e possivel|e preciso|e necessario|e seguro|e melhor|sera que|vale)\b|(?:can|could|would|will|may|might|shall)(?!\s+(?:you|voce|voces)\b(?!(?:\s+(?:please|kindly|por favor|gentilmente))?\s+(?:think|know|believe|recommend|suggest|mean|see|tell|say|explain|describe|clarify|show|walk|help (?:me |us )?(?:to )?(?:understand|figure out|learn|know|see|grasp|decide|choose)|acha|sabe|recomenda|sugere|conhece|me dizer|me explicar|me mostrar|me contar|me descrever|me esclarecer|me ajudar a (?:entender|compreender|saber|decidir|escolher)|me orientar|dizer|explicar|mostrar|contar|descrever|esclarecer)\b)))(?!\s+not\b|n't\b))\b(?:[^.?!\n]|\.(?=\S)|\n(?![ \t]*\n))*(?:\?|\.(?!\S)|$|(?=\n[ \t]*\n))/
 // "Can you tell me how to configure nginx", "Tell me how to ...", "Me diga como ...": an explanation is asked for,
 // whether or not a question mark closes it; the request ends with its sentence.
 const EXPLAIN_FORM = /^(?:(?:(?:please|por favor),?\s+)?(?:(?:tell|show|explain to|describe to|walk) (?:me|us)|help (?:me|us) (?:to )?(?:understand|figure out|learn|know|see|grasp|decide|choose)|(?:me|nos) (?:ajude|ajudem) a (?:entender|compreender|saber|decidir|escolher)|(?:ajude|ajudem)(?:-| )(?:me|nos) a (?:entender|compreender|saber|decidir|escolher)|(?:me|nos) (?:diga|digam|explique|expliquem|mostre|mostrem|conte|contem|descreva|descrevam|esclareca|esclarecam)|(?:diga|digam|explique|expliquem|mostre|mostrem|conte|contem|descreva|descrevam|esclareca|esclarecam) (?:me|nos|pra mim|para mim|para nos))|(?:can|could|would|will) you (?:(?:please|kindly) )?(?:tell|say|explain|describe|clarify|show|walk|help (?:me |us )?(?:to )?(?:understand|figure out|learn|know|see|grasp|decide|choose))|(?:voce|voces) (?:pode|podem|poderia|poderiam|consegue|conseguem|sabe|sabem) (?:por favor )?(?:me )?(?:dizer|explicar|mostrar|contar|descrever|esclarecer|ajudar a (?:entender|compreender|saber|decidir|escolher)|orientar|indicar))\b(?:[^.?!\n]|\.(?=\S)|\n(?![ \t]*\n))*(?:\?|\.(?!\S)|$|(?=\n[ \t]*\n))/
@@ -406,7 +409,7 @@ function questionAt(goal) {
     return order < 0 ? explain : [explain[0].slice(0, order)]
   }
   const yesNo = YESNO_FORM.exec(goal)
-  if (yesNo) return yesNo
+  if (yesNo && (yesNo[0].includes('?') || UNMARKED_YESNO.test(yesNo[0]))) return yesNo
   const m = QUESTION_FORM.exec(goal)
   if (!m) return null
   // "What I need is for you to build a React dashboard, can you do that?": a declarative request, with or without the mark.
