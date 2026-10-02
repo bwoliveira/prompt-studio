@@ -4500,16 +4500,15 @@ async function sendPreview() {
   closeStudio({ restoreDraft: false })
 }
 
-// Session context indicator: reading / used (model, seconds) / not available (short reason).
+// Session context indicator: used (model, seconds) / not available (short reason). While it is still reading,
+// the strip shows its own loading row (StudioLadder), so nothing is drawn here.
 function ContextStatus() {
   const t = useT()
   const context = useValue($context)
   if (!context || context.status === 'reading') return null
-  const text = context.status === 'reading'
-    ? t('context.reading')
-    : context.status === 'ready'
-      ? t('context.used', context.model || '-', (context.ms / 1000).toFixed(1))
-      : t('context.failed', context.reason)
+  const text = context.status === 'ready'
+    ? t('context.used', context.model || '-', (context.ms / 1000).toFixed(1))
+    : t('context.failed', context.reason)
   return jsx('span', { 'aria-live': 'polite', 'data-studio-context-status': context.status, role: 'status', style: { ...typeStyle, display: 'block', fontSize: '11px', lineHeight: '16px', marginTop: '4px' }, children: text })
 }
 
