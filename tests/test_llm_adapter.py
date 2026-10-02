@@ -444,3 +444,43 @@ def test_no_retry_once_the_budget_is_spent(monkeypatch):
     with pytest.raises(ValueError):
         adapter._default_llm(messages=[], max_tokens=10, timeout=1.2, is_json=True)
     assert len(calls) == 1
+
+
+# Issue #26: only the answer (message.content) becomes a suggestion; JSON inside the thinking never does.
+def _fake_with_host_fallback(monkeypatch, response):
+    """Fake Hermes whose extract_content_or_reasoning falls back to reasoning like the real one."""
+    fake = types.ModuleType("agent.auxiliary_client")
+
+    def extract(resp):
+        msg = resp["choices"][0]["message"] if isinstance(resp, dict) and "choices" in resp else resp
+        content = (msg.get("content") or "").strip()
+        return content or (msg.get("reasoning") or msg.get("reasoning_content") or "").strip()
+
+    fake.call_llm = lambda **kw: response
+    fake.extract_content_or_reasoning = extract
+    fake._get_auxiliary_task_config = lambda task: {}
+    fake._resolve_task_provider_model = lambda *a, **k: ("p", "m", None, None, None)
+    monkeypatch.setitem(sys.modules, "agent.auxiliary_client", fake)
+    monkeypatch.setitem(sys.modules, "agent", types.ModuleType("agent"))
+    hc = types.ModuleType("hermes_constants")
+    hc.parse_reasoning_effort = lambda v: None
+    monkeypatch.setitem(sys.modules, "hermes_constants", hc)
+
+
+def test_empty_content_with_json_in_the_reasoning_is_an_empty_reply(monkeypatch):
+    reasoning = '{"value": "Sim", "reason": "pensando"}'
+    for field in ("reasoning", "reasoning_content"):
+        response = {"choices": [{"finish_reason": "length", "message": {"content": "", field: reasoning}}]}
+        _fake_with_host_fallback(monkeypatch, response)
+        reply = adapter._invoke(None, [], max_tokens=10, timeout=1, is_json=True)
+        assert reply[0] == "" and reply.finish_reason == "length"
+    # Same through an attribute-style response, with content None.
+    msg = types.SimpleNamespace(content=None, reasoning=reasoning)
+    _fake_with_host_fallback(monkeypatch, types.SimpleNamespace(choices=[types.SimpleNamespace(finish_reason="stop", message=msg)]))
+    assert adapter._invoke(None, [], max_tokens=10, timeout=1, is_json=True)[0] == ""
+
+
+def test_the_answer_content_is_still_returned_when_there_is_reasoning_too(monkeypatch):
+    response = {"choices": [{"finish_reason": "stop", "message": {"content": '{"value": "Não"}', "reasoning": '{"value": "Sim"}'}}]}
+    _fake_with_host_fallback(monkeypatch, response)
+    assert adapter._invoke(None, [], max_tokens=10, timeout=1, is_json=True)[0] == '{"value": "Não"}'

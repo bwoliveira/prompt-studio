@@ -44,6 +44,21 @@ def test_invented_option_is_reported_not_accepted():
     assert out["ok"] is False and out["code"] == "unknown_option"
 
 
+def test_enum_value_that_only_starts_with_an_option_is_not_mapped_onto_it():
+    # "Not applicable here" starts with "no": it must not become "No" (issue #26).
+    se = _load()
+    yes_no = {**ENUM, "options": ["Yes", "No"]}
+    for value in ("Not applicable here", "Yes, probably", "Nope"):
+        llm, _ = _llm(json.dumps({"value": value, "reason": "x"}))
+        out = se.suggest({**BASE, "field": yes_no}, llm=llm)
+        assert out["ok"] is False and out["code"] == "unknown_option", value
+    # Exact (case-insensitive) matches and a value that is the start of one option stay accepted.
+    for value, want in (("no", "No"), ("YES", "Yes"), ("Y", "Yes")):
+        llm, _ = _llm(json.dumps({"value": value, "reason": "x"}))
+        out = se.suggest({**BASE, "field": yes_no}, llm=llm)
+        assert out["ok"] and out["value"] == want, value
+
+
 def test_text_suggestion_and_empty_value():
     se = _load()
     llm, _ = _llm('```json\n{"value": "Planilha atual no Google Sheets.", "reason": "Citado no pedido."}\n```')

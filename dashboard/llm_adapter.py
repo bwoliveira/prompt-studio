@@ -61,6 +61,19 @@ def _finish_reason(response: Any) -> str:
     return value if isinstance(value, str) else ""
 
 
+def _answer_content(response: Any) -> Any:
+    """``message.content`` of the first choice: the answer, never the thinking.
+
+    The host's ``extract_content_or_reasoning`` falls back to the reasoning fields when the content is empty;
+    handing it a bare ``{"content": ...}`` message keeps that fallback (and its think-block stripping) from
+    turning JSON inside the thinking into the reply.
+    """
+    choices = response.get("choices") if isinstance(response, Mapping) else getattr(response, "choices", None)
+    first = choices[0] if choices else response
+    message = first.get("message") if isinstance(first, Mapping) else getattr(first, "message", first)
+    return message.get("content") if isinstance(message, Mapping) else getattr(message, "content", None)
+
+
 def _loads_dict(text: str) -> dict[str, Any] | None:
     """json.loads ``text``; the value only when it is a dict, else None."""
     try:
@@ -236,7 +249,7 @@ def _default_llm(
         response = _call(retry_body, remaining)
     resolved_provider = route.get("provider", provider or "auto")
     resolved_model = route.get("model", model or "default")
-    return Reply(extract_content_or_reasoning(response), f"{resolved_provider}/{resolved_model}", _finish_reason(response))
+    return Reply(extract_content_or_reasoning({"content": _answer_content(response)}), f"{resolved_provider}/{resolved_model}", _finish_reason(response))
 
 
 _JSON_MODE_TEXT = ("response_format", "json_object", "structured output", "json_schema", "json mode")
