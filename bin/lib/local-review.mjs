@@ -5,7 +5,7 @@
 // Base branch: BASE_BRANCH, else origin's default branch, else main (`--print-base` prints it). Codex run limit:
 // CODEX_TIMEOUT_SECONDS (default 900); a timeout or any failure never approves. `--summary-file <path>` writes the
 // review verdict as Markdown, which bin/pr puts into the pull request body.
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync, existsSync, mkdtempSync, rmSync, openSync, closeSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -116,6 +116,29 @@ function parseArgs(argv) {
   return opts;
 }
 
+// Codex runs in its own process group: the installed codex is a wrapper that starts the real binary, and a signal to
+// the wrapper alone would leave that child running. The timeout and an interruption of the review (Ctrl+C, hangup,
+// termination) kill the whole group; an interruption is reported to the caller, which cleans up and never approves.
+const INTERRUPTS = ['SIGINT', 'SIGTERM', 'SIGHUP'];
+function runCodex(codex, args, { cwd, errFd, seconds }) {
+  return new Promise((resolve) => {
+    const child = spawn(codex, args, { cwd, stdio: ['ignore', 'ignore', errFd], detached: true });
+    const killGroup = () => { try { process.kill(-child.pid, 'SIGKILL'); } catch { /* the whole group was already gone */ } };
+    let timedOut = false;
+    let interrupted = null;
+    const timer = setTimeout(() => { timedOut = true; killGroup(); }, seconds * 1000);
+    const onSignal = (signal) => { interrupted = signal; killGroup(); };
+    for (const s of INTERRUPTS) process.on(s, onSignal);
+    const done = (result) => {
+      clearTimeout(timer);
+      for (const s of INTERRUPTS) process.off(s, onSignal);
+      resolve(result);
+    };
+    child.on('error', (error) => { killGroup(); done({ error }); });
+    child.on('exit', (status, signal) => done({ status, signal, timedOut, interrupted }));
+  });
+}
+
 // Every successful exit re-checks HEAD: if the branch moved after it was captured, the current commit was not reviewed.
 function moved(head) {
   const now = git('rev-parse', 'HEAD');
@@ -124,7 +147,7 @@ function moved(head) {
   return true;
 }
 
-function main() {
+async function main() {
   const opts = parseArgs(process.argv.slice(2));
   if (opts.spliceBody) {
     // bin/pr: prints the pull request body (file) with the review summary (file) in its delimited section.
@@ -142,7 +165,11 @@ function main() {
     if (opts.summaryFile) writeFileSync(opts.summaryFile, text);
   };
   // bin/pr fetches once and passes --no-fetch; run on its own, this brings the base up to date.
-  if (opts.fetch && opts.base.startsWith('origin/')) git('fetch', '--quiet', 'origin', opts.base.slice('origin/'.length));
+  // Explicit refspec: in a single-branch clone a bare `git fetch origin <branch>` only fills FETCH_HEAD.
+  if (opts.fetch && opts.base.startsWith('origin/')) {
+    const b = opts.base.slice('origin/'.length);
+    git('fetch', '--quiet', 'origin', `+refs/heads/${b}:refs/remotes/origin/${b}`);
+  }
 
   const head = git('rev-parse', 'HEAD');
   const base = git('merge-base', opts.base, head);
@@ -190,21 +217,20 @@ function main() {
     const seconds = codexTimeoutSeconds();
     let r;
     try {
-      r = spawnSync(codex, [
+      r = await runCodex(codex, [
         'exec', '--sandbox', 'read-only', '--ephemeral', '--color', 'never',
         '-c', 'model_reasoning_effort="high"',
         '--output-schema', join(controls, 'review-schema.json'),
         '-o', out, prompt,
-      ], { cwd: tree, stdio: ['ignore', 'ignore', errFd], timeout: seconds * 1000, killSignal: 'SIGKILL',
-        // Own process group: the installed codex is a wrapper that starts the real binary, and SIGKILL on the wrapper
-        // alone would leave that child running.
-        detached: true });
+      ], { cwd: tree, errFd, seconds });
     } finally {
       closeSync(errFd);
     }
-    if (r.error && r.error.code === 'ETIMEDOUT') {
-      // spawnSync killed only the direct child; the group (pgid = its pid) takes the descendants with it.
-      try { process.kill(-r.pid, 'SIGKILL'); } catch { /* the whole group was already gone */ }
+    if (r.interrupted) {
+      console.error(`Review interrupted (${r.interrupted}); Codex was stopped. Nothing was approved.`);
+      return 2;
+    }
+    if (r.timedOut) {
       console.error(`Codex did not answer within ${seconds}s (CODEX_TIMEOUT_SECONDS) and was stopped. Nothing was approved.`);
       return 2;
     }
@@ -244,7 +270,7 @@ function main() {
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   try {
-    process.exitCode = main();
+    process.exitCode = await main();
   } catch (e) {
     console.error(`Local review stopped: ${e.message}`);
     process.exitCode = 2;

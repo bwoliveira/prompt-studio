@@ -2,7 +2,7 @@
 // running against a temporary git repository and a fake `codex` (CODEX_BIN), with no quota and no network.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, readFileSync, existsSync, readdirSync, chmodSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -301,6 +301,37 @@ test('entry: the timeout also kills the descendants of Codex, not only the wrapp
   assert.ok(gone, `child ${pid} of the timed-out Codex is still running`);
 });
 
+const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+
+test('entry: an interrupted review (Ctrl+C) stops the detached Codex group, cleans up and never approves', async () => {
+  const repo = makeRepo();
+  const log = join(repo, '.fake-log');
+  const pidFile = log + '.child';
+  rmSync(pidFile, { force: true });
+  const child = spawn(process.execPath, [SCRIPT, '--base', 'main', '--no-fetch'], {
+    cwd: repo, stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, CODEX_BIN: fakeCodex(repo), FAKE_LOG: log, FAKE_REPO: repo, FAKE_HANG: '1', CODEX_TIMEOUT_SECONDS: '30', FAKE_OUTPUT: JSON.stringify({ findings: [] }) },
+  });
+  let stderr = '';
+  child.stderr.on('data', (d) => { stderr += d; });
+  for (let i = 0; i < 100 && !existsSync(pidFile); i++) await sleep(50);
+  assert.ok(existsSync(pidFile), 'the fake Codex started its child');
+  const codexChild = Number(readFileSync(pidFile, 'utf8'));
+  const started = Date.now();
+  child.kill('SIGINT');
+  const status = await new Promise((res) => child.on('exit', (code, signal) => res(code ?? signal)));
+  assert.ok(Date.now() - started < 4500, 'the script did not wait for the detached Codex');
+  assert.notEqual(status, 0);
+  assert.match(stderr, /interrupted/);
+  for (let i = 0; i < 20 && !isGone(codexChild); i++) await sleep(100);
+  const gone = isGone(codexChild);
+  if (!gone) process.kill(codexChild, 'SIGKILL');
+  assert.ok(gone, `child ${codexChild} of the interrupted Codex is still running`);
+  const dir = join(repo, '.git', 'prompt-studio-local-review');
+  assert.ok(!existsSync(dir) || readdirSync(dir).length === 0, 'no approval recorded');
+  assert.equal(git(repo, 'worktree', 'list').split('\n').length, 1, 'temporary worktree removed');
+});
+
 test('entry: --summary-file gets the verdict (blocked, approved and approved-again from the mark)', () => {
   const repo = makeRepo();
   const file = join(repo, 'summary.md');
@@ -333,6 +364,25 @@ test('entry: with no --base, the base is origin\'s default branch and is fetched
   assert.equal(r.status, 0, r.stderr + r.stdout);
   assert.equal(r.calls.length, 1);
   assert.equal(git(repo, 'rev-parse', '--verify', 'origin/trunk'), git(repo, 'rev-parse', 'trunk'));
+});
+
+// A clone whose remote.origin.fetch maps only one branch (`git clone --single-branch`): origin/<other> does not exist.
+function singleBranch(dir, only) {
+  git(dir, 'config', 'remote.origin.fetch', `+refs/heads/${only}:refs/remotes/origin/${only}`);
+  for (const ref of git(dir, 'for-each-ref', '--format=%(refname)', 'refs/remotes/origin/').split('\n').filter(Boolean)) {
+    if (ref !== `refs/remotes/origin/${only}`) git(dir, 'update-ref', '-d', ref);
+  }
+}
+
+test('entry: the base is fetched into origin/<base>, also in a single-branch clone with BASE_BRANCH', () => {
+  const repo = makeRepo('main', true);
+  git(repo, 'push', '-q', 'origin', 'main:refs/heads/release');
+  singleBranch(repo, 'main');
+  assert.notEqual(spawnSync('git', ['rev-parse', '--verify', '-q', 'origin/release'], { cwd: repo }).status, 0, 'precondition: no origin/release');
+  const r = run(repo, { BASE_BRANCH: 'release', FAKE_OUTPUT: JSON.stringify({ findings: [] }) }, []);
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.equal(r.calls.length, 1);
+  assert.equal(git(repo, 'rev-parse', 'origin/release'), git(repo, 'rev-parse', 'main'));
 });
 
 test('entry: prompt and schema come from the reviewed commit, not from the working folder', () => {
@@ -492,6 +542,18 @@ test('bin/pr: BASE_BRANCH overrides the base branch', () => {
   assert.equal(r.status, 0, r.stderr + r.stdout);
   assert.match(r.log, /pr list --head fix\/x --base develop --state open/, r.log);
   assert.match(r.review, /--base origin\/develop /);
+});
+
+test('bin/pr: BASE_BRANCH is fetched into origin/<base> in a single-branch clone, so the review and the body see it', () => {
+  const { dir, origin } = prRepo('main', 'release');
+  singleBranch(dir, 'main');
+  const gh = fakeGh();
+  const r = spawnSync('bash', ['bin/pr'], { cwd: dir, encoding: 'utf8', env: prEnv(gh, { FAKE_OPEN_PR: '', BASE_BRANCH: 'release' }) });
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.equal(git(dir, 'rev-parse', 'origin/release'), git(dir, 'rev-parse', 'origin/main'));
+  assert.match(readFileSync(join(gh, 'review.log'), 'utf8'), /--base origin\/release /);
+  assert.match(readFileSync(join(gh, 'body'), 'utf8'), /^- change$/m, 'the commit list against origin/release');
+  for (const d of [dir, origin, gh]) rmSync(d, { recursive: true, force: true });
 });
 
 test('bin/pr refuses to run on the base branch itself', () => {

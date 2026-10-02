@@ -15,8 +15,9 @@ BRANCH="$(git branch --show-current)"
 [[ "$BRANCH" != "$BASE" ]] || { echo "Create a branch: git switch -c <type>/<subject>" >&2; exit 1; }
 [[ -z "$(git status --porcelain)" ]] || { echo "There are uncommitted changes." >&2; exit 1; }
 
-# The only fetch: bin/review is told not to repeat it.
-git fetch --quiet origin "$BASE"
+# The only fetch: bin/review is told not to repeat it. Explicit refspec: in a single-branch clone a fetch of the bare
+# branch name only fills FETCH_HEAD and origin/<base> stays missing or stale.
+git fetch --quiet origin "+refs/heads/$BASE:refs/remotes/origin/$BASE"
 REVIEWED="$(git rev-parse HEAD)"
 SUMMARY="$(mktemp)"
 BODY="$(mktemp)"
@@ -31,7 +32,10 @@ fi
 [[ "$(git rev-parse HEAD)" == "$REVIEWED" ]] || { echo "The branch changed during the review; run bin/pr again." >&2; exit 1; }
 
 git push --quiet origin "$REVIEWED:refs/heads/$BRANCH"
-git branch --quiet --set-upstream-to="origin/$BRANCH"
+# Upstream of the branch, written directly: `--set-upstream-to` needs origin/<branch> to be a tracking ref, which a
+# single-branch clone (remote.origin.fetch maps only the base) does not have.
+git config "branch.$BRANCH.remote" origin
+git config "branch.$BRANCH.merge" "refs/heads/$BRANCH"
 # Only an OPEN pull request of this branch into the base branch counts: `gh pr view <branch>` also finds an old
 # merged PR when a branch name is reused, and merging that one would report success with nothing reaching the base.
 PR="$(gh pr list --head "$BRANCH" --base "$BASE" --state open --json number -q '.[0].number')"
