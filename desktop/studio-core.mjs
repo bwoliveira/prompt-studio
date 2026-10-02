@@ -153,6 +153,11 @@ const LOOKUP_AFTER = /^\s+(?:that|which|que)\s+(?:(?:already|ja)\s+)?(?:exists?|
 // that asks to understand it makes the draft a question, whatever the artifact. It opens a clause (the start, a
 // sentence or comma mark, or a coordinator), so "a script that explains how it works" still asks for the script.
 // Languages: Portuguese (unaccented) + English.
+// "Can you show me a script? What does it do?", "... Can I run it on Windows?": a later sentence that opens as a question
+// about the artifact (a question word, or an auxiliary with its own subject) asks to understand it as well; an order in
+// question form ("Can you make it faster?") is addressed to the reader and stays a task.
+// Languages: Portuguese (unaccented) + English.
+const QUESTION_TAIL = /(?:[.!?]\s+|\n\s*)(?:(?:and|also|but|e|mas)\s+)?(?:(?:what|which|who|whom|whose|where|when|why|how|qual|quais|quem|onde|quando|por que|porque|o que|quanto|quantos|quantas)\b|como\b(?!\s+(?:um\s+|uma\s+)?(?:especialista|expert|engenheir|desenvolvedor|analista|consultor|revisor|professor|designer|arquitet))|(?:does|do|did|is|are|was|were|can|could|will|would|should|has|have|may|might)\s+(?:i|we|it|this|that|these|those|they|there|the|a|an|my|our)\b|(?:posso|podemos|devo|devemos|existe|existem|funciona|funcionam)\b)/
 const EXPLAIN_TAIL = /(?:[.!?;:\n,]|\b(?:and|then|also|but|plus|e|tambem|depois|mas)\b)\s*(?:(?:please|por favor|also|tambem|e|me|nos)\s+)*(?:(?:can|could|would|will)\s+you\s+(?:(?:please|also)\s+)?)?(?:(?:explain|describe|clarify|walk\s+(?:me|us)\s+through|tell\s+(?:me|us)\s+(?:how|why|what|when|where|which)|show\s+(?:me|us)\s+how|let\s+(?:me|us)\s+know\s+(?:how|why)|explique|expliquem|explicar|descreva|descrever|esclareca|esclarecer|diga\s+(?:como|por que|porque)|dizer\s+(?:como|por que|porque)|mostre\s+como|mostrar\s+como|conte\s+como)\b|(?:why|how|por que|porque|como)\s+(?:does|do|did|is|are|can|could|would|will|it|this|that|they|these|those|funciona|funcionam|isso|ele|ela|eles|elas|falha|falhou)\b)/
 // The phrase ends with a code artifact: the artifact is the head noun, not a modifier ("the API key").
 const CODE_ARTIFACT_END = new RegExp(`(?:${CODE_ARTIFACT.source})\\s*$`)
@@ -417,7 +422,7 @@ function createDetector(profile = {}) {
       const tail = goal.slice(shown[0].length, shown[0].length + 1000)
       const rest = goal.slice(shown[0].length, shown[0].length + 300)
       const head = rest.split(/[.!?\n]|\s+(?:of|to|for|from|in|on|at|about|between|with|without|by|that|which|who|whose|where|when|and|or|but|de|do|da|dos|das|para|em|no|na|nos|nas|sobre|entre|com|sem|por|que|e|ou|mas)\b/, 1)[0]
-      if (EXPLAIN_TAIL.test(tail)) signal = 'answer'
+      if (EXPLAIN_TAIL.test(tail) || QUESTION_TAIL.test(tail)) signal = 'answer'
       else if (CODE_ARTIFACT_END.test(head) && pickArtifact(rest.split(/[.!?\n]/, 1)[0]) === 'code') {
         // Asking about an existing artifact, or for a recommendation, is a question; asking for one to be made is a task.
         if (LOOKUP_MODIFIER.test(head) || LOOKUP_AFTER.test(rest.slice(head.length)) || (REFERENCE_NOUN_END.test(head) && FOR_PURPOSE.test(rest.slice(head.length)))) signal = 'answer'
