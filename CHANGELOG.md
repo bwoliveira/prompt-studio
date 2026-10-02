@@ -124,7 +124,8 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   from the repository (`BASE_BRANCH` overrides it), the local review verdict goes into the PR body, a hung Codex run
   stops after `CODEX_TIMEOUT_SECONDS` (default 900) and never approves, and the base is fetched once.
   An interrupted review (Ctrl+C, hangup) also stops the detached Codex process group and never approves, and the base
-  branch is fetched into `origin/<base>` with an explicit refspec, so `BASE_BRANCH` works in a single-branch clone.
+  branch is fetched into `origin/<base>` with an explicit refspec, so `BASE_BRANCH` works in a single-branch clone. The default branch is asked of origin, so a default changed
+  on GitHub (main to trunk) is followed even when the clone's cached `origin/HEAD` is stale.
 
 ## 1.8.0
 

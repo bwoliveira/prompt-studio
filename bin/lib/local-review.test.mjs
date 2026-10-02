@@ -358,6 +358,20 @@ test('--print-base: BASE_BRANCH wins, then the default branch of origin, then ma
   assert.equal(printBase(makeRepo()), 'main', 'no origin: fallback');
 });
 
+test('--print-base: a default branch changed on origin wins over the stale cached origin/HEAD; offline, the cache serves', () => {
+  const printBase = (repo) => run(repo, { BASE_BRANCH: '' }, ['--print-base']).stdout.trim();
+  const repo = makeRepo('main', true);
+  const origin = git(repo, 'remote', 'get-url', 'origin');
+  git(repo, 'fetch', '-q', 'origin');
+  git(repo, 'remote', 'set-head', 'origin', 'main');
+  git(repo, 'push', '-q', 'origin', 'main:refs/heads/trunk');
+  git(origin, 'symbolic-ref', 'HEAD', 'refs/heads/trunk');
+  assert.equal(git(repo, 'symbolic-ref', '--short', 'refs/remotes/origin/HEAD'), 'origin/main', 'precondition: stale cache');
+  assert.equal(printBase(repo), 'trunk', 'the current default of origin, not the cached one');
+  git(repo, 'remote', 'set-url', 'origin', join(origin, 'gone'));
+  assert.equal(printBase(repo), 'main', 'origin unreachable: the cached origin/HEAD');
+});
+
 test('entry: with no --base, the base is origin\'s default branch and is fetched', () => {
   const repo = makeRepo('trunk', true);
   const r = run(repo, { BASE_BRANCH: '', FAKE_OUTPUT: JSON.stringify({ findings: [] }) }, []);

@@ -86,18 +86,20 @@ function git(...args) {
   return r.stdout.trim();
 }
 
-// The branch pull requests go into: BASE_BRANCH, else the default branch of origin, else main.
+// The branch pull requests go into: BASE_BRANCH, else the current default branch of origin, else main. origin is
+// asked first: the cached origin/HEAD is not refreshed by a fetch and stays on the old branch after the repository
+// changes its default (main -> trunk), so it only serves when origin cannot be reached.
 export function resolveBaseBranch(env = process.env) {
   if (env.BASE_BRANCH && env.BASE_BRANCH.trim()) return env.BASE_BRANCH.trim();
   try {
-    const sym = sh('git', ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD']);
-    const ref = sym.stdout.trim();
-    if (sym.status === 0 && ref.startsWith('origin/')) return ref.slice('origin/'.length);
     const ls = sh('git', ['ls-remote', '--symref', 'origin', 'HEAD'], { timeout: 20000 });
     const m = ls.status === 0 && /^ref: refs\/heads\/(\S+)\s+HEAD$/m.exec(ls.stdout);
     if (m) return m[1];
+    const sym = sh('git', ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD']);
+    const ref = sym.stdout.trim();
+    if (sym.status === 0 && ref.startsWith('origin/')) return ref.slice('origin/'.length);
   } catch {
-    // no origin or no network: fall through
+    // no origin: fall through
   }
   return 'main';
 }
