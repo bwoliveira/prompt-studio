@@ -3086,3 +3086,107 @@ test('ALT-4: the listener never handles Enter, Alt+Enter, Ctrl+Enter, Tab, Esc o
   assert.equal(currentText(), text, 'still on the same step')
   await press(K().close)
 })
+
+// ---------------------------------------------------------------- open without an F-key: the Desktop keybinds area (#20)
+// The one binding Prompt Studio contributes to Hermes Desktop's `keybinds` area (the user reassigns it in Desktop settings).
+const keybind = () => ui.slots.keybinds?.data
+// Every default combo of Hermes Desktop 0.21.5 (fixture); off macOS `ctrl` folds into `mod`, so both spellings count.
+const desktopDefaults = new Set(readFileSync(join(here, 'fixtures', 'hermes-desktop-default-keybinds-0.21.5.txt'), 'utf8')
+  .split('\n').filter(line => line && !line.startsWith('#')).map(combo => combo.replace(/^ctrl\+/, 'mod+')))
+
+test('KEY-1: Prompt Studio contributes an open binding to the keybinds area: mod+shift+letter, not a Desktop default, tied to the palette command', () => {
+  const item = ui.slots.keybinds
+  assert.ok(item, 'a contribution in the keybinds area')
+  assert.equal(item.area, 'keybinds')
+  assert.equal(typeof keybind().run, 'function')
+  assert.match(keybind().label, /\S/)
+  assert.equal(keybind().label, ui.i18n.bundles.en.palette.keybind)
+  assert.ok(ui.i18n.bundles.pt.palette.keybind && ui.i18n.bundles.pt.palette.keybind !== ui.i18n.bundles.en.palette.keybind, 'translated')
+  assert.equal(keybind().defaults.length, 1, 'one default')
+  const [combo] = keybind().defaults
+  assert.match(combo, /^mod\+shift\+[a-z]$/, 'mod+shift+letter, in Desktop canonical form')
+  assert.ok(!desktopDefaults.has(combo), `${combo} is not among Hermes Desktop's default actions`)
+  assert.ok(!desktopDefaults.has(combo.replace('mod+', 'ctrl+')))
+  assert.equal(keybind().id, ui.slots.palette.data.action, 'the palette command shows this binding as its hotkey')
+  assert.equal(keybind().id, 'prompt-studio.start')
+})
+
+test('KEY-2: running the binding opens the studio like F4 does, and F4 and the palette command keep working', { skip }, async () => {
+  for (const [name, open] of [
+    ['the keybind', () => keybind().run()],
+    ['F4', () => press(K().open)],
+    ['the palette command', () => ui.slots.palette.data.run()]
+  ]) {
+    resetComposer()
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    await ui.act(async () => { await open() })
+    await waitFor(() => $('[data-studio-strip]'), { label: `${name} opened the studio` })
+    assert.equal(draft(), '', `${name}: the draft was taken into the studio`)
+    await press(K().close)
+    assert.ok($('[data-studio-strip]') === null)
+    assert.equal(draft(), INTENT, `${name}: closing returns the draft`)
+  }
+})
+
+test('KEY-3: the binding reports an empty or short draft and a missing composer exactly as F4 does, and opens nothing', { skip }, async () => {
+  const outcome = async open => {
+    ui.notifications.length = 0
+    await ui.act(async () => { await open() })
+    await settle()
+    return { opened: $('[data-studio-strip]') !== null, notes: ui.notifications.map(n => `${n.kind}: ${n.message}`), text: draft() }
+  }
+  const viaKeybind = () => keybind().run()
+  const viaF4 = () => press(K().open)
+  const bundle = ui.i18n.bundles.en.notify
+  const cases = [
+    ['an empty draft', '', { kind: 'info', message: bundle.empty(K().open) }],
+    ['a draft under 10 characters', 'curto', { kind: 'warning', message: bundle.short }]
+  ]
+  for (const [name, text, expected] of cases) {
+    $('[data-slot="composer-rich-input"]').textContent = text
+    const a = await outcome(viaKeybind)
+    $('[data-slot="composer-rich-input"]').textContent = text
+    const b = await outcome(viaF4)
+    assert.deepEqual(a, b, `${name}: same outcome as F4`)
+    assert.equal(a.opened, false)
+    assert.deepEqual(a.notes, [`${expected.kind}: ${expected.message}`], name)
+    assert.equal(a.text, text, `${name}: draft untouched`)
+  }
+  // No composer in the host (Hermes older than 0.21.5): the update note, nothing opened, draft untouched.
+  const saved = ui.host.composer
+  ui.host.composer = undefined
+  try {
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    const a = await outcome(viaKeybind)
+    const b = await outcome(viaF4)
+    assert.deepEqual(a, b, 'composer missing: same outcome as F4')
+    assert.equal(a.opened, false)
+    assert.deepEqual(a.notes, [`error: ${bundle.needsComposer}`])
+    assert.equal(a.text, INTENT)
+  } finally {
+    ui.host.composer = saved
+  }
+})
+
+test('KEY-4: running the binding while the studio is open or opening does nothing more, and the studio\'s own listener never sees the binding', { skip }, async () => {
+  resetComposer()
+  $('[data-slot="composer-rich-input"]').textContent = INTENT
+  // Pressed twice before the first read ends: one opening.
+  await ui.act(async () => { keybind().run(); keybind().run() })
+  await waitFor(() => $('[data-studio-strip]'))
+  await settle()
+  const writes = composer().writes.length
+  await ui.act(async () => { await keybind().run() })
+  await settle()
+  assert.equal(composer().writes.length, writes, 'no second opening while open')
+  // The chord itself is Desktop's: the studio's listener leaves it alone, open or closed.
+  const [combo] = keybind().defaults
+  const letter = combo.slice(-1).toUpperCase()
+  const chord = { key: letter.toLowerCase(), code: `Key${letter}`, shiftKey: true }
+  for (const mods of [{ ctrlKey: true }, { metaKey: true }]) {
+    const event = new ui.dom.window.KeyboardEvent('keydown', { ...chord, ...mods, bubbles: true, cancelable: true })
+    await ui.act(async () => { document.body.dispatchEvent(event) })
+    assert.equal(event.defaultPrevented, false, `${JSON.stringify(mods)} not taken by the studio`)
+  }
+  await press(K().close)
+})

@@ -9,7 +9,7 @@ const QUESTION_TEXT_ID = 'prompt-studio-question-text'
 const QUESTION_HELP_ID = 'prompt-studio-question-help'
 
 // Keyboard: every studio control has a key, and the key is printed on the control itself.
-// F4 opens the studio from the composer; everything else lives on the buttons: a button with a
+// F4 opens the studio from the composer (so does the Hermes Desktop keybind, see OPEN_BINDING); everything else lives on the buttons: a button with a
 // `keyHint` is the one that key presses, so what is shown is always what runs. SHORTCUTS (below) is the
 // one map of every key (F1 shows it). Tab, Enter and Esc are never taken: they stay the app's.
 // Conflicts checked: Hermes Desktop binds none of these (it uses Ctrl/Ctrl+Shift/Ctrl+Alt chords,
@@ -46,6 +46,10 @@ export const SHORTCUTS = {
   // Not a row of its own in F1: each combo is listed next to the F-key it doubles.
   alt: { accept: 'Alt+Y', skip: 'Alt+K', useAi: 'Alt+L', back: 'Alt+B', generate: 'Alt+G', close: 'Alt+X' }
 }
+// The Hermes Desktop keybind that opens the studio (the `keybinds` area; the user can reassign it in Desktop
+// settings). Desktop's own notation, `mod` = Cmd on a Mac and Ctrl elsewhere. Desktop's default actions use
+// mod+shift with M N F B S L H T K G W C V 0 [ ] and \, so E is free; the Studio's own listener never sees it.
+const OPEN_BINDING = 'mod+shift+e'
 // The combo of digit `n` for a range entry of the map ('pick' → Alt+3, 'edit' → Alt+Shift+3).
 const digitCombo = (action, n) => SHORTCUTS[action].replace('1…9', String(n))
 // What the F1 list prints for an entry: the combo, or the three target combos joined.
@@ -1123,6 +1127,13 @@ export default {
         // While the studio is open the composer is intentionally empty; a send that reaches
         // the app's submit path anyway must not fire a blank turn.
         data: { handler: draft => ($studio.get().status !== 'idle' ? null : draft) }
+      },
+      {
+        id: 'keybind-start',
+        area: KEYBINDS_AREA,
+        // The same entry as the palette command (same id, so ⌘K shows the live key), and F4's own path: the
+        // draft is read, a short or empty one is reported, a missing composer is reported.
+        data: { id: `${ID}.start`, defaults: [OPEN_BINDING], label: tr('palette.keybind'), run: startFromComposer }
       },
       {
         id: 'palette-start',

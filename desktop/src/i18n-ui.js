@@ -18,6 +18,7 @@ export const UI_MESSAGES = {
     },
     palette: {
       label: 'Prompt Studio',
+      keybind: 'Open Prompt Studio',
       detailDraft: 'Build the prompt from the draft'
     },
     notify: {
@@ -235,6 +236,7 @@ export const UI_MESSAGES = {
     },
     palette: {
       label: 'Prompt Studio',
+      keybind: 'Abrir o Prompt Studio',
       detailDraft: 'Montar o prompt a partir do rascunho'
     },
     notify: {

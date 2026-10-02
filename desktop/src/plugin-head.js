@@ -13,6 +13,7 @@ import {
   GlyphSpinner,
   host,
   Kbd,
+  KEYBINDS_AREA,
   ModelCatalogMenu,
   ModelMenuCloseContext,
   PALETTE_AREA,
