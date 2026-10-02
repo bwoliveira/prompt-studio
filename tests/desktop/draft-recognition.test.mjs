@@ -674,6 +674,28 @@ const TABLE = [
   ['Escreva uma revisão sem alterar a API.', 'review', 'pt revisao sem alterar'],
   ['Write a review except for the API', 'review', 'review except for'],
   ['Write a review without a script', 'review', 'near miss: the review is first'],
+  // "but not" and "rather than" end the artifact (Codex P2)
+  ['Write a Python script but not documentation.', 'implementation', 'script but not documentation'],
+  ['Write a Python script rather than documentation.', 'implementation', 'script rather than documentation'],
+  ['Escreva um script Python mas não documentação', 'implementation', 'pt script mas nao documentacao'],
+  ['Write an email but not a script', 'text', 'near miss: the email is first'],
+  // "show me" before a requested artifact is a request, not a question (Codex P2)
+  ['Please show me a script that extracts data.', 'implementation', 'show me a script'],
+  ['Can you show me a plan to configure nginx?', 'plan', 'can you show me a plan'],
+  ['Me mostre um script que extrai dados', 'implementation', 'pt me mostre um script'],
+  ['Você pode me mostrar um plano para configurar o nginx?', 'plan', 'pt pode me mostrar um plano'],
+  ['Show me the whole plan', 'plan', 'show me the whole plan'],
+  ['Can you show me how to configure nginx?', 'answer', 'near miss: can you show me how'],
+  ['Tell me a plan to configure nginx', 'plan', 'tell me a plan'],
+  ['Tell me the difference between nginx and apache', 'answer', 'near miss: tell me the difference'],
+  ['Show me how to configure nginx', 'answer', 'near miss: show me how'],
+  ['Show me the steps to configure nginx', 'answer', 'near miss: show me the steps'],
+  ['Tell me the best way to configure nginx', 'answer', 'near miss: tell me the best way'],
+  // a participial clause may follow the workflow noun (Codex P2)
+  ['Create a workflow using GitHub Actions.', 'workflow', 'workflow using'],
+  ['Create a workflow automating backups.', 'workflow', 'workflow automating'],
+  ['Crie um pipeline usando GitHub Actions', 'workflow', 'pt pipeline usando'],
+  ['Create a workflow engine in Python', 'implementation', 'near miss: a workflow engine is code'],
 ]
 
 for (const [draft, expected, why] of TABLE) {

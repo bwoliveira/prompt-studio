@@ -104,7 +104,9 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   question and "I need a script. Please write it in Python with documentation." is code, as is "Write a Python script
   without documentation"; "How do I build a React app? Add examples." stays a question and "Write a strategy memo about
   optimizing SQL queries" stays text. "How do I build a React app? Add examples; then fix the login bug." is the fix
-  and "Write a review without modifying the API." is the review.
+  and "Write a review without modifying the API." is the review. "Write a Python script but not documentation." is
+  code, "Please show me a script that extracts data." is code and "Can you show me a plan to configure nginx?" is a
+  plan, and "Create a workflow using GitHub Actions." is a workflow.
 - Fix: *Gere um e-mail*, *Monte uma mensagem* and the like stay text, reports and summaries are text even when they
   mention tests ("Write a summary of the test results", "Escreva um relatório dos testes"), and a question such as
   "Como instalar o Docker?" or "Como resumir um livro?" stays an answer on Opus, Sonnet and Astra.
