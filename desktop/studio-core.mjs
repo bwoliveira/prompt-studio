@@ -219,7 +219,7 @@ const MAKE_VERB = /\b(crie|criar|escreva|escrever|write|create|build|construa|de
 // Languages: Portuguese (unaccented) + English.
 const CODE_ARTIFACT = /\b(scripts?|func(ao|oes)|functions?|apis?|endpoints?|cli|clis|apps?|aplicativos?|modul[oe]s?|class(e|es)?|programas?|programs?|bots?|(?:tests?|testes?)(?!\s+(?:report|relatorio|results?|resultados?|summary|resumo)\b)|quer(y|ies)|regex(es)?|readme|dockerfile)\b/
 // Languages: Portuguese (unaccented) + English.
-const TEXT_ARTIFACT = /((?<!\b(?:and|then|also|e|depois|por|via|by)\s)\be-?mails?\b(?!\s+(?:me|us|him|her|them|you)\b)|\b(posts?|artigos?|articles?|blog|carta|letter|newsletter|texto|essay|ensaio|roteiro|mensagem|message|copy(?!\s+(?:of|function|script|command|files?|folders?)\b)|description|descricao|reports?|relatorios?|summar(?:y|ies)|resumos?)\b)/
+const TEXT_ARTIFACT = /((?<!\b(?:and|then|also|e|depois|por|via|by)\s)\be-?mails?\b(?!\s+(?:me|us|him|her|them|you)\b)|\b(posts?|artigos?|articles?|blog|carta|letter|newsletter|texto|essay|ensaio|roteiro|mensagem|message|copy(?!\s+(?:of|function|script|command|files?|folders?)\b)|description|descricao|reports?|relatorios?|summar(?:y|ies)|resumos?|instructions?|instrucoes|instrucao|guides?|guias?|tutorials?|tutoriais|manua(?:l|is)|documentation|documentacao|docs|how-?tos?|faqs?|checklists?|release notes|notas de versao)\b)/
 // Languages: Portuguese (unaccented).
 // A generate/assemble verb at the start of the match: it does not say which artifact is made, so the first artifact named decides ("Gere um e-mail").
 const GENERATE_VERB = /^(gere|gerar|monte|montar)\b/
@@ -292,8 +292,14 @@ function prohibited(text, at, hops = 0) {
   const chain = hops < 5 && COORDINATED.exec(before)
   return chain ? prohibited(text, at - before.length + chain.index, hops + 1) : false
 }
+// Languages: Portuguese (unaccented) + English.
+// A yes/no question, closed by its mark ("Can I configure nginx?", "Posso reiniciar o servidor?"). "Can you ..." and
+// "Voce pode ..." are requests, not questions, unless they ask what the reader thinks or knows.
+const YESNO_FORM = /^(?:(?:can|could|should|would|will|may|might|shall|must|do|does|did|is|are|was|were|am|have|has|posso|podemos|devo|devemos|consigo|conseguimos|preciso|precisamos|existe|existem|ha|tem como|da para|e possivel|e preciso|e necessario|e seguro|e melhor|sera que|vale)(?!\s+(?:you|voce|voces)\b(?!\s+(?:think|know|believe|recommend|suggest|mean|see|acha|sabe|recomenda|sugere|conhece)\b)))\b(?:[^?!\n]|\n(?!\s*\n))*\?/
 // The question form, unless its comma follows something that is not a question ("Como especialista, escreva").
 function isQuestion(goal) {
+  const yesNo = YESNO_FORM.exec(goal)
+  if (yesNo) return yesNo
   const m = QUESTION_FORM.exec(goal)
   if (!m || m[0].includes('?') || !m[0].includes(',')) return m
   const head = m[0].slice(0, m[0].indexOf(','))
@@ -730,7 +736,7 @@ const MAKE_VERB = /\b(crie|criar|escreva|escrever|write|create|build|construa|de
 // Languages: Portuguese (unaccented) + English.
 const CODE_ARTIFACT = /\b(scripts?|func(ao|oes)|functions?|apis?|endpoints?|cli|clis|apps?|aplicativos?|modul[oe]s?|class(e|es)?|programas?|programs?|bots?|(?:tests?|testes?)(?!\s+(?:report|relatorio|results?|resultados?|summary|resumo)\b)|quer(y|ies)|regex(es)?|readme|dockerfile)\b/
 // Languages: Portuguese (unaccented) + English.
-const TEXT_ARTIFACT = /((?<!\b(?:and|then|also|e|depois|por|via|by)\s)\be-?mails?\b(?!\s+(?:me|us|him|her|them|you)\b)|\b(posts?|artigos?|articles?|blog|carta|letter|newsletter|texto|essay|ensaio|roteiro|mensagem|message|copy(?!\s+(?:of|function|script|command|files?|folders?)\b)|description|descricao|reports?|relatorios?|summar(?:y|ies)|resumos?)\b)/
+const TEXT_ARTIFACT = /((?<!\b(?:and|then|also|e|depois|por|via|by)\s)\be-?mails?\b(?!\s+(?:me|us|him|her|them|you)\b)|\b(posts?|artigos?|articles?|blog|carta|letter|newsletter|texto|essay|ensaio|roteiro|mensagem|message|copy(?!\s+(?:of|function|script|command|files?|folders?)\b)|description|descricao|reports?|relatorios?|summar(?:y|ies)|resumos?|instructions?|instrucoes|instrucao|guides?|guias?|tutorials?|tutoriais|manua(?:l|is)|documentation|documentacao|docs|how-?tos?|faqs?|checklists?|release notes|notas de versao)\b)/
 // Languages: Portuguese (unaccented).
 // A generate/assemble verb at the start of the match: it does not say which artifact is made, so the first artifact named decides ("Gere um e-mail").
 const GENERATE_VERB = /^(gere|gerar|monte|montar)\b/
@@ -797,8 +803,14 @@ function prohibited(text, at, hops = 0) {
   const chain = hops < 5 && COORDINATED.exec(before)
   return chain ? prohibited(text, at - before.length + chain.index, hops + 1) : false
 }
+// Languages: Portuguese (unaccented) + English.
+// A yes/no question, closed by its mark ("Can I configure nginx?", "Posso reiniciar o servidor?"). "Can you ..." and
+// "Voce pode ..." are requests, not questions, unless they ask what the reader thinks or knows.
+const YESNO_FORM = /^(?:(?:can|could|should|would|will|may|might|shall|must|do|does|did|is|are|was|were|am|have|has|posso|podemos|devo|devemos|consigo|conseguimos|preciso|precisamos|existe|existem|ha|tem como|da para|e possivel|e preciso|e necessario|e seguro|e melhor|sera que|vale)(?!\s+(?:you|voce|voces)\b(?!\s+(?:think|know|believe|recommend|suggest|mean|see|acha|sabe|recomenda|sugere|conhece)\b)))\b(?:[^?!\n]|\n(?!\s*\n))*\?/
 // The question form, unless its comma follows something that is not a question ("Como especialista, escreva").
 function isQuestion(goal) {
+  const yesNo = YESNO_FORM.exec(goal)
+  if (yesNo) return yesNo
   const m = QUESTION_FORM.exec(goal)
   if (!m || m[0].includes('?') || !m[0].includes(',')) return m
   const head = m[0].slice(0, m[0].indexOf(','))
@@ -1293,7 +1305,7 @@ const MAKE_VERB = /\b(crie|criar|escreva|escrever|write|create|build|construa|de
 // Languages: Portuguese (unaccented) + English.
 const CODE_ARTIFACT = /\b(scripts?|func(ao|oes)|functions?|apis?|endpoints?|cli|clis|apps?|aplicativos?|modul[oe]s?|class(e|es)?|programas?|programs?|bots?|(?:tests?|testes?)(?!\s+(?:report|relatorio|results?|resultados?|summary|resumo)\b)|quer(y|ies)|regex(es)?|readme|dockerfile)\b/
 // Languages: Portuguese (unaccented) + English.
-const TEXT_ARTIFACT = /((?<!\b(?:and|then|also|e|depois|por|via|by)\s)\be-?mails?\b(?!\s+(?:me|us|him|her|them|you)\b)|\b(posts?|artigos?|articles?|blog|carta|letter|newsletter|texto|essay|ensaio|roteiro|mensagem|message|copy(?!\s+(?:of|function|script|command|files?|folders?)\b)|description|descricao|reports?|relatorios?|summar(?:y|ies)|resumos?)\b)/
+const TEXT_ARTIFACT = /((?<!\b(?:and|then|also|e|depois|por|via|by)\s)\be-?mails?\b(?!\s+(?:me|us|him|her|them|you)\b)|\b(posts?|artigos?|articles?|blog|carta|letter|newsletter|texto|essay|ensaio|roteiro|mensagem|message|copy(?!\s+(?:of|function|script|command|files?|folders?)\b)|description|descricao|reports?|relatorios?|summar(?:y|ies)|resumos?|instructions?|instrucoes|instrucao|guides?|guias?|tutorials?|tutoriais|manua(?:l|is)|documentation|documentacao|docs|how-?tos?|faqs?|checklists?|release notes|notas de versao)\b)/
 // Languages: Portuguese (unaccented).
 // A generate/assemble verb at the start of the match: it does not say which artifact is made, so the first artifact named decides ("Gere um e-mail").
 const GENERATE_VERB = /^(gere|gerar|monte|montar)\b/
@@ -1366,8 +1378,14 @@ function prohibited(text, at, hops = 0) {
   const chain = hops < 5 && COORDINATED.exec(before)
   return chain ? prohibited(text, at - before.length + chain.index, hops + 1) : false
 }
+// Languages: Portuguese (unaccented) + English.
+// A yes/no question, closed by its mark ("Can I configure nginx?", "Posso reiniciar o servidor?"). "Can you ..." and
+// "Voce pode ..." are requests, not questions, unless they ask what the reader thinks or knows.
+const YESNO_FORM = /^(?:(?:can|could|should|would|will|may|might|shall|must|do|does|did|is|are|was|were|am|have|has|posso|podemos|devo|devemos|consigo|conseguimos|preciso|precisamos|existe|existem|ha|tem como|da para|e possivel|e preciso|e necessario|e seguro|e melhor|sera que|vale)(?!\s+(?:you|voce|voces)\b(?!\s+(?:think|know|believe|recommend|suggest|mean|see|acha|sabe|recomenda|sugere|conhece)\b)))\b(?:[^?!\n]|\n(?!\s*\n))*\?/
 // The question form, unless its comma follows something that is not a question ("Como especialista, escreva").
 function isQuestion(goal) {
+  const yesNo = YESNO_FORM.exec(goal)
+  if (yesNo) return yesNo
   const m = QUESTION_FORM.exec(goal)
   if (!m || m[0].includes('?') || !m[0].includes(',')) return m
   const head = m[0].slice(0, m[0].indexOf(','))
