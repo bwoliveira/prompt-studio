@@ -21,7 +21,7 @@ export const UI_MESSAGES = {
       detailDraft: 'Build the prompt from the draft'
     },
     notify: {
-      empty: 'Write your request in the message field, then open Prompt Studio (F4).',
+      empty: key => `Write your request in the message field, then open Prompt Studio (${key}).`,
       short: 'Describe the request in at least 10 characters.',
       needsComposer: 'Prompt Studio needs Hermes Desktop 0.21.5 or newer. Update Hermes and reopen the app.',
       readFailed: 'Could not read the message field. Click in it and try again.',
@@ -50,7 +50,7 @@ export const UI_MESSAGES = {
     ai: {
       group: 'AI help',
       label: '✨ AI:',
-      cycle: 'Alt+I switches to the next mode',
+      cycle: key => `${key} switches to the next mode`,
       mode: { auto: 'Auto', manual: 'On request', off: 'Off' },
       modeTitle: {
         auto: 'The AI suggests an answer on every step and writes the final prompt.',
@@ -127,7 +127,7 @@ export const UI_MESSAGES = {
       undoEditTitle: 'Keeps the answer you had before',
       cancel: 'Cancel',
       cancelTitle: 'Closes and returns the original draft',
-      done: label => `All steps answered. Choose “${label}” (F9).`
+      done: (label, key) => `All steps answered. Choose “${label}” (${key}).`
     },
     loading: {
       spinner: 'Loading',
@@ -148,10 +148,10 @@ export const UI_MESSAGES = {
       no_session: 'This session was not found.',
       empty_session: 'This session has no conversation yet.',
       invalid_summary: 'The model did not return a usable summary.',
-      model_not_found: 'The provider does not offer this model; check the name in Settings (F3).',
-      provider_refused: 'The provider refused the request: API key not accepted (401) or model not allowed for your account or plan (403). Check the provider API key and plan, or pick another model in Settings (F3).',
-      provider_payment: 'The provider refused the request for billing reasons (for example 402: no credits or quota). Check your plan or credits, or pick another model in Settings (F3).',
-      provider_bad_request: 'The provider rejected the request (400). The model or route may not accept these settings; try another model or route in Settings (F3). Details are in the Hermes log.'
+      model_not_found: key => `The provider does not offer this model; check the name in Settings (${key}).`,
+      provider_refused: key => `The provider refused the request: API key not accepted (401) or model not allowed for your account or plan (403). Check the provider API key and plan, or pick another model in Settings (${key}).`,
+      provider_payment: key => `The provider refused the request for billing reasons (for example 402: no credits or quota). Check your plan or credits, or pick another model in Settings (${key}).`,
+      provider_bad_request: key => `The provider rejected the request (400). The model or route may not accept these settings; try another model or route in Settings (${key}). Details are in the Hermes log.`
     },
     context: {
       reading: 'Reading this session…',
@@ -217,7 +217,7 @@ export const UI_MESSAGES = {
       version: 'Other version in the preview',
       editPrompt: 'Put the prompt in the composer to edit before sending',
       noteAlt: 'Use the left Alt key: on some layouts the right Alt works as AltGr.',
-      noteDigits: 'Alt+digits follow the physical number row, whatever the keyboard layout.',
+      noteDigits: modifier => `${modifier}+digits follow the physical number row, whatever the keyboard layout.`,
       noteKeys: 'Tab, Enter and Esc keep working as usual.'
     }
   },
@@ -237,7 +237,7 @@ export const UI_MESSAGES = {
       detailDraft: 'Montar o prompt a partir do rascunho'
     },
     notify: {
-      empty: 'Escreva o pedido no campo de mensagem e abra o Prompt Studio (F4).',
+      empty: key => `Escreva o pedido no campo de mensagem e abra o Prompt Studio (${key}).`,
       short: 'Descreva o pedido com pelo menos 10 caracteres.',
       needsComposer: 'O Prompt Studio precisa do Hermes Desktop 0.21.5 ou mais novo. Atualize o Hermes e reabra o app.',
       readFailed: 'Não foi possível ler o campo de mensagem. Clique nele e tente de novo.',
@@ -266,7 +266,7 @@ export const UI_MESSAGES = {
     ai: {
       group: 'Ajuda da IA',
       label: '✨ IA:',
-      cycle: 'Alt+I muda para o próximo modo',
+      cycle: key => `${key} muda para o próximo modo`,
       mode: { auto: 'Auto', manual: 'Sob demanda', off: 'Desligada' },
       modeTitle: {
         auto: 'A IA sugere uma resposta em cada etapa e escreve o prompt final.',
@@ -343,7 +343,7 @@ export const UI_MESSAGES = {
       undoEditTitle: 'Mantém a resposta que estava antes',
       cancel: 'Cancelar',
       cancelTitle: 'Fecha e devolve o rascunho original',
-      done: label => `Todas as etapas respondidas. Escolha “${label}” (F9).`
+      done: (label, key) => `Todas as etapas respondidas. Escolha “${label}” (${key}).`
     },
     loading: {
       spinner: 'Carregando',
@@ -364,10 +364,10 @@ export const UI_MESSAGES = {
       no_session: 'Esta sessão não foi encontrada.',
       empty_session: 'Esta sessão ainda não tem conversa.',
       invalid_summary: 'O modelo não devolveu um resumo utilizável.',
-      model_not_found: 'O provedor não oferece este modelo; confira o nome nas Configurações (F3).',
-      provider_refused: 'O provedor recusou o pedido: chave de API não aceita (401) ou modelo não liberado para a sua conta ou plano (403). Confira a chave de API e o plano do provedor, ou escolha outro modelo nas Configurações (F3).',
-      provider_payment: 'O provedor recusou o pedido por cobrança (por exemplo 402: sem créditos ou cota). Confira o plano ou os créditos, ou escolha outro modelo nas Configurações (F3).',
-      provider_bad_request: 'O provedor rejeitou o pedido (400). O modelo ou a rota podem não aceitar estes ajustes; tente outro modelo ou rota nas Configurações (F3). Os detalhes estão no log do Hermes.'
+      model_not_found: key => `O provedor não oferece este modelo; confira o nome nas Configurações (${key}).`,
+      provider_refused: key => `O provedor recusou o pedido: chave de API não aceita (401) ou modelo não liberado para a sua conta ou plano (403). Confira a chave de API e o plano do provedor, ou escolha outro modelo nas Configurações (${key}).`,
+      provider_payment: key => `O provedor recusou o pedido por cobrança (por exemplo 402: sem créditos ou cota). Confira o plano ou os créditos, ou escolha outro modelo nas Configurações (${key}).`,
+      provider_bad_request: key => `O provedor rejeitou o pedido (400). O modelo ou a rota podem não aceitar estes ajustes; tente outro modelo ou rota nas Configurações (${key}). Os detalhes estão no log do Hermes.`
     },
     context: {
       reading: 'Lendo esta sessão…',
@@ -433,7 +433,7 @@ export const UI_MESSAGES = {
       version: 'Outra versão na prévia',
       editPrompt: 'Pôr o prompt no composer para editar antes de enviar',
       noteAlt: 'Use o Alt da esquerda: em alguns layouts o Alt da direita funciona como AltGr.',
-      noteDigits: 'Alt+dígito segue a fileira física de números, qualquer que seja o layout do teclado.',
+      noteDigits: modifier => `${modifier}+dígito segue a fileira física de números, qualquer que seja o layout do teclado.`,
       noteKeys: 'Tab, Enter e Esc continuam funcionando como sempre.'
     }
   }

@@ -515,7 +515,7 @@ function AiToggle() {
     role: 'radiogroup',
     style: { ...typeStyle, alignItems: 'center', display: 'inline-flex', fontSize: '12px', gap: '4px' },
     children: [
-      jsxs('span', { style: { alignItems: 'center', display: 'inline-flex', marginRight: '2px' }, title: t('ai.cycle'), children: [t('ai.label'), jsx(KeyCap, { combo: SHORTCUTS.mode })] }),
+      jsxs('span', { style: { alignItems: 'center', display: 'inline-flex', marginRight: '2px' }, title: t('ai.cycle', SHORTCUTS.mode), children: [t('ai.label'), jsx(KeyCap, { combo: SHORTCUTS.mode })] }),
       ...AI_MODES.map(item => jsx('button', {
         ...(item === next ? { 'data-studio-shortcut': SHORTCUTS.mode } : {}),
         'aria-checked': item === mode,
@@ -558,7 +558,7 @@ function DoneRow() {
   return jsx('div', {
     'data-studio': 'done',
     style: { marginTop: '14px' },
-    children: jsx(CurrentQuestion, { text: t('actions.done', generateLabel(t, true, mode)) })
+    children: jsx(CurrentQuestion, { text: t('actions.done', generateLabel(t, true, mode), SHORTCUTS.generate) })
   })
 }
 
@@ -874,7 +874,7 @@ function ShortcutsList() {
           ]
         })
       }),
-      jsxs('ul', { style: { margin: '8px 0 0', paddingLeft: '16px' }, children: [note(t('shortcuts.noteAlt')), note(t('shortcuts.noteDigits')), note(t('shortcuts.noteKeys'))] })
+      jsxs('ul', { style: { margin: '8px 0 0', paddingLeft: '16px' }, children: [note(t('shortcuts.noteAlt')), note(t('shortcuts.noteDigits', SHORTCUTS.pick.replace('+1…9', ''))), note(t('shortcuts.noteKeys'))] })
     ]
   })
 }

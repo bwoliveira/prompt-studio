@@ -8,7 +8,7 @@
 // to PROMPT_STUDIO_NODE_MODULES (used to prove the missing-dependency path without deleting files).
 import { test, before, after, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -657,6 +657,11 @@ test('preview: "Back to steps" keeps every answer and generating again works', {
 // F5–F9 while the studio is open (window capture listener): the user's chosen map.
 // The shortcut map the UI is built from (exported by plugin.js): tests assert against it, never against literals.
 const K = () => ui.SHORTCUTS
+// An errors.* message as shown: the ones that point to Settings take the settings key.
+const errorText = (code, locale = 'en') => {
+  const message = ui.i18n.bundles[locale].errors[code]
+  return typeof message === 'function' ? message(K().settings) : message
+}
 const digit = (action, n) => K()[action].replace('1…9', String(n))
 async function press(combo, target = document.activeElement || document.body, extra = {}) {
   const parts = combo.split('+')
@@ -864,6 +869,54 @@ test('SHORTCUT MAP: every key cap, aria-keyshortcuts, target key and Alt+Shift e
   await press(map.close)
 })
 
+test('SHORTCUT MAP: texts that teach a key (tooltip, notices, notes, errors) print the map\'s combo, en and pt', { skip }, async () => {
+  const original = structuredClone(K())
+  const swapped = { open: 'F11', settings: 'F12', generate: 'F2', mode: 'Alt+Z', pick: 'Option+1…9' }
+  const stale = /\b(F4|F3|F9)\b|Alt\+I|Alt\+digit/
+  try {
+    for (const locale of ['en', 'pt']) {
+      Object.assign(ui.SHORTCUTS, original)
+      await freshSettings('sess-1')
+      ui.i18n.locale = locale
+      await ui.act(async () => { ui.$locale.set(locale) })
+      Object.assign(ui.SHORTCUTS, swapped)
+      const map = K()
+      // The "write your request first" notice names the key that opens the studio.
+      $('[data-slot="composer-rich-input"]').textContent = ''
+      ui.notifications.length = 0
+      await click('[data-studio-open]')
+      const empty = ui.notifications.at(-1)?.message ?? ''
+      assert.ok(empty.includes(map.open) && !stale.test(empty), `${locale}: empty-draft notice names ${map.open}: ${empty}`)
+      // The AI-mode tooltip, the done state and the notes under F1.
+      await openStudio(INTENT, 'off')
+      const tip = $('[data-studio-ai-toggle] span[title]').getAttribute('title')
+      assert.ok(tip.includes(map.mode) && !stale.test(tip), `${locale}: tooltip names ${map.mode}: ${tip}`)
+      for (let i = 0; i < 20 && $('[data-studio-step]'); i += 1) await press($('[data-studio-skip]') ? original.skip : original.accept)
+      assert.ok(currentText().includes(`(${map.generate})`) && !stale.test(currentText()), `${locale}: done state names ${map.generate}: ${currentText()}`)
+      if (!$('[data-studio-shortcuts-list]')) await press(map.help)
+      const notes = $('[data-studio-shortcuts-list]').textContent
+      assert.ok(notes.includes('Option+') && !stale.test(notes), `${locale}: digit note follows the pick combo`)
+      await press(map.help)
+      // Provider errors point to Settings with the settings key.
+      await freshSettings('sess-1')
+      backend.context = () => ({ ok: false, code: 'provider_refused', error: 'provider refused: PermissionDeniedError' })
+      await openFresh()
+      await waitFor(() => $('[data-studio-context-status]')?.textContent.includes(`(${map.settings})`))
+      assert.ok(!stale.test($('[data-studio-context-status]').textContent), `${locale}: error names ${map.settings}`)
+    }
+  } finally {
+    Object.assign(ui.SHORTCUTS, original)
+    ui.i18n.locale = 'en'
+    await ui.act(async () => { ui.$locale.set('en') })
+    if ($('[data-studio-cancel]')) await click('[data-studio-cancel]')
+  }
+})
+
+test('SHORTCUT MAP: i18n-ui.js writes no key combo itself (every one comes in as an argument)', () => {
+  const source = readFileSync(join(repo, 'desktop', 'src', 'i18n-ui.js'), 'utf8').split('\n').filter(line => !/^\s*\/\//.test(line)).join('\n')
+  assert.deepEqual(source.match(/\bF(?:[1-9]|1[0-2])\b|\b(?:Alt|Ctrl|Shift)\+/g) ?? [], [], 'no F-key or modifier combo typed in the bundles')
+})
+
 // ---------------------------------------------------------------- v1.0.0 review fixes
 const active = () => document.activeElement
 const inStrip = () => Boolean($('[data-studio-strip]')?.contains(active()))
@@ -1041,7 +1094,7 @@ test('U10/U11/U12/U15: labelled region, small live status, labelled answer field
 test('U14: the done state names the real Generate label and its key', { skip }, async () => {
   await openStudio(INTENT, 'off')
   for (let i = 0; i < 20 && $('[data-studio-step]'); i += 1) await press($('[data-studio-skip]') ? K().skip : K().accept)
-  assert.match(currentText(), /^All steps answered\. Choose “Generate prompt” \(F9\)\.$/)
+  assert.equal(currentText(), `All steps answered. Choose “Generate prompt” (${K().generate}).`)
   assert.doesNotMatch(currentText(), /Click/)
 })
 
@@ -1451,7 +1504,7 @@ test('CX-1: the gear button shows F3, F3 and a click open the settings dialog, F
   assert.ok($('[data-studio-settings-dialog]'), 'click opened it')
   await closeSettings()
   await press(K().help)
-  assert.ok($('[data-studio-shortcuts-list] [data-studio-shortcut-row="F3"]'), 'F3 in the F1 list')
+  assert.ok($(`[data-studio-shortcuts-list] [data-studio-shortcut-row="${K().settings}"]`), 'settings key in the F1 list')
   await press(K().help)
 })
 
@@ -1608,24 +1661,24 @@ test('CX-1: a failed or timed-out context read shows a short note and the sugges
   await freshSettings('sess-1')
   backend.context = () => ({ ok: false, code: 'model_not_found', error: 'model not found: NotFoundError' })
   await openFresh()
-  await waitFor(() => $('[data-studio-context-status]')?.textContent.includes(ui.i18n.bundles.en.errors.model_not_found))
-  assert.equal($('[data-studio-context-status]').textContent.includes(ui.i18n.bundles.en.errors.model_not_found), true)
+  await waitFor(() => $('[data-studio-context-status]')?.textContent.includes(errorText('model_not_found')))
+  assert.equal($('[data-studio-context-status]').textContent.includes(errorText('model_not_found')), true)
   // A model the provider refuses (401/403, MODEL_NOT_IN_PLAN) says so too.
   await freshSettings('sess-1')
   backend.context = () => ({ ok: false, code: 'provider_refused', error: 'provider refused: PermissionDeniedError' })
   await openFresh()
-  await waitFor(() => $('[data-studio-context-status]')?.textContent.includes(ui.i18n.bundles.en.errors.provider_refused))
-  assert.equal($('[data-studio-context-status]').textContent.includes(ui.i18n.bundles.en.errors.provider_refused), true)
+  await waitFor(() => $('[data-studio-context-status]')?.textContent.includes(errorText('provider_refused')))
+  assert.equal($('[data-studio-context-status]').textContent.includes(errorText('provider_refused')), true)
   // Billing (402) and bad request (400) get their own notes too.
   for (const code of ['provider_payment', 'provider_bad_request']) {
     await freshSettings('sess-1')
     backend.context = () => ({ ok: false, code, error: `${code}: APIStatusError` })
     await openFresh()
-    await waitFor(() => $('[data-studio-context-status]')?.textContent.includes(ui.i18n.bundles.en.errors[code]))
-    assert.ok($('[data-studio-context-status]').textContent.includes(ui.i18n.bundles.en.errors[code]))
+    await waitFor(() => $('[data-studio-context-status]')?.textContent.includes(errorText(code)))
+    assert.ok($('[data-studio-context-status]').textContent.includes(errorText(code)))
   }
   for (const code of ['no_session', 'empty_session', 'invalid_summary', 'model_not_found', 'provider_refused', 'provider_payment', 'provider_bad_request']) {
-    assert.ok(ui.i18n.bundles.en.errors[code] && ui.i18n.bundles.pt.errors[code], `errors.${code} in en and pt`)
+    assert.ok(errorText(code) && errorText(code, 'pt'), `errors.${code} in en and pt`)
   }
 })
 
