@@ -275,20 +275,33 @@ const INTERFACE = /\b(dashboards?|sites?|website|landing|pages?|pagina|telas?|sc
 // Languages: Portuguese (unaccented) + English.
 // A signal that is a noun, not an order ("Our plan is ready. Build ..."): it decides only when no verb does.
 const NOUN_SIGNAL = /^(plano|planos|plan|roadmap|cronograma|estrategia|strategy|workflows?|pipelines?|planilhas?|csv|datasets?|spreadsheets?|revisao|reviews|pesquisa)$/
+// Languages: English. A noun-signal word that is also an imperative when it opens a sentence ("Plan the steps ...").
+const IMPERATIVE_NOUN = /^(plan|review|schedule)$/
+// The match opens the draft or a sentence (only punctuation or a line break and spaces before it), or follows a
+// one-word opener and its comma ("First, plan ...").
+const SENTENCE_START = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?$/
 // Languages: Portuguese (unaccented) + English.
 // Between two artifact words, only bare modifiers ("API announcement email"): a preposition or clause word means the
 // first word is the artifact asked for ("script that sends an e-mail", "app de blog").
 const MODIFIER_GAP = /^\s+(?:(?!(?:that|which|who|to|for|of|on|about|with|and|or|in|by|que|para|de|do|da|dos|das|sobre|com|e|ou|em|no|na|por)\b)\w+\s+){0,2}$/
-// The earliest explicit verb decides; a noun signal counts only when no verb fired.
+// The earliest explicit verb decides; a noun signal counts only when no verb fired. Every match of a rule is
+// read, so a context noun ("The CSV is attached. Extract ...") does not hide a later verb of the same rule.
 function firstSignal(text) {
   let signal = null
   let at = Infinity
   let noun = null
   let nounAt = Infinity
   for (const [id, re] of DELIVERABLE_RULES) {
-    const m = re.exec(text)
-    if (!m) continue
-    if (NOUN_SIGNAL.test(m[0])) { if (m.index < nounAt) { noun = id; nounAt = m.index } } else if (m.index < at) { signal = id; at = m.index }
+    const all = new RegExp(re.source, re.flags.includes('g') ? re.flags : re.flags + 'g')
+    let m
+    while ((m = all.exec(text))) {
+      if (m[0] === '') { all.lastIndex++; continue }
+      const word = m[0].trim()
+      const isNoun = NOUN_SIGNAL.test(word) && !(IMPERATIVE_NOUN.test(word) && SENTENCE_START.test(text.slice(0, m.index)))
+      if (isNoun) { if (m.index < nounAt) { noun = id; nounAt = m.index }; continue }
+      if (m.index < at) { signal = id; at = m.index }
+      break
+    }
   }
   if (signal) return { signal, at, verb: true }
   return noun ? { signal: noun, at: nounAt, verb: false } : { signal: null, at: Infinity, verb: false }

@@ -138,6 +138,18 @@ const TABLE = [
   ['What is cron? Write a script that runs it nightly', 'implementation', 'write + script after the question'],
   ['Como instalar o Docker? Responda em dez linhas.', 'answer', 'near miss: a style note, no task verb'],
   ['How does cron work? Be brief.', 'answer', 'near miss: style note'],
+  // "plan" opening a sentence is an order, not a context noun (Codex P1)
+  ['Plan the steps to configure nginx; do not run any commands.', 'plan', 'imperative plan before configure'],
+  ['Plan the migration, then write a summary for the team', 'plan', 'imperative plan before write'],
+  ['First, plan the rollout. Then automate the deploy.', 'plan', 'imperative plan after a one-word opener'],
+  ['Our plan, the dashboard, is late. Build it now', 'implementation', 'near miss: a noun before a comma'],
+  ['Review the plan for the API', 'review', 'review still first'],
+  ['Our plan: build a React dashboard', 'implementation', 'near miss: plan is a noun before a colon'],
+  // a context noun does not hide a later verb of the same rule (Codex P2)
+  ['The CSV is attached. Extract the totals and write a report.', 'data', 'csv hides extract no more'],
+  ['A planilha está anexa. Extraia os totais e escreva um relatório.', 'data', 'pt'],
+  ['The roadmap is done. Plan the next quarter.', 'plan', 'roadmap noun, then imperative plan'],
+  ['The spreadsheet is attached. Write an email to the client', 'text', 'near miss: no data verb follows'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
@@ -205,7 +217,7 @@ test('parity: Opus and Sonnet carry the identical detection block', async () => 
   const [opus, sonnet] = await Promise.all([src('engine-opus.js'), src('engine-sonnet.js')])
   const a = detection(opus)
   const b = detection(sonnet)
-  for (const needle of ['CATEGORY_RULES', 'DELIVERABLE_RULES', 'MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'QUESTION_START', 'NOUN_SIGNAL', 'MODIFIER_GAP', 'INTERFACE', 'function firstSignal', 'function detect', 'function analyzeNormalized']) {
+  for (const needle of ['CATEGORY_RULES', 'DELIVERABLE_RULES', 'MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'QUESTION_START', 'NOUN_SIGNAL', 'IMPERATIVE_NOUN', 'SENTENCE_START', 'MODIFIER_GAP', 'INTERFACE', 'function firstSignal', 'function detect', 'function analyzeNormalized']) {
     assert.ok(a.includes(needle), `opus block has ${needle}`)
   }
   assert.equal(a, b, 'Opus and Sonnet detection blocks drifted apart: change both engines identically')
@@ -213,7 +225,7 @@ test('parity: Opus and Sonnet carry the identical detection block', async () => 
 
 test('parity: the artifact constants are the same text on all three engines', async () => {
   const sources = await Promise.all(['engine-opus.js', 'engine-sonnet.js', 'engine-astra.js'].map(src))
-  for (const name of ['MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'NOUN_SIGNAL', 'MODIFIER_GAP', 'REVIEW_OBJECT', 'PLAN_OBJECT', 'DATA_OBJECT', 'WORKFLOW_OBJECT']) {
+  for (const name of ['MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'NOUN_SIGNAL', 'IMPERATIVE_NOUN', 'SENTENCE_START', 'MODIFIER_GAP', 'REVIEW_OBJECT', 'PLAN_OBJECT', 'DATA_OBJECT', 'WORKFLOW_OBJECT']) {
     const lines = sources.map(source => source.split('\n').find(line => line.startsWith(`const ${name} =`)))
     assert.ok(lines.every(Boolean), `${name} exists in every engine`)
     assert.equal(new Set(lines).size, 1, `${name} differs between engines:\n${lines.join('\n')}`)
