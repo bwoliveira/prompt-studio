@@ -6,9 +6,6 @@
 // Current suggestion: { key, mode: 'suggest'|'improve', status: 'loading'|'ready'|'error'|'dismissed',
 //   value, reason, agrees, errorKey, detail, model, latency }
 const $suggestion = atom(null)
-// Finished suggestions by question key, so Back / reopening a question does not call the model again.
-const suggestionCache = new Map()
-let suggestSerial = 0
 
 // Identity of "this question with these answers before it": a suggestion for it stays valid
 // until the target, the field or any earlier answer changes.
@@ -20,7 +17,7 @@ function questionKey(state) {
 
 function clearSuggestion() {
   cancelAutoSuggestion()
-  suggestSerial += 1
+  lifecycle.suggestSerial += 1
   $suggestion.set(null)
 }
 
@@ -28,24 +25,23 @@ function clearSuggestion() {
 // clicking through steps quickly would otherwise queue one backend request per step. Leaving the
 // step (clearSuggestion) or scheduling again cancels the pending ask; manual asks stay immediate.
 const AUTO_SUGGEST_DELAY_MS = 400
-let autoSuggestTimer = null
 
 function cancelAutoSuggestion() {
-  if (autoSuggestTimer !== null) autoSuggestTimer()
-  autoSuggestTimer = null
+  if (lifecycle.autoSuggestTimer !== null) lifecycle.autoSuggestTimer()
+  lifecycle.autoSuggestTimer = null
 }
 
 function scheduleAutoSuggestion() {
   cancelAutoSuggestion()
   const key = questionKey($studio.get())
   const delay = globalThis.__promptStudioAutoSuggestDelayMs ?? AUTO_SUGGEST_DELAY_MS
-  const serial = suggestSerial
-  autoSuggestTimer = later(async () => {
-    autoSuggestTimer = null
+  const serial = lifecycle.suggestSerial
+  lifecycle.autoSuggestTimer = later(async () => {
+    lifecycle.autoSuggestTimer = null
     // A pending session context read comes first (it has its own deadline); manual asks never wait.
-    if (contextPromise) await contextPromise
+    if (lifecycle.contextPromise) await lifecycle.contextPromise
     const state = $studio.get()
-    if (serial !== suggestSerial || $aiMode.get() !== 'auto' || state.status !== 'active' || questionKey(state) !== key) return
+    if (serial !== lifecycle.suggestSerial || $aiMode.get() !== 'auto' || state.status !== 'active' || questionKey(state) !== key) return
     requestSuggestion()
   }, delay)
 }
@@ -55,7 +51,7 @@ function refreshSuggestion() {
   const state = $studio.get()
   const mode = $aiMode.get()
   if (state.status !== 'active' || !state.current || mode === 'off') return
-  const cached = suggestionCache.get(questionKey(state))
+  const cached = lifecycle.suggestionCache.get(questionKey(state))
   if (cached) {
     $suggestion.set(cached)
     return
@@ -131,7 +127,7 @@ function SuggestionRow({ state }) {
       children.push(jsx(Button, {
         ariaLabel: t('ai.anotherAria'),
         data: { 'data-studio-ai-retry': true },
-        onClick: () => { suggestionCache.delete(mine.key); requestSuggestion('suggest') },
+        onClick: () => { lifecycle.suggestionCache.delete(mine.key); requestSuggestion('suggest') },
         title: t('ai.anotherAria'),
         keyHint: SHORTCUTS.another,
         children: t('ai.another')
@@ -150,17 +146,17 @@ function SuggestionRow({ state }) {
 
 async function requestSuggestion(mode = 'suggest') {
   const state = $studio.get()
-  if (state.status !== 'active' || !state.current || !pluginContext) return
+  if (state.status !== 'active' || !state.current || !lifecycle.pluginContext) return
   const improving = mode === 'improve'
   const typed = String(state.answer || '').trim()
   if (improving && (state.current.kind === 'enum' || !typed)) return
   cancelAutoSuggestion()
   const key = questionKey(state)
-  const serial = ++suggestSerial
+  const serial = ++lifecycle.suggestSerial
   $suggestion.set({ key, mode, status: 'loading' })
   let next
   try {
-    const response = await withTimeout(pluginContext.rest('/suggest', {
+    const response = await withTimeout(lifecycle.pluginContext.rest('/suggest', {
       method: 'POST',
       body: {
         target: currentTarget(),
@@ -189,8 +185,8 @@ async function requestSuggestion(mode = 'suggest') {
     next = { key, mode, status: 'error', ...describeFailure(error) }
   }
   // Keep good suggestions even if the user already moved on: Back will show them instantly.
-  if (next.status === 'ready' && !improving) suggestionCache.set(key, next)
-  if (serial !== suggestSerial || questionKey($studio.get()) !== key) return
+  if (next.status === 'ready' && !improving) lifecycle.suggestionCache.set(key, next)
+  if (serial !== lifecycle.suggestSerial || questionKey($studio.get()) !== key) return
   $suggestion.set(next)
 }
 
@@ -203,7 +199,7 @@ function useSuggestion() {
   } else {
     update({ type: 'SET_ANSWER', answer: suggestion.value })
     // The field now holds the AI text; drop the card so "Improve my text" works on the new text.
-    suggestSerial += 1
+    lifecycle.suggestSerial += 1
     $suggestion.set(null)
   }
 }
@@ -212,7 +208,7 @@ function discardSuggestion() {
   // Remembered as dismissed, so automatic mode does not ask again when the question comes back.
   const key = questionKey($studio.get())
   const dismissed = { key, mode: 'suggest', status: 'dismissed' }
-  suggestionCache.set(key, dismissed)
-  suggestSerial += 1
+  lifecycle.suggestionCache.set(key, dismissed)
+  lifecycle.suggestSerial += 1
   $suggestion.set(dismissed)
 }

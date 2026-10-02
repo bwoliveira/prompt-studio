@@ -2607,12 +2607,39 @@ const $studio = atom(initialStudioState())
 // True while the preview's prompt is being written into the composer (host.composer is async): the studio
 // is frozen until the write settles, so the placed prompt and the studio state cannot diverge.
 const $placing = atom(false)
-let pluginContext = null
+// Every piece of module-level mutable state of the plugin lives in this one object, so a dispose or a reload resets
+// it in one place and nothing else is reassigned at module level. (The atoms above hold what the UI shows.)
+const lifecycle = {
+  // The host context from register(); null before it and after a dispose.
+  pluginContext: null,
+  // The conversation the Studio was opened in, as a host.composer address (see focusedAddress): Close, dispose,
+  // placing and F9 all go there, never to whatever composer is active by then.
+  openedAddress: 'new',
+  // One opening and one placement at a time: host.composer calls are async.
+  starting: false,
+  // The draft taken out of the composer while the Studio opens (not yet in $studio).
+  pendingDraft: null,
+  // Bumped on dispose so an opening cut short by disable or hot reload never continues (see disposeComposerFlow).
+  generation: 0,
+  // The preview placement in flight (a promise of its success), so a dispose waits for it (see disposeComposerFlow).
+  placement: null,
+  // Counters that make a late answer (compose, context read, suggestion) stale: each is bumped when the thing is
+  // cancelled or asked again, and an answer that finds another value is dropped.
+  composeSerial: 0,
+  contextSerial: 0,
+  suggestSerial: 0,
+  // Finished suggestions by question key, so Back / reopening a question does not call the model again.
+  suggestionCache: new Map(),
+  // The session context read in flight (a promise), so the first automatic suggestion waits for it.
+  contextPromise: null,
+  // Disposer of the pending automatic-suggestion timer, or null.
+  autoSuggestTimer: null
+}
 
 // Timers go through ctx.setTimeout so the host clears them on dispose (SDK pitfall: bare globals are
 // not tracked). It returns a disposer. Plain global only when the host has no ctx.setTimeout.
 function later(fn, ms) {
-  if (typeof pluginContext?.setTimeout === 'function') return pluginContext.setTimeout(fn, ms)
+  if (typeof lifecycle.pluginContext?.setTimeout === 'function') return lifecycle.pluginContext.setTimeout(fn, ms)
   const id = setTimeout(fn, ms)
   return () => clearTimeout(id)
 }
@@ -2640,7 +2667,7 @@ function fixedT(language) {
 function tr(key, ...args) {
   const language = $language.get()
   if (language !== 'auto') return fixedT(language)(key, ...args)
-  const t = pluginContext?.i18n?.t
+  const t = lifecycle.pluginContext?.i18n?.t
   if (t) return t(key, ...args)
   return resolveMessage(UI_MESSAGES.en, key, args) ?? key
 }
@@ -3060,11 +3087,11 @@ const $target = atom(null)
 const $aiMode = atom('auto')
 
 function readPref(key, fallback) {
-  try { return pluginContext?.storage?.get(key, fallback) ?? fallback } catch { return fallback }
+  try { return lifecycle.pluginContext?.storage?.get(key, fallback) ?? fallback } catch { return fallback }
 }
 
 function writePref(key, value) {
-  try { pluginContext?.storage?.set(key, value) } catch { /* in-memory only */ }
+  try { lifecycle.pluginContext?.storage?.set(key, value) } catch { /* in-memory only */ }
 }
 
 function readAiMode() {
@@ -3324,9 +3351,6 @@ function SettingsDialog() {
 // Current suggestion: { key, mode: 'suggest'|'improve', status: 'loading'|'ready'|'error'|'dismissed',
 //   value, reason, agrees, errorKey, detail, model, latency }
 const $suggestion = atom(null)
-// Finished suggestions by question key, so Back / reopening a question does not call the model again.
-const suggestionCache = new Map()
-let suggestSerial = 0
 
 // Identity of "this question with these answers before it": a suggestion for it stays valid
 // until the target, the field or any earlier answer changes.
@@ -3338,7 +3362,7 @@ function questionKey(state) {
 
 function clearSuggestion() {
   cancelAutoSuggestion()
-  suggestSerial += 1
+  lifecycle.suggestSerial += 1
   $suggestion.set(null)
 }
 
@@ -3346,24 +3370,23 @@ function clearSuggestion() {
 // clicking through steps quickly would otherwise queue one backend request per step. Leaving the
 // step (clearSuggestion) or scheduling again cancels the pending ask; manual asks stay immediate.
 const AUTO_SUGGEST_DELAY_MS = 400
-let autoSuggestTimer = null
 
 function cancelAutoSuggestion() {
-  if (autoSuggestTimer !== null) autoSuggestTimer()
-  autoSuggestTimer = null
+  if (lifecycle.autoSuggestTimer !== null) lifecycle.autoSuggestTimer()
+  lifecycle.autoSuggestTimer = null
 }
 
 function scheduleAutoSuggestion() {
   cancelAutoSuggestion()
   const key = questionKey($studio.get())
   const delay = globalThis.__promptStudioAutoSuggestDelayMs ?? AUTO_SUGGEST_DELAY_MS
-  const serial = suggestSerial
-  autoSuggestTimer = later(async () => {
-    autoSuggestTimer = null
+  const serial = lifecycle.suggestSerial
+  lifecycle.autoSuggestTimer = later(async () => {
+    lifecycle.autoSuggestTimer = null
     // A pending session context read comes first (it has its own deadline); manual asks never wait.
-    if (contextPromise) await contextPromise
+    if (lifecycle.contextPromise) await lifecycle.contextPromise
     const state = $studio.get()
-    if (serial !== suggestSerial || $aiMode.get() !== 'auto' || state.status !== 'active' || questionKey(state) !== key) return
+    if (serial !== lifecycle.suggestSerial || $aiMode.get() !== 'auto' || state.status !== 'active' || questionKey(state) !== key) return
     requestSuggestion()
   }, delay)
 }
@@ -3373,7 +3396,7 @@ function refreshSuggestion() {
   const state = $studio.get()
   const mode = $aiMode.get()
   if (state.status !== 'active' || !state.current || mode === 'off') return
-  const cached = suggestionCache.get(questionKey(state))
+  const cached = lifecycle.suggestionCache.get(questionKey(state))
   if (cached) {
     $suggestion.set(cached)
     return
@@ -3449,7 +3472,7 @@ function SuggestionRow({ state }) {
       children.push(jsx(Button, {
         ariaLabel: t('ai.anotherAria'),
         data: { 'data-studio-ai-retry': true },
-        onClick: () => { suggestionCache.delete(mine.key); requestSuggestion('suggest') },
+        onClick: () => { lifecycle.suggestionCache.delete(mine.key); requestSuggestion('suggest') },
         title: t('ai.anotherAria'),
         keyHint: SHORTCUTS.another,
         children: t('ai.another')
@@ -3468,17 +3491,17 @@ function SuggestionRow({ state }) {
 
 async function requestSuggestion(mode = 'suggest') {
   const state = $studio.get()
-  if (state.status !== 'active' || !state.current || !pluginContext) return
+  if (state.status !== 'active' || !state.current || !lifecycle.pluginContext) return
   const improving = mode === 'improve'
   const typed = String(state.answer || '').trim()
   if (improving && (state.current.kind === 'enum' || !typed)) return
   cancelAutoSuggestion()
   const key = questionKey(state)
-  const serial = ++suggestSerial
+  const serial = ++lifecycle.suggestSerial
   $suggestion.set({ key, mode, status: 'loading' })
   let next
   try {
-    const response = await withTimeout(pluginContext.rest('/suggest', {
+    const response = await withTimeout(lifecycle.pluginContext.rest('/suggest', {
       method: 'POST',
       body: {
         target: currentTarget(),
@@ -3507,8 +3530,8 @@ async function requestSuggestion(mode = 'suggest') {
     next = { key, mode, status: 'error', ...describeFailure(error) }
   }
   // Keep good suggestions even if the user already moved on: Back will show them instantly.
-  if (next.status === 'ready' && !improving) suggestionCache.set(key, next)
-  if (serial !== suggestSerial || questionKey($studio.get()) !== key) return
+  if (next.status === 'ready' && !improving) lifecycle.suggestionCache.set(key, next)
+  if (serial !== lifecycle.suggestSerial || questionKey($studio.get()) !== key) return
   $suggestion.set(next)
 }
 
@@ -3521,7 +3544,7 @@ function useSuggestion() {
   } else {
     update({ type: 'SET_ANSWER', answer: suggestion.value })
     // The field now holds the AI text; drop the card so "Improve my text" works on the new text.
-    suggestSerial += 1
+    lifecycle.suggestSerial += 1
     $suggestion.set(null)
   }
 }
@@ -3530,8 +3553,8 @@ function discardSuggestion() {
   // Remembered as dismissed, so automatic mode does not ask again when the question comes back.
   const key = questionKey($studio.get())
   const dismissed = { key, mode: 'suggest', status: 'dismissed' }
-  suggestionCache.set(key, dismissed)
-  suggestSerial += 1
+  lifecycle.suggestionCache.set(key, dismissed)
+  lifecycle.suggestSerial += 1
   $suggestion.set(dismissed)
 }
 // ---------------------------------------------------------------------------
@@ -4126,10 +4149,6 @@ function StudioLadder() {
 // placing and sending the prompt, closing, the entry button and register().
 // ---------------------------------------------------------------------------
 
-// The conversation the Studio was opened in, as a host.composer address (see focusedAddress): Close, dispose,
-// placing and F9 all go there, never to whatever composer is active by then.
-let openedAddress = 'new'
-
 // Resolves after two animation frames and a short timer: later than the app's deferred composer-focus
 // retries (the focus effect may run after a paint, then retries on the next frame and a 0 ms timer).
 const FOCUS_SETTLE_MS = 50
@@ -4141,27 +4160,18 @@ function hostFocusSettled() {
   })
 }
 
-// One opening and one placement at a time: host.composer calls are async.
-let starting = false
-// The draft taken out of the composer while the Studio opens (not yet in $studio), and a counter bumped on
-// dispose so an opening cut short by disable or hot reload never continues (see disposeComposerFlow).
-let pendingDraft = null
-let lifecycle = 0
-// The preview placement in flight (a promise of its success), so a dispose waits for it (see disposeComposerFlow).
-let placement = null
-
 // On dispose the composer gets its draft back, whether the Studio was opening or open.
 function disposeComposerFlow() {
-  lifecycle += 1
+  lifecycle.generation += 1
   const state = $studio.get()
-  const lost = pendingDraft ?? (state.status !== 'idle' && state.intent ? { text: state.intent, address: openedAddress } : null)
-  const inFlight = placement
-  pendingDraft = null
-  starting = false
+  const lost = lifecycle.pendingDraft ?? (state.status !== 'idle' && state.intent ? { text: state.intent, address: lifecycle.openedAddress } : null)
+  const inFlight = lifecycle.placement
+  lifecycle.pendingDraft = null
+  lifecycle.starting = false
   $placing.set(false)
   if (!lost) return
   // pluginContext is cleared right after this, and restore may run later: take the clipboard API now.
-  const os = pluginContext?.os
+  const os = lifecycle.pluginContext?.os
   const restore = () => returnDraftTo(lost.address, lost.text, { os, reason: 'closed' })
   // A prompt being placed wins: the request comes back only if that placement fails.
   if (inFlight) inFlight.then(ok => { if (!ok) restore() })
@@ -4169,15 +4179,15 @@ function disposeComposerFlow() {
 }
 
 async function startFromComposer() {
-  if ($studio.get().status !== 'idle' || starting) return
+  if ($studio.get().status !== 'idle' || lifecycle.starting) return
   if (!composerAdapter.available()) {
     host.notify({ kind: 'error', message: tr('notify.needsComposer') })
     return
   }
-  starting = true
-  const generation = lifecycle
+  lifecycle.starting = true
+  const generation = lifecycle.generation
   // A dispose clears pluginContext; a recovery that runs after one still needs the clipboard.
-  const os = pluginContext?.os
+  const os = lifecycle.pluginContext?.os
   // F9 sends only into the session the Studio was opened in (see sendPreview): taken before any await.
   const originAddress = focusedAddress()
   try {
@@ -4197,21 +4207,21 @@ async function startFromComposer() {
       host.notify({ kind: 'warning', message: tr('notify.short') })
       return
     }
-    if (focusedAddress() !== originAddress || generation !== lifecycle) return
+    if (focusedAddress() !== originAddress || generation !== lifecycle.generation) return
     if (!(await composerAdapter.writeDraft('', originAddress))) {
       host.notify({ kind: 'error', message: tr('notify.clearFailed') })
       return
     }
-    if (generation !== lifecycle) {
+    if (generation !== lifecycle.generation) {
       returnDraftTo(originAddress, draft, { os, reason: 'closed' })
       return
     }
-    pendingDraft = { text: draft, address: originAddress }
+    lifecycle.pendingDraft = { text: draft, address: originAddress }
     // setDraft makes the app focus the composer it painted, now and again on a later frame and timer
     // (focusComposerInput). The studio opens only after those retries, so its focus is not taken back.
     await hostFocusSettled()
-    if (generation !== lifecycle) return
-    pendingDraft = null
+    if (generation !== lifecycle.generation) return
+    lifecycle.pendingDraft = null
     if ($studio.get().status !== 'idle') {
       await returnDraftTo(originAddress, draft, { reason: 'closed' })
       return
@@ -4222,16 +4232,16 @@ async function startFromComposer() {
       await returnDraftTo(originAddress, draft)
       return
     }
-    suggestionCache.clear()
+    lifecycle.suggestionCache.clear()
     $helpOpen.set(false)
     // Settings are read from storage on every opening (storage is the source of truth).
     loadSettings()
-    openedAddress = originAddress
+    lifecycle.openedAddress = originAddress
     update({ type: 'START', intent })
     startContextRead()
     askNext()
   } finally {
-    starting = false
+    lifecycle.starting = false
   }
 }
 
@@ -4251,7 +4261,7 @@ function focusedAddress() {
 // the composer in use (nothing sent); else the error notice carries the text itself.
 // reason 'switch': the user changed conversations while the Studio opened; 'closed': Close, or the plugin
 // was disabled or reloaded. os: the clipboard API, kept by the caller when the context is being disposed.
-async function returnDraftTo(address, draft, { reason = 'switch', os = pluginContext?.os } = {}) {
+async function returnDraftTo(address, draft, { reason = 'switch', os = lifecycle.pluginContext?.os } = {}) {
   const key = reason === 'switch' ? 'sessionChanged' : 'draftBack'
   if (await composerAdapter.placeDraft(draft, address)) {
     if (reason === 'switch') host.notify({ kind: 'info', message: tr('notify.sessionChanged') })
@@ -4280,20 +4290,17 @@ function cancelStudio() {
   // While the prompt is being placed, Close would race it and put the old draft over the prompt.
   if (state.status === 'idle' || $placing.get()) return
   clearSuggestion()
-  composeSerial += 1
+  lifecycle.composeSerial += 1
   stopContextRead()
   $helpOpen.set(false)
   const intent = state.intent
   update({ type: 'RESET' })
-  if (intent) returnDraftTo(openedAddress, intent, { reason: 'closed' })
+  if (intent) returnDraftTo(lifecycle.openedAddress, intent, { reason: 'closed' })
 }
 
 // Session context read on opening: null | { status: 'reading'|'ready'|'error', summary, model, ms, reason }
 const $context = atom(null)
-let contextPromise = null
-let contextSerial = 0
 
-let composeSerial = 0
 const COMPOSE_CLIENT_TIMEOUT_MS = 50_000
 // A bit above the backend's 15 s hard deadline for /context.
 const CONTEXT_CLIENT_TIMEOUT_MS = 17_000
@@ -4327,8 +4334,8 @@ function errorDetail(response) {
 }
 
 function stopContextRead() {
-  contextSerial += 1
-  contextPromise = null
+  lifecycle.contextSerial += 1
+  lifecycle.contextPromise = null
   $context.set(null)
 }
 
@@ -4337,8 +4344,8 @@ function stopContextRead() {
 function startContextRead() {
   stopContextRead()
   const sessionId = host.state?.focusedStoredSessionId?.get?.()
-  if (!pluginContext || $aiMode.get() === 'off' || !$readContext.get() || !sessionId) return
-  const serial = contextSerial
+  if (!lifecycle.pluginContext || $aiMode.get() === 'off' || !$readContext.get() || !sessionId) return
+  const serial = lifecycle.contextSerial
   const profile = host.state?.focusedSessionProfile?.get?.()
   const choice = contextChoice()
   const body = { session_id: sessionId, ...(profile ? { profile } : {}), locale: activeLocale(), ...(choice ? { model_choice: choice } : {}) }
@@ -4348,7 +4355,7 @@ function startContextRead() {
     const text = tr(key, displayCombo(SHORTCUTS.settings))
     return { status: 'error', reason: text && text !== key ? text : tr('errors.unavailable') }
   }
-  contextPromise = withTimeout(pluginContext.rest('/context', { method: 'POST', body }), globalThis.__promptStudioContextTimeoutMs ?? CONTEXT_CLIENT_TIMEOUT_MS)
+  lifecycle.contextPromise = withTimeout(lifecycle.pluginContext.rest('/context', { method: 'POST', body }), globalThis.__promptStudioContextTimeoutMs ?? CONTEXT_CLIENT_TIMEOUT_MS)
     .then(
       response => (response?.ok && typeof response.summary === 'string' && response.summary.trim()
         ? { status: 'ready', summary: response.summary, model: response.model || '', ms: Number(response.ms) || 0 }
@@ -4356,8 +4363,8 @@ function startContextRead() {
       error => fail(String(error?.message || error) === TIMEOUT_MESSAGE ? 'timeout' : 'unavailable')
     )
     .then(next => {
-      if (serial !== contextSerial) return
-      contextPromise = null
+      if (serial !== lifecycle.contextSerial) return
+      lifecycle.contextPromise = null
       $context.set(next)
     })
 }
@@ -4397,16 +4404,16 @@ async function generatePrompt() {
   const warnings = { target, ladder }
   let note = ''
   let noteDetail = ''
-  if ($aiMode.get() !== 'off' && pluginContext) {
-    const serial = ++composeSerial
+  if ($aiMode.get() !== 'off' && lifecycle.pluginContext) {
+    const serial = ++lifecycle.composeSerial
     try {
       // Client-side ceiling a bit above the backend's 45 s deadline: a hung transport falls back
       // to the local engine instead of leaving the studio stuck on "writing".
-      const response = await withTimeout(pluginContext.rest('/compose', {
+      const response = await withTimeout(lifecycle.pluginContext.rest('/compose', {
         method: 'POST',
         body: { target, intent: requestState.intent, answers: studioAnswers(target, requestState.intent, ladder, locale), baseline: engineResult.prompt, locale, ...(helperChoice() ? { model_choice: helperChoice() } : {}) }
       }), COMPOSE_CLIENT_TIMEOUT_MS)
-      if (serial !== composeSerial || $studio.get().status !== 'briefing') return // cancelled meanwhile
+      if (serial !== lifecycle.composeSerial || $studio.get().status !== 'briefing') return // cancelled meanwhile
       if ($aiMode.get() === 'off') {
         // AI switched off while it was writing: keep the engine prompt.
       } else if (response?.ok && response.prompt) {
@@ -4417,7 +4424,7 @@ async function generatePrompt() {
         noteDetail = errorDetail(response)
       }
     } catch (error) {
-      if (serial !== composeSerial || $studio.get().status !== 'briefing') return
+      if (serial !== lifecycle.composeSerial || $studio.get().status !== 'briefing') return
       if ($aiMode.get() !== 'off') {
         const { errorKey, detail } = describeFailure(error)
         note = tr(errorKey === 'missing' ? 'preview.missing' : 'preview.failed')
@@ -4434,9 +4441,9 @@ async function generatePrompt() {
 // The prompt goes into the conversation the Studio was opened in. Tracked in `placement` so a dispose during
 // the write waits for its outcome instead of racing it.
 function placePrompt(text) {
-  const run = composerAdapter.placeDraft(text, openedAddress)
-  placement = run
-  run.finally(() => { if (placement === run) placement = null })
+  const run = composerAdapter.placeDraft(text, lifecycle.openedAddress)
+  lifecycle.placement = run
+  run.finally(() => { if (lifecycle.placement === run) lifecycle.placement = null })
   return run
 }
 
@@ -4470,7 +4477,7 @@ async function sendPreview() {
   const text = state.preview[state.preview.showing]
   let sent = false
   try {
-    sent = focusedAddress() === openedAddress && typeof host.composer?.submit === 'function' && host.composer.submit(openedAddress, text) === true
+    sent = focusedAddress() === lifecycle.openedAddress && typeof host.composer?.submit === 'function' && host.composer.submit(lifecycle.openedAddress, text) === true
   } catch {
     sent = false
   }
@@ -4546,14 +4553,14 @@ export default {
   id: ID,
   name: 'Prompt Studio',
   register(ctx) {
-    pluginContext = ctx
+    lifecycle.pluginContext = ctx
     ctx.onDispose(() => {
       disposeComposerFlow()
       cancelAutoSuggestion()
-      suggestSerial += 1
-      composeSerial += 1
-      suggestionCache.clear()
-      pluginContext = null
+      lifecycle.suggestSerial += 1
+      lifecycle.composeSerial += 1
+      lifecycle.suggestionCache.clear()
+      lifecycle.pluginContext = null
       $studio.set(initialStudioState())
       $suggestion.set(null)
       $helpOpen.set(false)

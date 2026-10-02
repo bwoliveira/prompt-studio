@@ -133,12 +133,39 @@ const $studio = atom(initialStudioState())
 // True while the preview's prompt is being written into the composer (host.composer is async): the studio
 // is frozen until the write settles, so the placed prompt and the studio state cannot diverge.
 const $placing = atom(false)
-let pluginContext = null
+// Every piece of module-level mutable state of the plugin lives in this one object, so a dispose or a reload resets
+// it in one place and nothing else is reassigned at module level. (The atoms above hold what the UI shows.)
+const lifecycle = {
+  // The host context from register(); null before it and after a dispose.
+  pluginContext: null,
+  // The conversation the Studio was opened in, as a host.composer address (see focusedAddress): Close, dispose,
+  // placing and F9 all go there, never to whatever composer is active by then.
+  openedAddress: 'new',
+  // One opening and one placement at a time: host.composer calls are async.
+  starting: false,
+  // The draft taken out of the composer while the Studio opens (not yet in $studio).
+  pendingDraft: null,
+  // Bumped on dispose so an opening cut short by disable or hot reload never continues (see disposeComposerFlow).
+  generation: 0,
+  // The preview placement in flight (a promise of its success), so a dispose waits for it (see disposeComposerFlow).
+  placement: null,
+  // Counters that make a late answer (compose, context read, suggestion) stale: each is bumped when the thing is
+  // cancelled or asked again, and an answer that finds another value is dropped.
+  composeSerial: 0,
+  contextSerial: 0,
+  suggestSerial: 0,
+  // Finished suggestions by question key, so Back / reopening a question does not call the model again.
+  suggestionCache: new Map(),
+  // The session context read in flight (a promise), so the first automatic suggestion waits for it.
+  contextPromise: null,
+  // Disposer of the pending automatic-suggestion timer, or null.
+  autoSuggestTimer: null
+}
 
 // Timers go through ctx.setTimeout so the host clears them on dispose (SDK pitfall: bare globals are
 // not tracked). It returns a disposer. Plain global only when the host has no ctx.setTimeout.
 function later(fn, ms) {
-  if (typeof pluginContext?.setTimeout === 'function') return pluginContext.setTimeout(fn, ms)
+  if (typeof lifecycle.pluginContext?.setTimeout === 'function') return lifecycle.pluginContext.setTimeout(fn, ms)
   const id = setTimeout(fn, ms)
   return () => clearTimeout(id)
 }

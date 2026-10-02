@@ -15,7 +15,7 @@ are in `AGENTS.md`; the standing decisions are in `docs/adr/`; the vocabulary is
 | `desktop/src/i18n-core.js` | Questions, help and option labels, `en` and `pt`. |
 | `desktop/src/i18n-ui.js` | Every string `plugin.js` shows (buttons, notes, errors, shortcut help), `en` and `pt`. |
 | `desktop/src/plugin-head.js` | The plugin's imports and `ID`; the only hand-written file allowed to import. |
-| `desktop/src/studio-state.js` | The `@core` state machine (reducer) plus the studio atom. No imports. |
+| `desktop/src/studio-state.js` | The `@core` state machine (reducer), the studio atom and the one `lifecycle` object that holds every piece of module-level mutable state (plugin context, opened address, serial counters, timers, suggestion cache). No imports. |
 | `desktop/src/ui-locale.js`, `ui-keys.js`, `ui-settings.js`, `ui-suggestions.js`, `ui-steps.js`, `ui-composer.js` | The rest of the Desktop UI, one module per responsibility: locale helpers and the composer adapter; the shortcut map, key display and keydown listener; preferences, Settings and the model picker; the suggestion machine; the strip and the step flow; opening from the composer, host calls, placing, closing and `export default`. Concatenated in this order into `plugin.js`'s single module scope. No imports. |
 | `desktop/plugin.js` | Generated whole by `scripts/build.mjs`; the single file Hermes Desktop loads. Imports only `@hermes/plugin-sdk`, `react` and `react/jsx-runtime`. |
 | `desktop/studio-core.mjs` | Generated ESM bundle of `src/*` for the Node tests. |

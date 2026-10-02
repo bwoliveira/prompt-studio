@@ -22,11 +22,11 @@ const $target = atom(null)
 const $aiMode = atom('auto')
 
 function readPref(key, fallback) {
-  try { return pluginContext?.storage?.get(key, fallback) ?? fallback } catch { return fallback }
+  try { return lifecycle.pluginContext?.storage?.get(key, fallback) ?? fallback } catch { return fallback }
 }
 
 function writePref(key, value) {
-  try { pluginContext?.storage?.set(key, value) } catch { /* in-memory only */ }
+  try { lifecycle.pluginContext?.storage?.set(key, value) } catch { /* in-memory only */ }
 }
 
 function readAiMode() {
