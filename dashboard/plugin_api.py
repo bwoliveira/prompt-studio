@@ -10,6 +10,7 @@ import asyncio
 import importlib
 import importlib.util
 import logging
+import os
 from pathlib import Path
 from typing import Annotated, Any, Literal, Optional
 
@@ -73,11 +74,47 @@ class SuggestRequest(BaseModel):
     session_context: str = Field("", max_length=SESSION_CONTEXT_TEXT)
 
 
+# Loaded sibling modules, name -> (file signature, module). The host imports this file by path and the
+# route handlers call _load() on every request: re-executing a sibling each time would build new thread
+# pools (suggest/compose/context) and drop their concurrency caps. Reload only when a file changed, or
+# on every call with the dev switch below.
+_MODULES: dict[str, tuple[tuple, Any]] = {}
+DEV_RELOAD_ENV = "PROMPT_STUDIO_DEV_RELOAD"
+
+
+def _signature() -> tuple:
+    """mtimes of the sibling modules (they import each other, so any change reloads them all)."""
+    here = Path(__file__).parent
+    stamps = []
+    for path in sorted(here.glob("*.py")):
+        try:
+            stamps.append((path.name, path.stat().st_mtime_ns))
+        except OSError:
+            continue
+    return tuple(stamps)
+
+
 def _load(name: str, attr: str) -> Any:
     """Import a sibling module without a top-level Hermes dependency (hot-reload friendly).
 
-    Returns the module once it exposes ``attr``; raises RuntimeError otherwise, whichever path loaded it.
+    Loaded once per process; reloaded when a file's mtime changed or when ``PROMPT_STUDIO_DEV_RELOAD`` is
+    set to a truthy value. Returns the module once it exposes ``attr``; raises RuntimeError otherwise,
+    whichever path loaded it.
     """
+    signature = _signature()
+    cached = _MODULES.get(name)
+    dev = os.environ.get(DEV_RELOAD_ENV, "").strip().lower() in ("1", "true", "yes", "on")
+    if cached is not None and cached[0] == signature and not dev:
+        module = cached[1]
+    else:
+        module = _import(name)
+        _MODULES[name] = (signature, module)
+    if not hasattr(module, attr):
+        raise RuntimeError(f"{name}.{attr} missing")
+    return module
+
+
+def _import(name: str) -> Any:
     module = None
     try:
         module = importlib.import_module(f".{name}", __package__) if __package__ else None
@@ -94,8 +131,6 @@ def _load(name: str, attr: str) -> Any:
             raise RuntimeError(f"{name} could not be loaded")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-    if not hasattr(module, attr):
-        raise RuntimeError(f"{name}.{attr} missing")
     return module
 
 

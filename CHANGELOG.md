@@ -27,6 +27,10 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   improve" (backend `code: too_long`, en/pt). Any other cut the backend makes to your text (a draft over 6,000
   characters, an answer over 3,000, an earlier answer or default text over 600, a baseline over 30,000, or a model
   reply cut to its limit) is reported with `truncated: true` in the /suggest and /compose response, and `docs/CONTRACT.md` lists the effective limit of each field.
+- Internal/perf: the backend now loads the engine, adapter and context modules once per process (reloaded only when a
+  file's mtime changes, or on every request with `PROMPT_STUDIO_DEV_RELOAD=1`). Before, the dashboard's by-path load
+  re-ran them on every request, creating new thread pools each time, so the suggest (6), compose (3) and context (2)
+  worker caps and the suggest/compose separation did not hold.
 - New target: **Claude Sonnet 5.5** (Alt+T, or pick **Sonnet**), next to Opus and Astra. It has its own prompt engine,
   question help and AI writer rules from Anthropic's Sonnet 5.5 prompting guide, and is the default when the
   session's model is a Sonnet. Opus and Astra prompts do not change.
