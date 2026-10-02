@@ -939,6 +939,198 @@ test('absolutely everything has a key: F4 opens, F10 closes, Alt+digit picks, Al
 })
 
 
+// Overlay guard (#21): behind Settings, a model menu or any open dialog/menu/listbox the studio's
+// keys do nothing; only F1 and F3 (which toggle their own overlays) are handled.
+test('overlay guard: with Settings open F-key actions and Alt chords do nothing behind it; F1 and F3 still work', { skip }, async () => {
+  await openStudio(INTENT, 'off')
+  await openSettings()
+  const rungs = document.querySelectorAll('[data-studio-rung]').length
+  const mode = aiMode()
+  backend.calls.length = 0
+  // F-key action class: F9 must not generate, F10 must not cancel, F5-F8 do not step; still swallowed.
+  for (const combo of [K().accept, K().skip, K().useAi, K().back, K().generate, K().close]) {
+    assert.equal((await press(combo)).defaultPrevented, true, `${combo} swallowed`)
+  }
+  assert.ok($('[data-studio-preview]') === null, 'F9 did not generate')
+  assert.ok($('[data-studio-strip]'), 'F10 did not cancel the studio')
+  assert.equal(document.querySelectorAll('[data-studio-rung]').length, rungs, 'F5-F8 did not move the steps')
+  assert.ok(!backend.calls.some(c => c.path === '/compose'), 'no compose call')
+  // Alt chord class: Alt+I (mode), Alt+O (target), Alt+1 (pick) are left alone.
+  for (const combo of [K().mode, K().model.astra, digit('pick', 1)]) {
+    assert.equal((await press(combo)).defaultPrevented, false, `${combo} not taken`)
+  }
+  assert.equal(aiMode(), mode, 'Alt+I did not cycle the AI mode')
+  assert.equal($('[data-studio-target-option="astra"]').getAttribute('aria-checked'), 'false', 'Alt+A did not switch the target')
+  // F1 / F3 class: F1 still toggles the help list, F3 closes Settings.
+  await press(K().help)
+  assert.ok($('[data-studio-shortcuts-list]'), 'F1 handled behind Settings')
+  await press(K().help)
+  assert.ok($('[data-studio-shortcuts-list]') === null)
+  await press(K().settings)
+  assert.ok($('[data-studio-settings-dialog]') === null, 'F3 closed Settings')
+  // Overlay gone: the studio's keys work again.
+  await press(K().model.astra)
+  assert.equal($('[data-studio-target-option="astra"]').getAttribute('aria-checked'), 'true')
+  await press(K().generate)
+  assert.ok($('[data-studio-preview]'), 'F9 generates once nothing is open')
+})
+
+for (const role of ['dialog', 'menu', 'listbox']) {
+  test(`overlay guard: an open role=${role} in the document stops F-keys and Alt chords, and its removal restores them`, { skip }, async () => {
+    await openStudio(INTENT, 'off')
+    const overlay = document.createElement('div')
+    overlay.setAttribute('role', role)
+    document.body.appendChild(overlay)
+    try {
+      const mode = aiMode()
+      await press(K().generate)
+      assert.ok($('[data-studio-preview]') === null, `F9 ignored behind role=${role}`)
+      await press(K().close)
+      assert.ok($('[data-studio-strip]'), `F10 ignored behind role=${role}`)
+      await press(K().mode)
+      assert.equal(aiMode(), mode, `Alt+I ignored behind role=${role}`)
+      // A hidden overlay does not count.
+      overlay.setAttribute('aria-hidden', 'true')
+      await press(K().mode)
+      assert.notEqual(aiMode(), mode, 'aria-hidden overlay does not block')
+      await press(K().mode)
+      await setMode('off')
+      overlay.removeAttribute('aria-hidden')
+      await press(K().close)
+      assert.ok($('[data-studio-strip]'), 'blocked again once visible')
+    } finally {
+      overlay.remove()
+    }
+    await press(K().close)
+    assert.ok($('[data-studio-strip]') === null, 'F10 cancels once the overlay is gone')
+  })
+}
+
+// R1: F1 and F3 toggle the studio's own help and Settings only; behind a FOREIGN overlay (a dialog, a
+// menu, the command palette's listbox) nothing the studio owns reacts, F1 and F3 included.
+for (const role of ['dialog', 'menu', 'listbox']) {
+  for (const combo of ['help', 'settings']) {
+    test(`overlay guard: ${combo === 'help' ? 'F1' : 'F3'} behind a foreign role=${role} opens no Settings and toggles no help`, { skip }, async () => {
+      await openStudio(INTENT, 'off')
+      const overlay = document.createElement('div')
+      overlay.setAttribute('role', role)
+      document.body.appendChild(overlay)
+      try {
+        const event = await press(K()[combo])
+        assert.equal(event.defaultPrevented, false, 'the key is left to the foreign overlay')
+        assert.ok($('[data-studio-settings-dialog]') === null, 'no studio Settings dialog opened')
+        assert.ok($('[data-studio-shortcuts-list]') === null, 'studio help not toggled')
+      } finally {
+        overlay.remove()
+      }
+      // Overlay gone: the same key works again.
+      await press(K()[combo])
+      assert.ok(combo === 'help' ? $('[data-studio-shortcuts-list]') : $('[data-studio-settings-dialog]'), 'works once nothing is in front')
+      await press(K()[combo])
+    })
+  }
+}
+
+test('overlay guard: a foreign dialog in front of the open Settings keeps F1 and F3 from reaching the studio', { skip }, async () => {
+  await openStudio(INTENT, 'off')
+  await openSettings()
+  const overlay = document.createElement('div')
+  overlay.setAttribute('role', 'dialog')
+  document.body.appendChild(overlay)
+  try {
+    await press(K().help)
+    assert.ok($('[data-studio-shortcuts-list]') === null, 'F1 does not toggle the help')
+    await press(K().settings)
+    assert.ok($('[data-studio-settings-dialog]'), 'F3 does not close Settings')
+  } finally {
+    overlay.remove()
+  }
+  await press(K().settings)
+  assert.ok($('[data-studio-settings-dialog]') === null, 'F3 closes Settings again once the foreign overlay is gone')
+})
+
+// R2: Hermes's DialogContent is the portal container for the menus and listboxes opened inside it, so a
+// role=menu / role=listbox nested in the Settings dialog is a real overlay in front of it.
+for (const role of ['menu', 'listbox', 'dialog']) {
+  test(`overlay guard: an open role=${role} nested inside the Settings dialog keeps F1 and F3 from reaching the studio`, { skip }, async () => {
+    await openStudio(INTENT, 'off')
+    await openSettings()
+    const nested = document.createElement('div')
+    nested.setAttribute('role', role)
+    $('[data-studio-settings-dialog]').appendChild(nested)
+    try {
+      assert.equal((await press(K().help)).defaultPrevented, false, 'F1 left to the nested overlay')
+      assert.ok($('[data-studio-shortcuts-list]') === null, 'F1 does not toggle the help')
+      assert.equal((await press(K().settings)).defaultPrevented, false, 'F3 left to the nested overlay')
+      assert.ok($('[data-studio-settings-dialog]'), 'F3 does not close Settings behind the picker')
+    } finally {
+      nested.remove()
+    }
+    await press(K().settings)
+    assert.ok($('[data-studio-settings-dialog]') === null, 'F3 closes Settings once the picker is gone')
+  })
+}
+
+test('overlay guard: the Settings dialog itself carrying role=dialog (or role=alertdialog) is not a foreign overlay', { skip }, async () => {
+  await openStudio(INTENT, 'off')
+  await openSettings()
+  for (const role of ['dialog', 'alertdialog']) {
+    const dialog = $('[data-studio-settings-dialog]')
+    dialog.setAttribute('role', role)
+    try {
+      await press(K().help)
+      assert.ok($('[data-studio-shortcuts-list]'), `F1 still works in role=${role} Settings`)
+      await press(K().help)
+    } finally {
+      dialog.removeAttribute('role')
+    }
+  }
+  await press(K().settings)
+  assert.ok($('[data-studio-settings-dialog]') === null, 'F3 closes Settings')
+})
+
+// R2: an overlay that is mounted but hidden through CSS does not count (jsdom has no layout: computed
+// display / visibility only).
+for (const [name, hide] of [
+  ['display:none on the dialog', (el) => { el.style.display = 'none' }],
+  ['visibility:hidden on the dialog', (el) => { el.style.visibility = 'hidden' }],
+  ['display:none on an ancestor', (el) => { const wrap = document.createElement('div'); wrap.style.display = 'none'; el.replaceWith(wrap); wrap.appendChild(el) }]
+]) {
+  test(`overlay guard: a role=dialog hidden by CSS (${name}) blocks nothing`, { skip }, async () => {
+    await openStudio(INTENT, 'off')
+    const overlay = document.createElement('div')
+    overlay.setAttribute('role', 'dialog')
+    document.body.appendChild(overlay)
+    hide(overlay)
+    try {
+      await press(K().generate)
+      assert.ok($('[data-studio-preview]'), 'F9 generates behind a CSS-hidden dialog')
+      await press(K().close)
+      assert.ok($('[data-studio-strip]') === null, 'F10 closes')
+      // Studio closed: F4 opens it though the hidden dialog is mounted.
+      $('[data-slot="composer-rich-input"]').textContent = INTENT
+      assert.equal((await press(K().open)).defaultPrevented, true)
+      assert.ok($('[data-studio-strip]'), 'F4 opened the studio')
+    } finally {
+      (overlay.parentElement === document.body ? overlay : overlay.parentElement).remove()
+    }
+  })
+}
+
+test('overlay guard: F4 does not open the studio behind an open menu', { skip }, async () => {
+  const overlay = document.createElement('div')
+  overlay.setAttribute('role', 'menu')
+  document.body.appendChild(overlay)
+  try {
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    assert.equal((await press(K().open)).defaultPrevented, false)
+    assert.ok($('[data-studio-strip]') === null, 'studio stayed closed')
+  } finally {
+    overlay.remove()
+  }
+})
+
+
 test('SHORTCUT MAP: every key cap, aria-keyshortcuts, target key and Alt+Shift edit key on screen is a combo of the map', { skip }, async () => {
   const map = K()
   const flat = []

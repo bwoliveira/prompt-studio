@@ -108,7 +108,8 @@ The key listener reads an Alt chord on a `Key*`/`Digit*` code even when the even
 `composerAdapter` in `desktop/src/ui-locale.js` reads and writes the message field only through the SDK's
 `host.composer` (Hermes Desktop 0.21.5+), addressed with `null` (the composer in use): `getDraft` to start,
 `setDraft` to empty it, return the draft on Close and place the prompt; F9 uses `submit` for the session the Studio
-was opened in. The plugin touches no app DOM. The SDK has no attachment API, so attachments are not read: they stay
+was opened in. The plugin changes nothing in the app's DOM; its key listener only reads which dialogs, menus and listboxes are
+open (ARIA roles and visibility) to stand back behind them, which depends on the host marking its overlays that way. The SDK has no attachment API, so attachments are not read: they stay
 in the composer, go with the prompt on Alt+E and are not sent by F9 (the preview says so).
 
 ## Try it in Hermes Desktop

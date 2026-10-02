@@ -291,7 +291,9 @@ The three models need different prompts, and the engines follow each vendor's gu
   `prompt_studio` auxiliary task), `dashboard/` (REST routes at `/api/plugins/prompt-studio/`) and
   `desktop/plugin.js` (the Desktop half).
 - **SDK only:** the Desktop half imports only `@hermes/plugin-sdk` and `react`, and reads and writes the message
-  field only through `host.composer`; it never reads or changes the app's DOM or internal stores.
+  field only through `host.composer`; it changes nothing in the app's DOM and reads no internal stores. The one thing it reads from the page is which
+  dialogs, menus and listboxes are open (their ARIA roles and whether they are visible), so that its keys stand back
+  behind them; that depends on the host marking its overlays with those roles.
 - **Host-tracked resources:** the key listener goes through `ctx.addEventListener`, timers through `ctx.setTimeout`,
   preferences through
   `ctx.storage`, text through `ctx.i18n`, and colours through theme variables.
