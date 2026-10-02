@@ -114,7 +114,17 @@ def _load(name: str, attr: str) -> Any:
     return module
 
 
+def _drop_stale_bytecode(name: str) -> None:
+    """Delete the module's cached .pyc: Python validates it by whole-second mtime + size only, so a same-size edit
+    inside the same second (which the ns signature above does detect) would otherwise run the old code."""
+    try:
+        Path(importlib.util.cache_from_source(str(Path(__file__).with_name(f"{name}.py")))).unlink()
+    except (OSError, NotImplementedError, ValueError):
+        pass
+
+
 def _import(name: str) -> Any:
+    _drop_stale_bytecode(name)
     module = None
     try:
         module = importlib.import_module(f".{name}", __package__) if __package__ else None

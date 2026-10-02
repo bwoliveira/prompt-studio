@@ -431,3 +431,40 @@ def test_package_path_reloads_only_when_the_files_changed(monkeypatch):
     plugin_api._load("suggest_engine", "suggest")
     plugin_api._load("suggest_engine", "suggest")
     assert len(reloads) == 1
+
+
+# ---- #27: a same-size edit within the same second must not run stale bytecode ----
+@pytest.mark.parametrize("mode", ["standalone", "package"])
+def test_reload_runs_the_new_source_when_a_stale_pyc_matches_second_and_size(tmp_path, monkeypatch, mode):
+    import os
+    import py_compile
+
+    pkg = tmp_path / f"psbytecode_{mode}"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    real = Path(__file__).resolve().parents[1] / "dashboard" / "plugin_api.py"
+    (pkg / "plugin_api.py").write_text(real.read_text())
+    engine = pkg / "suggest_engine.py"
+
+    def write(effort: str, mtime_ns: int) -> None:
+        engine.write_text(f'DEFAULT_EFFORT = "{effort}"\n\n\ndef suggest(payload):\n    return DEFAULT_EFFORT\n')
+        os.utime(engine, ns=(mtime_ns, mtime_ns))
+
+    base = 1_700_000_000_200_000_000  # xxx.2 s
+    write("one", base)
+    if mode == "package":
+        monkeypatch.syspath_prepend(str(tmp_path))
+        api = importlib.import_module(f"{pkg.name}.plugin_api")
+    else:
+        spec = importlib.util.spec_from_file_location(f"{pkg.name}_plugin_api", pkg / "plugin_api.py")
+        api = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(api)
+    try:
+        assert api._load("suggest_engine", "suggest").suggest({}) == "one"
+        # Leave a .pyc for the OLD source on disk, as a previous process or run would have.
+        py_compile.compile(str(engine), doraise=True)
+        write("two", base + 100_000_000)  # same byte length, same integer second, mtime +100 ms
+        assert api._load("suggest_engine", "suggest").suggest({}) == "two"
+    finally:
+        for name in [n for n in sys.modules if n.startswith(pkg.name)]:
+            del sys.modules[name]
