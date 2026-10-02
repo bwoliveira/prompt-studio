@@ -520,6 +520,16 @@ const TABLE = [
   ['Como arquiteta de software, você pode planejar a migração?', 'plan', 'como arquiteta, voce pode planejar ...?'],
   ['Como especialista em redes, como configuro o nginx?', 'answer', 'near miss: a role before a real question'],
   ['Como configuro o nginx, sem downtime?', 'answer', 'near miss: a question with a comma'],
+  // a copula right after any verb word makes it a thing (Codex P1)
+  ['The build is broken. Review the dashboard code.', 'review', 'the build is broken'],
+  ['The build was slow. Review the pipeline.', 'review', 'the build was slow'],
+  ['O build está quebrado. Revise o código.', 'review', 'pt o build esta quebrado'],
+  ['The fix is ready. Review it.', 'review', 'the fix is ready'],
+  ['Build is broken. Review the dashboard code.', 'review', 'build is broken, no article'],
+  ['The build is broken. Fix the dashboard code.', 'implementation', 'near miss: the order after the context'],
+  ['Build the app. It is broken.', 'implementation', 'near miss: the copula is not after the verb'],
+  ['Revisar esta API', 'review', 'near miss: pt esta as a demonstrative'],
+  ['Escreva uma revisão crítica e detalhada do código', 'review', 'near miss: pt e as a conjunction'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
@@ -612,7 +622,7 @@ test('parity: Opus and Sonnet carry the identical detection block', async () => 
   const [opus, sonnet] = await Promise.all([src('engine-opus.js'), src('engine-sonnet.js')])
   const a = detection(opus)
   const b = detection(sonnet)
-  for (const needle of ['CATEGORY_RULES', 'DELIVERABLE_RULES', 'MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'YESNO_FORM', 'EXPLAIN_FORM', 'QUESTION_START', 'NOUN_SIGNAL', 'SENTENCE_START', 'VERB_OBJECT', 'REQUESTED_NOUN', 'COPULA', 'PREDICATE', 'INFINITIVE_MARK', 'NEGATED', 'COORDINATED', 'PREDICATE_NEGATION', 'CLAUSE_NEGATION', 'LIST_TAIL', 'QUESTION_HEAD', 'ROLE_HEAD', 'DECLARATIVE', 'TOPIC_TAIL', 'TOPIC_HEAD', 'ORDER_LEAD', 'ORDER_JOIN', 'INTRO_CLAUSE', 'PT_INFINITIVE', 'AFTER_A', 'MODIFIER_USE', 'COMPOUND_AFTER', 'NARRATIVE', 'CONTEXT_WINDOW', 'REQUESTED_ARTIFACT', 'MODIFIER_GAP', 'INTERFACE', 'function contextBefore', 'function prohibited', 'function isQuestion', 'function questionAt', 'function coordinatedOrder', 'function pickArtifact', 'function firstSignal', 'function detect', 'function analyzeNormalized']) {
+  for (const needle of ['CATEGORY_RULES', 'DELIVERABLE_RULES', 'MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'YESNO_FORM', 'EXPLAIN_FORM', 'QUESTION_START', 'NOUN_SIGNAL', 'SENTENCE_START', 'VERB_OBJECT', 'REQUESTED_NOUN', 'COPULA', 'VERB_COPULA', 'PREDICATE', 'INFINITIVE_MARK', 'NEGATED', 'COORDINATED', 'PREDICATE_NEGATION', 'CLAUSE_NEGATION', 'LIST_TAIL', 'QUESTION_HEAD', 'ROLE_HEAD', 'DECLARATIVE', 'TOPIC_TAIL', 'TOPIC_HEAD', 'ORDER_LEAD', 'ORDER_JOIN', 'INTRO_CLAUSE', 'PT_INFINITIVE', 'AFTER_A', 'MODIFIER_USE', 'COMPOUND_AFTER', 'NARRATIVE', 'CONTEXT_WINDOW', 'REQUESTED_ARTIFACT', 'MODIFIER_GAP', 'INTERFACE', 'function contextBefore', 'function prohibited', 'function isQuestion', 'function questionAt', 'function coordinatedOrder', 'function pickArtifact', 'function firstSignal', 'function detect', 'function analyzeNormalized']) {
     assert.ok(a.includes(needle), `opus block has ${needle}`)
   }
   assert.equal(a, b, 'Opus and Sonnet detection blocks drifted apart: change both engines identically')
@@ -620,7 +630,7 @@ test('parity: Opus and Sonnet carry the identical detection block', async () => 
 
 test('parity: the artifact constants are the same text on all three engines', async () => {
   const sources = await Promise.all(['engine-opus.js', 'engine-sonnet.js', 'engine-astra.js'].map(src))
-  for (const name of ['MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'YESNO_FORM', 'EXPLAIN_FORM', 'NOUN_SIGNAL', 'SENTENCE_START', 'VERB_OBJECT', 'REQUESTED_NOUN', 'COPULA', 'PREDICATE', 'INFINITIVE_MARK', 'NEGATED', 'COORDINATED', 'PREDICATE_NEGATION', 'CLAUSE_NEGATION', 'LIST_TAIL', 'QUESTION_HEAD', 'ROLE_HEAD', 'DECLARATIVE', 'TOPIC_TAIL', 'TOPIC_HEAD', 'ORDER_LEAD', 'ORDER_JOIN', 'INTRO_CLAUSE', 'PT_INFINITIVE', 'AFTER_A', 'MODIFIER_USE', 'COMPOUND_AFTER', 'NARRATIVE', 'CONTEXT_WINDOW', 'REQUESTED_ARTIFACT', 'MODIFIER_GAP', 'REVIEW_OBJECT', 'PLAN_OBJECT', 'DATA_OBJECT', 'WORKFLOW_OBJECT']) {
+  for (const name of ['MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'YESNO_FORM', 'EXPLAIN_FORM', 'NOUN_SIGNAL', 'SENTENCE_START', 'VERB_OBJECT', 'REQUESTED_NOUN', 'COPULA', 'VERB_COPULA', 'PREDICATE', 'INFINITIVE_MARK', 'NEGATED', 'COORDINATED', 'PREDICATE_NEGATION', 'CLAUSE_NEGATION', 'LIST_TAIL', 'QUESTION_HEAD', 'ROLE_HEAD', 'DECLARATIVE', 'TOPIC_TAIL', 'TOPIC_HEAD', 'ORDER_LEAD', 'ORDER_JOIN', 'INTRO_CLAUSE', 'PT_INFINITIVE', 'AFTER_A', 'MODIFIER_USE', 'COMPOUND_AFTER', 'NARRATIVE', 'CONTEXT_WINDOW', 'REQUESTED_ARTIFACT', 'MODIFIER_GAP', 'REVIEW_OBJECT', 'PLAN_OBJECT', 'DATA_OBJECT', 'WORKFLOW_OBJECT']) {
     const lines = sources.map(source => source.split('\n').find(line => line.startsWith(`const ${name} =`)))
     assert.ok(lines.every(Boolean), `${name} exists in every engine`)
     assert.equal(new Set(lines).size, 1, `${name} differs between engines:\n${lines.join('\n')}`)

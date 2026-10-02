@@ -274,6 +274,9 @@ const REQUESTED_NOUN = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor
 const COPULA = /^\s+(?:is|are|was|were|will|would|has|have|had|e|esta|estao|era|eram|foi|foram|sera|serao|ja|fica|ficou|seems|looks|parece)\b/
 // "The pipeline failed. Review the logs.": a predicate after a noun-signal word makes it context, unless the word opens
 // its sentence as an order ("Review failed deployments", "Review works in progress").
+// For a plain verb word, "e" (and/is) and "esta" (this/is) are ambiguous: only an unambiguous copula, or "esta" before
+// a participle or state ("esta quebrado", "esta pronto"), makes "The build is broken" a thing.
+const VERB_COPULA = /^\s+(?:(?:is|are|was|were|will|would|has|have|had|estao|era|eram|foi|foram|sera|serao|fica|ficou|seems|looks|parece)\b|esta\s+\w+(?:ad[ao]s?|id[ao]s?|ndo|nte|pront[ao]s?|lent[ao]s?|ok)\b)/
 const PREDICATE = /^\s+(?:failed|fails|broke|breaks|crashed|crashes|works|worked|ran|runs|stopped|stops|falhou|falha|quebrou|quebra|funciona|funcionou|rodou|roda|parou)\b/
 // A noun-signal word followed by a determiner is the verb wherever it sits ("... so plan the steps", "review our API").
 // Portuguese este/esta are left out: folded, "esta" is also "esta" ("Nosso plano esta pronto").
@@ -426,6 +429,8 @@ function firstSignal(text) {
       const requested = REQUESTED_NOUN.test(before) && !copula
       const isNoun = NOUN_SIGNAL.test(word) && (copula || (!SENTENCE_START.test(before) && !INFINITIVE_MARK.test(before) && !VERB_OBJECT.test(after) && !requested))
       if (isNoun) { if (m.index < nounAt) { noun = id; nounAt = m.index }; continue }
+      // "The build is broken", "The fix is ready": a copula right after any verb word makes it a thing, not an order.
+      if (!NOUN_SIGNAL.test(word) && (VERB_COPULA.test(after) || (PREDICATE.test(after) && !SENTENCE_START.test(before) && !INFINITIVE_MARK.test(before)))) continue
       // A verb that names a thing ("the configure script") or tells the past ("I tried to configure") is context.
       const article = MODIFIER_USE.test(before) && !(AFTER_A.test(before) && PT_INFINITIVE.test(word))
       if (!NOUN_SIGNAL.test(word) && (NARRATIVE.test(before) || (article && COMPOUND_AFTER.test(after)))) continue
@@ -891,6 +896,9 @@ const REQUESTED_NOUN = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor
 const COPULA = /^\s+(?:is|are|was|were|will|would|has|have|had|e|esta|estao|era|eram|foi|foram|sera|serao|ja|fica|ficou|seems|looks|parece)\b/
 // "The pipeline failed. Review the logs.": a predicate after a noun-signal word makes it context, unless the word opens
 // its sentence as an order ("Review failed deployments", "Review works in progress").
+// For a plain verb word, "e" (and/is) and "esta" (this/is) are ambiguous: only an unambiguous copula, or "esta" before
+// a participle or state ("esta quebrado", "esta pronto"), makes "The build is broken" a thing.
+const VERB_COPULA = /^\s+(?:(?:is|are|was|were|will|would|has|have|had|estao|era|eram|foi|foram|sera|serao|fica|ficou|seems|looks|parece)\b|esta\s+\w+(?:ad[ao]s?|id[ao]s?|ndo|nte|pront[ao]s?|lent[ao]s?|ok)\b)/
 const PREDICATE = /^\s+(?:failed|fails|broke|breaks|crashed|crashes|works|worked|ran|runs|stopped|stops|falhou|falha|quebrou|quebra|funciona|funcionou|rodou|roda|parou)\b/
 // A noun-signal word followed by a determiner is the verb wherever it sits ("... so plan the steps", "review our API").
 // Portuguese este/esta are left out: folded, "esta" is also "esta" ("Nosso plano esta pronto").
@@ -1043,6 +1051,8 @@ function firstSignal(text) {
       const requested = REQUESTED_NOUN.test(before) && !copula
       const isNoun = NOUN_SIGNAL.test(word) && (copula || (!SENTENCE_START.test(before) && !INFINITIVE_MARK.test(before) && !VERB_OBJECT.test(after) && !requested))
       if (isNoun) { if (m.index < nounAt) { noun = id; nounAt = m.index }; continue }
+      // "The build is broken", "The fix is ready": a copula right after any verb word makes it a thing, not an order.
+      if (!NOUN_SIGNAL.test(word) && (VERB_COPULA.test(after) || (PREDICATE.test(after) && !SENTENCE_START.test(before) && !INFINITIVE_MARK.test(before)))) continue
       // A verb that names a thing ("the configure script") or tells the past ("I tried to configure") is context.
       const article = MODIFIER_USE.test(before) && !(AFTER_A.test(before) && PT_INFINITIVE.test(word))
       if (!NOUN_SIGNAL.test(word) && (NARRATIVE.test(before) || (article && COMPOUND_AFTER.test(after)))) continue
@@ -1572,6 +1582,9 @@ const REQUESTED_NOUN = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor
 const COPULA = /^\s+(?:is|are|was|were|will|would|has|have|had|e|esta|estao|era|eram|foi|foram|sera|serao|ja|fica|ficou|seems|looks|parece)\b/
 // "The pipeline failed. Review the logs.": a predicate after a noun-signal word makes it context, unless the word opens
 // its sentence as an order ("Review failed deployments", "Review works in progress").
+// For a plain verb word, "e" (and/is) and "esta" (this/is) are ambiguous: only an unambiguous copula, or "esta" before
+// a participle or state ("esta quebrado", "esta pronto"), makes "The build is broken" a thing.
+const VERB_COPULA = /^\s+(?:(?:is|are|was|were|will|would|has|have|had|estao|era|eram|foi|foram|sera|serao|fica|ficou|seems|looks|parece)\b|esta\s+\w+(?:ad[ao]s?|id[ao]s?|ndo|nte|pront[ao]s?|lent[ao]s?|ok)\b)/
 const PREDICATE = /^\s+(?:failed|fails|broke|breaks|crashed|crashes|works|worked|ran|runs|stopped|stops|falhou|falha|quebrou|quebra|funciona|funcionou|rodou|roda|parou)\b/
 // A noun-signal word followed by a determiner is the verb wherever it sits ("... so plan the steps", "review our API").
 // Portuguese este/esta are left out: folded, "esta" is also "esta" ("Nosso plano esta pronto").
@@ -1724,6 +1737,8 @@ function firstSignal(text) {
       const requested = REQUESTED_NOUN.test(before) && !copula
       const isNoun = NOUN_SIGNAL.test(word) && (copula || (!SENTENCE_START.test(before) && !INFINITIVE_MARK.test(before) && !VERB_OBJECT.test(after) && !requested))
       if (isNoun) { if (m.index < nounAt) { noun = id; nounAt = m.index }; continue }
+      // "The build is broken", "The fix is ready": a copula right after any verb word makes it a thing, not an order.
+      if (!NOUN_SIGNAL.test(word) && (VERB_COPULA.test(after) || (PREDICATE.test(after) && !SENTENCE_START.test(before) && !INFINITIVE_MARK.test(before)))) continue
       // A verb that names a thing ("the configure script") or tells the past ("I tried to configure") is context.
       const article = MODIFIER_USE.test(before) && !(AFTER_A.test(before) && PT_INFINITIVE.test(word))
       if (!NOUN_SIGNAL.test(word) && (NARRATIVE.test(before) || (article && COMPOUND_AFTER.test(after)))) continue

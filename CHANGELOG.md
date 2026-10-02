@@ -89,7 +89,7 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   need a script that will configure nginx" is code. "Can you explain cron and the steps to configure nginx?" stays a
   question, and "Do not configure nginx, review the API and report findings." is the review. "Ajude-me a revisar código"
   is a review, "Crie uma planilha detalhada com as vendas" is data, and "Como especialista em segurança, você pode
-  revisar esta API?" is the review it asks for.
+  revisar esta API?" is the review it asks for, as is "The build is broken. Review the dashboard code."
 - Fix: *Gere um e-mail*, *Monte uma mensagem* and the like stay text, reports and summaries are text even when they
   mention tests ("Write a summary of the test results", "Escreva um relatório dos testes"), and a question such as
   "Como instalar o Docker?" or "Como resumir um livro?" stays an answer on Opus, Sonnet and Astra.
