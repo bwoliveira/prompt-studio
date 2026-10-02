@@ -77,6 +77,8 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   is code. "Do you configure nginx by default?" is a question, and "Do not build the app or configure nginx"
   forbids both. "Please carefully plan before you configure nginx" asks for the plan, "Can you tell me how to
   configure nginx" is a question even without its mark, and a school test is writing while a test for the API is code.
+  "Tell me how to configure nginx" and "Me diga como instalar o Docker" are questions, and "Escreva uma revisão
+  detalhada da API" is a review.
 - Fix: *Gere um e-mail*, *Monte uma mensagem* and the like stay text, reports and summaries are text even when they
   mention tests ("Write a summary of the test results", "Escreva um relatório dos testes"), and a question such as
   "Como instalar o Docker?" or "Como resumir um livro?" stays an answer on Opus, Sonnet and Astra.

@@ -376,6 +376,20 @@ const TABLE = [
   ['Write tests for the API', 'implementation', 'near miss: software tests'],
   ['Write a test for the login function', 'implementation', 'near miss: a test for a function'],
   ['Escreva testes para a API', 'implementation', 'near miss: pt software tests'],
+  // an imperative explanation request is a question (Codex P1)
+  ['Tell me how to configure nginx', 'answer', 'tell me how to'],
+  ['Me diga como instalar o Docker', 'answer', 'pt me diga como'],
+  ['Show me how to configure nginx', 'answer', 'show me how to'],
+  ['Please tell us how to configure nginx.', 'answer', 'please tell us'],
+  ['Explique para mim como instalar o Docker', 'answer', 'pt explique para mim'],
+  ['Tell me how it went. Then configure nginx.', 'workflow', 'near miss: an order after the explanation request'],
+  ['Tell the team to configure nginx', 'workflow', 'near miss: tell someone else to act'],
+  // a modifier may follow the requested review noun (Codex P1)
+  ['Escreva uma revisão detalhada da API', 'review', 'pt revisao detalhada'],
+  ['Write a review focused on security for the API', 'review', 'review focused on'],
+  ['Escreva uma revisão crítica e detalhada do código', 'review', 'pt two modifiers'],
+  ['Write a review summary for the API', 'text', 'near miss: a review summary is a summary'],
+  ['Escreva um resumo da revisão da API', 'text', 'near miss: pt resumo da revisao'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
@@ -399,7 +413,7 @@ test('draft recognition: a long draft full of context nouns is analysed in linea
 })
 
 test('draft recognition: a question form that fails on a long run of spaces is still linear on every engine (Codex P2)', () => {
-  for (const goal of ['How do I configure nginx' + ' '.repeat(128000) + '!', 'Can I configure nginx' + ' '.repeat(128000) + '!', 'How do I configure nginx' + '\n '.repeat(64000) + '!']) {
+  for (const goal of ['How do I configure nginx' + ' '.repeat(128000) + '!', 'Can I configure nginx' + ' '.repeat(128000) + '!', 'How do I configure nginx' + '\n '.repeat(64000) + '!', 'Write ' + 'test '.repeat(40000) + 'for students.']) {
     for (const [id, engine] of Object.entries(ENGINES)) {
       const started = performance.now()
       const out = engine.analyze({ goal })
