@@ -40,6 +40,77 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   the preview says so in the Studio's language (following a language switch), on both versions (with or without
   AI). The visual-design step and rules follow the chosen deliverable: an answer or plan about an app no longer
   gets them, in the prompt or in what the AI writer receives.
+- Fix: common drafts are read the same way on Opus, Sonnet and Astra. Unit tests, SQL queries, regexes, READMEs and
+  Dockerfiles are code; "Create a plan" is a plan and "Crie uma planilha" is data (Astra now has the data
+  deliverable); the first verb in the draft decides ("Build a review dashboard" is a build); `cron` and `rest` no
+  longer force workflow or code; "email me" is a verb, not a text; Portuguese *gerar, montar, resumir,
+  configurar, instalar* are recognised. Astra also reads the requirements, trims and lower-cases the deliverable
+  and accepts Windows line endings. Marketing copy ("Write the copy for the landing page", "Redija a descrição do
+  app") is text: the Studio asks for examples, not design patterns. "Write a review of the API" is a review, not
+  code; "Write a plan summary" or "a strategy memo" is text, since the summary or memo is what is asked for.
+  Context before the verb does not name its object ("For our app, write a blog post" is text), and a question
+  closed by a period ("How to create an app.") stays an answer. A code word that only modifies the text asked for
+  ("Write an API announcement email") is not the artifact; a noun before the order ("Our plan is ready. Build a
+  dashboard") is context, while "Plan the steps ..." or "Please plan ..." opening a sentence is the order; a context noun no longer
+  hides a later verb of the same kind ("The CSV is attached. Extract the totals" is data); an order after an
+  opening question ("How does it work? Fix the login bug.") is the task. "Write an email announcing the app" is
+  text (a participle opens a clause, not a modifier), and "Como instalar o Node.js?" or "nginx 1.26?" stays a question.
+  "Can you plan the steps ..." and "so plan the rollout" keep the planning verb; a negated verb ("Do not execute
+  any commands") is a prohibition, not the order; and only the verb that fired can make a request code
+  ("Analyze this script, then write a post" stays an analysis). A second question is still a question, a reminder
+  ("Don't forget to review the API") still asks for the review, and a very long draft no longer freezes the Studio
+  while it is read. "Explain how to configure nginx" is an answer on every engine, "We need to plan before we
+  configure" keeps the plan, and a question that wraps onto the next line or carries a comma is still a question.
+  "Do not build or deploy anything" forbids both verbs, and the Astra prompt states the chosen deliverable from
+  the same reading of goal and requirements as the analysis. Documentation about code ("Write instructions for
+  running the unit tests") is text, and a yes/no question ("Can I configure nginx?") is a question, while "Can you
+  configure nginx?" stays a request. A question closed by a period and followed by a note ("How do I configure
+  nginx. Be brief.") is still a question, and a draft with a long run of spaces no longer freezes the Studio. "A plan
+  to configure nginx" (or "a migration plan", "outline a plan") asks for the plan, "Do not access production. Can
+  you build the app?" is a request, not a question, an indirect prohibition ("I do not want you to configure") is
+  still one, "Can you tell me how to configure nginx?" asks for an explanation, and "Include a code example" after
+  a question is not an order. A blank line ends a question ("How do I configure nginx\n\nBe brief."), "Write an API
+  documentation generator script" is code, and "What I need: build a React dashboard" is the order it states. "The
+  API is not ready, review the code" is a review, "Can you please tell me how to configure nginx?" is a question,
+  and "Plan is ready. Build a React dashboard." is the build. "Can you help me fix the login bug?" is the fix,
+  "help me understand" is a question, and a video or podcast script is writing, while a Python script for a video
+  is code. "Do you configure nginx by default?" is a question, and "Do not build the app or configure nginx"
+  forbids both. "Please carefully plan before you configure nginx" asks for the plan, "Can you tell me how to
+  configure nginx" is a question even without its mark, and a school test is writing while a test for the API is code.
+  "Tell me how to configure nginx" and "Me diga como instalar o Docker" are questions, and "Escreva uma revisão
+  detalhada da API" is a review. "Do not write a review. Build a React app." is the build, and "Write a biology
+  test with ten questions" is writing while a load test or a test suite is code. "Before we begin, can I configure
+  nginx without downtime?" is a question, and "The configure script is broken. Review it." is a review. "Help me
+  plan deployment before we configure nginx" asks for the plan, and "I need a script to write log files" is code,
+  as is "I need a script to configure nginx". "Do not deploy, review the code instead" is the review, "Can you help me
+  plan deployment before we configure nginx?" is the plan, and "Review failed deployments" is the review. "Can you walk
+  through the repository and fix the login bug?" is the fix, and "What I need is for you to build a React dashboard, can
+  you do that?" is the build, while "Can you tell me how to configure nginx and deploy the app?" stays a question. "I
+  need a script that will configure nginx" is code. "Can you explain cron and the steps to configure nginx?" stays a
+  question, and "Do not configure nginx, review the API and report findings." is the review. "Ajude-me a revisar código"
+  is a review, "Crie uma planilha detalhada com as vendas" is data, and "Como especialista em segurança, você pode
+  revisar esta API?" is the review it asks for, as are "The build is broken. Review the dashboard code." and "The goal
+  is to write a Python script. Review the existing code."; "Do not install anything. How do I configure nginx?" and "Do I need to
+  configure nginx" stay questions, "We have a plan to build the app. Review it." is the review, and "As a security
+  expert, review API authentication before we configure nginx" is too, as are "Write a review highlighting security
+  flaws in the API." and "Revisão e auditoria da API antes de configurar nginx". "Can you recommend a design and build
+  a React dashboard?" is the build and "Can you explain cron and then review it?" is the review, while "Can you explain
+  why we first configure nginx and then build the app?" stays a question. "I need a script. Write it in Python" and
+  "Write a script for video processing in Python" are code, as is "I need a React app. Write it in TypeScript with
+  documentation."; "Tell me how to configure nginx!" stays a question, "Have a look at the repository and fix the login
+  bug." is the fix, and "Create a spreadsheet containing the sales data." is data. "Can you give me a plan to configure
+  nginx?" is the plan, a requirement such as "Include documentation" no longer turns a requested script into text, and
+  "I need a blog post explaining how to configure nginx." stays text. "I need instructions to configure nginx" is a
+  question and "I need a script. Please write it in Python with documentation." is code, as is "Write a Python script
+  without documentation"; "How do I build a React app? Add examples." stays a question and "Write a strategy memo about
+  optimizing SQL queries" stays text. "How do I build a React app? Add examples; then fix the login bug." is the fix
+  and "Write a review without modifying the API." is the review. "Write a Python script but not documentation." is
+  code, "Please show me a script that extracts data." is code and "Can you show me a plan to configure nginx?" is a
+  plan, and "Create a workflow using GitHub Actions." is a workflow. "Escreva uma revisão desta API" is the review, and a
+  draft that repeats a stated goal thousands of times is analysed in milliseconds.
+- Fix: *Gere um e-mail*, *Monte uma mensagem* and the like stay text, reports and summaries are text even when they
+  mention tests ("Write a summary of the test results", "Escreva um relatório dos testes"), and a question such as
+  "Como instalar o Docker?" or "Como resumir um livro?" stays an answer on Opus, Sonnet and Astra.
 - New target: **Claude Sonnet 5.5** (Alt+T, or pick **Sonnet**), next to Opus and Astra. It has its own prompt engine,
   question help and AI writer rules from Anthropic's Sonnet 5.5 prompting guide, and is the default when the
   session's model is a Sonnet. Opus and Astra prompts do not change.
