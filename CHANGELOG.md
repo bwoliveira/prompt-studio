@@ -79,7 +79,8 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   configure nginx" is a question even without its mark, and a school test is writing while a test for the API is code.
   "Tell me how to configure nginx" and "Me diga como instalar o Docker" are questions, and "Escreva uma revisão
   detalhada da API" is a review. "Do not write a review. Build a React app." is the build, and "Write a biology
-  test with ten questions" is writing while a load test or a test suite is code.
+  test with ten questions" is writing while a load test or a test suite is code. "Before we begin, can I configure
+  nginx without downtime?" is a question, and "The configure script is broken. Review it." is a review.
 - Fix: *Gere um e-mail*, *Monte uma mensagem* and the like stay text, reports and summaries are text even when they
   mention tests ("Write a summary of the test results", "Escreva um relatório dos testes"), and a question such as
   "Como instalar o Docker?" or "Como resumir um livro?" stays an answer on Opus, Sonnet and Astra.

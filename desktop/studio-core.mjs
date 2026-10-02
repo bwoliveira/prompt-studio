@@ -269,7 +269,7 @@ const INFINITIVE_MARK = /\b(?:(?:need|needs|needed|want|wants|wanted|have|has|ha
 // names the request: a determiner (after an optional request opener or verb) opens its sentence, up to two plain
 // modifiers may sit between them ("a migration plan"), and no copula follows ("The plan is ready. Build ..." is context).
 const REQUESTED_NOUN = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:i|we) (?:need|want|would like)|i'd like|we'd like|give me|send me|preciso de|precisamos de|quero|queremos|gostaria de|gostariamos de|me de|me passe|me envie|me mande|outline|draft|prepare|propose|sketch|produce|provide|esboce|elabore|prepare|proponha|produza|forneca|apresente|what (?:i|we) (?:need|want|would like) is|o que (?:eu|nos) (?:preciso|precisamos|quero|queremos) e)\s+(?:me\s+)?)?(?:a|an|the|um|uma|o|os|as|some|algum|alguma|alguns|algumas)\s+(?:(?!(?:to|for|of|and|or|that|which|para|de|do|da|que|e|ou)\s)[\w-]+\s+){0,2}$/
-const COPULA = /^\s+(?:is|are|was|were|will|would|has|have|had|e|esta|estao|era|eram|foi|foram|sera|serao|ja|fica|ficou|seems|looks|parece)\b/
+const COPULA = /^\s+(?:is|are|was|were|will|would|has|have|had|e|esta|estao|era|eram|foi|foram|sera|serao|ja|fica|ficou|seems|looks|parece|failed|fails|broke|breaks|crashed|crashes|works|worked|ran|runs|stopped|stops|falhou|falha|quebrou|quebra|funciona|funcionou|rodou|roda|parou)\b/
 // A noun-signal word followed by a determiner is the verb wherever it sits ("... so plan the steps", "review our API").
 // Portuguese este/esta are left out: folded, "esta" is also "esta" ("Nosso plano esta pronto").
 const VERB_OBJECT = /^\s+(?:the|a|an|our|my|your|this|these|those|all|each|every|o|os|as|um|uma|uns|umas|nosso|nossa|nossos|nossas|meu|minha|seu|sua|esse|essa|esses|essas|todos|todas|cada)\b/
@@ -290,6 +290,11 @@ const QUESTION_HEAD = /\b(?:do|does|did|can|could|should|would|will|may|might|is
 // Only this many characters around a match are inspected, so the scan stays linear on long drafts; the prefixes
 // NEGATED and SENTENCE_START look for are far shorter than this.
 const CONTEXT_WINDOW = 120
+const INTRO_CLAUSE = /^([^.!?,:;\n]{1,60}),\s+/
+// "The configure script is broken", "I tried to configure nginx yesterday": the verb names a thing or tells the past.
+const MODIFIER_USE = /\b(?:the|a|an|this|that|these|those|my|our|your|o|os|a|as|um|uma|este|esta|esse|essa|meu|minha|nosso|nossa|seu|sua)\s+$/
+const COMPOUND_AFTER = /^\s+(?!(?:the|a|an|this|that|these|those|my|our|your|all|each|every|o|os|as|um|uma|uns|umas|este|esta|esse|essa|meu|minha|nosso|nossa|seu|sua|todos|todas|cada|and|or|e|ou|to|for|para|de|do|da|with|com|in|em|on|at|by|por|it|them|me|us|is|are|was|were|e|esta|estao)\b)\w+/
+const NARRATIVE = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:i|we|they|he|she|eu|nos|a gente|eles|elas|ele|ela)\s+)?(?:tried|attempted|managed|failed|forgot|happened|used|started|began|finished|stopped|tentei|tentamos|tentou|tentaram|consegui|conseguimos|conseguiu|esqueci|esquecemos|comecei|comecamos|comecou|parei|paramos|parou|terminei|terminamos|terminou)\s+(?:to\s+|de\s+|a\s+)?$/
 // Languages: Portuguese (unaccented) + English.
 // Between two artifact words, only bare modifiers ("API announcement email"): a preposition, clause word or
 // participle ("email announcing the app", "script that sends an e-mail", "app de blog") means the first word is the
@@ -337,6 +342,15 @@ const YESNO_FORM = /^(?:(?:voce|voces)\s+(?:pode|podem|poderia|poderiam|consegue
 const EXPLAIN_FORM = /^(?:(?:(?:please|por favor),?\s+)?(?:(?:tell|show|explain to|describe to|walk) (?:me|us)|(?:me|nos) (?:diga|digam|explique|expliquem|mostre|mostrem|conte|contem|descreva|descrevam|esclareca|esclarecam)|(?:diga|digam|explique|expliquem|mostre|mostrem|conte|contem|descreva|descrevam|esclareca|esclarecam) (?:me|nos|pra mim|para mim|para nos))|(?:can|could|would|will) you (?:(?:please|kindly) )?(?:tell|say|explain|describe|clarify|show|walk|help (?:me |us )?(?:to )?(?:understand|figure out|learn|know|see|grasp|decide|choose))|(?:voce|voces) (?:pode|podem|poderia|poderiam|consegue|conseguem|sabe|sabem) (?:por favor )?(?:me )?(?:dizer|explicar|mostrar|contar|descrever|esclarecer|ajudar a (?:entender|compreender|saber|decidir|escolher)|orientar|indicar))\b(?:[^.?!\n]|\.(?=\S)|\n(?![ \t]*\n))*(?:\?|\.(?!\S)|$|(?=\n[ \t]*\n))/
 // The question form, unless its comma follows something that is not a question ("Como especialista, escreva").
 function isQuestion(goal) {
+  const direct = questionAt(goal)
+  if (direct) return direct
+  // "Before we begin, can I configure nginx without downtime?": a short clause without an order may introduce it.
+  const intro = INTRO_CLAUSE.exec(goal)
+  if (!intro || firstSignal(intro[1]).verb) return null
+  const rest = questionAt(goal.slice(intro[0].length))
+  return rest ? [intro[0] + rest[0]] : null
+}
+function questionAt(goal) {
   const explain = EXPLAIN_FORM.exec(goal)
   if (explain) return explain
   const yesNo = YESNO_FORM.exec(goal)
@@ -370,6 +384,8 @@ function firstSignal(text) {
       const requested = REQUESTED_NOUN.test(before) && !copula
       const isNoun = NOUN_SIGNAL.test(word) && (copula || (!SENTENCE_START.test(before) && !INFINITIVE_MARK.test(before) && !VERB_OBJECT.test(after) && !requested))
       if (isNoun) { if (m.index < nounAt) { noun = id; nounAt = m.index }; continue }
+      // A verb that names a thing ("the configure script") or tells the past ("I tried to configure") is context.
+      if (!NOUN_SIGNAL.test(word) && (NARRATIVE.test(before) || (MODIFIER_USE.test(before) && COMPOUND_AFTER.test(after)))) continue
       if (m.index < at) { signal = id; at = m.index }
       break
     }
@@ -823,7 +839,7 @@ const INFINITIVE_MARK = /\b(?:(?:need|needs|needed|want|wants|wanted|have|has|ha
 // names the request: a determiner (after an optional request opener or verb) opens its sentence, up to two plain
 // modifiers may sit between them ("a migration plan"), and no copula follows ("The plan is ready. Build ..." is context).
 const REQUESTED_NOUN = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:i|we) (?:need|want|would like)|i'd like|we'd like|give me|send me|preciso de|precisamos de|quero|queremos|gostaria de|gostariamos de|me de|me passe|me envie|me mande|outline|draft|prepare|propose|sketch|produce|provide|esboce|elabore|prepare|proponha|produza|forneca|apresente|what (?:i|we) (?:need|want|would like) is|o que (?:eu|nos) (?:preciso|precisamos|quero|queremos) e)\s+(?:me\s+)?)?(?:a|an|the|um|uma|o|os|as|some|algum|alguma|alguns|algumas)\s+(?:(?!(?:to|for|of|and|or|that|which|para|de|do|da|que|e|ou)\s)[\w-]+\s+){0,2}$/
-const COPULA = /^\s+(?:is|are|was|were|will|would|has|have|had|e|esta|estao|era|eram|foi|foram|sera|serao|ja|fica|ficou|seems|looks|parece)\b/
+const COPULA = /^\s+(?:is|are|was|were|will|would|has|have|had|e|esta|estao|era|eram|foi|foram|sera|serao|ja|fica|ficou|seems|looks|parece|failed|fails|broke|breaks|crashed|crashes|works|worked|ran|runs|stopped|stops|falhou|falha|quebrou|quebra|funciona|funcionou|rodou|roda|parou)\b/
 // A noun-signal word followed by a determiner is the verb wherever it sits ("... so plan the steps", "review our API").
 // Portuguese este/esta are left out: folded, "esta" is also "esta" ("Nosso plano esta pronto").
 const VERB_OBJECT = /^\s+(?:the|a|an|our|my|your|this|these|those|all|each|every|o|os|as|um|uma|uns|umas|nosso|nossa|nossos|nossas|meu|minha|seu|sua|esse|essa|esses|essas|todos|todas|cada)\b/
@@ -844,6 +860,11 @@ const QUESTION_HEAD = /\b(?:do|does|did|can|could|should|would|will|may|might|is
 // Only this many characters around a match are inspected, so the scan stays linear on long drafts; the prefixes
 // NEGATED and SENTENCE_START look for are far shorter than this.
 const CONTEXT_WINDOW = 120
+const INTRO_CLAUSE = /^([^.!?,:;\n]{1,60}),\s+/
+// "The configure script is broken", "I tried to configure nginx yesterday": the verb names a thing or tells the past.
+const MODIFIER_USE = /\b(?:the|a|an|this|that|these|those|my|our|your|o|os|a|as|um|uma|este|esta|esse|essa|meu|minha|nosso|nossa|seu|sua)\s+$/
+const COMPOUND_AFTER = /^\s+(?!(?:the|a|an|this|that|these|those|my|our|your|all|each|every|o|os|as|um|uma|uns|umas|este|esta|esse|essa|meu|minha|nosso|nossa|seu|sua|todos|todas|cada|and|or|e|ou|to|for|para|de|do|da|with|com|in|em|on|at|by|por|it|them|me|us|is|are|was|were|e|esta|estao)\b)\w+/
+const NARRATIVE = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:i|we|they|he|she|eu|nos|a gente|eles|elas|ele|ela)\s+)?(?:tried|attempted|managed|failed|forgot|happened|used|started|began|finished|stopped|tentei|tentamos|tentou|tentaram|consegui|conseguimos|conseguiu|esqueci|esquecemos|comecei|comecamos|comecou|parei|paramos|parou|terminei|terminamos|terminou)\s+(?:to\s+|de\s+|a\s+)?$/
 // Languages: Portuguese (unaccented) + English.
 // Between two artifact words, only bare modifiers ("API announcement email"): a preposition, clause word or
 // participle ("email announcing the app", "script that sends an e-mail", "app de blog") means the first word is the
@@ -891,6 +912,15 @@ const YESNO_FORM = /^(?:(?:voce|voces)\s+(?:pode|podem|poderia|poderiam|consegue
 const EXPLAIN_FORM = /^(?:(?:(?:please|por favor),?\s+)?(?:(?:tell|show|explain to|describe to|walk) (?:me|us)|(?:me|nos) (?:diga|digam|explique|expliquem|mostre|mostrem|conte|contem|descreva|descrevam|esclareca|esclarecam)|(?:diga|digam|explique|expliquem|mostre|mostrem|conte|contem|descreva|descrevam|esclareca|esclarecam) (?:me|nos|pra mim|para mim|para nos))|(?:can|could|would|will) you (?:(?:please|kindly) )?(?:tell|say|explain|describe|clarify|show|walk|help (?:me |us )?(?:to )?(?:understand|figure out|learn|know|see|grasp|decide|choose))|(?:voce|voces) (?:pode|podem|poderia|poderiam|consegue|conseguem|sabe|sabem) (?:por favor )?(?:me )?(?:dizer|explicar|mostrar|contar|descrever|esclarecer|ajudar a (?:entender|compreender|saber|decidir|escolher)|orientar|indicar))\b(?:[^.?!\n]|\.(?=\S)|\n(?![ \t]*\n))*(?:\?|\.(?!\S)|$|(?=\n[ \t]*\n))/
 // The question form, unless its comma follows something that is not a question ("Como especialista, escreva").
 function isQuestion(goal) {
+  const direct = questionAt(goal)
+  if (direct) return direct
+  // "Before we begin, can I configure nginx without downtime?": a short clause without an order may introduce it.
+  const intro = INTRO_CLAUSE.exec(goal)
+  if (!intro || firstSignal(intro[1]).verb) return null
+  const rest = questionAt(goal.slice(intro[0].length))
+  return rest ? [intro[0] + rest[0]] : null
+}
+function questionAt(goal) {
   const explain = EXPLAIN_FORM.exec(goal)
   if (explain) return explain
   const yesNo = YESNO_FORM.exec(goal)
@@ -924,6 +954,8 @@ function firstSignal(text) {
       const requested = REQUESTED_NOUN.test(before) && !copula
       const isNoun = NOUN_SIGNAL.test(word) && (copula || (!SENTENCE_START.test(before) && !INFINITIVE_MARK.test(before) && !VERB_OBJECT.test(after) && !requested))
       if (isNoun) { if (m.index < nounAt) { noun = id; nounAt = m.index }; continue }
+      // A verb that names a thing ("the configure script") or tells the past ("I tried to configure") is context.
+      if (!NOUN_SIGNAL.test(word) && (NARRATIVE.test(before) || (MODIFIER_USE.test(before) && COMPOUND_AFTER.test(after)))) continue
       if (m.index < at) { signal = id; at = m.index }
       break
     }
@@ -1441,7 +1473,7 @@ const INFINITIVE_MARK = /\b(?:(?:need|needs|needed|want|wants|wanted|have|has|ha
 // names the request: a determiner (after an optional request opener or verb) opens its sentence, up to two plain
 // modifiers may sit between them ("a migration plan"), and no copula follows ("The plan is ready. Build ..." is context).
 const REQUESTED_NOUN = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:i|we) (?:need|want|would like)|i'd like|we'd like|give me|send me|preciso de|precisamos de|quero|queremos|gostaria de|gostariamos de|me de|me passe|me envie|me mande|outline|draft|prepare|propose|sketch|produce|provide|esboce|elabore|prepare|proponha|produza|forneca|apresente|what (?:i|we) (?:need|want|would like) is|o que (?:eu|nos) (?:preciso|precisamos|quero|queremos) e)\s+(?:me\s+)?)?(?:a|an|the|um|uma|o|os|as|some|algum|alguma|alguns|algumas)\s+(?:(?!(?:to|for|of|and|or|that|which|para|de|do|da|que|e|ou)\s)[\w-]+\s+){0,2}$/
-const COPULA = /^\s+(?:is|are|was|were|will|would|has|have|had|e|esta|estao|era|eram|foi|foram|sera|serao|ja|fica|ficou|seems|looks|parece)\b/
+const COPULA = /^\s+(?:is|are|was|were|will|would|has|have|had|e|esta|estao|era|eram|foi|foram|sera|serao|ja|fica|ficou|seems|looks|parece|failed|fails|broke|breaks|crashed|crashes|works|worked|ran|runs|stopped|stops|falhou|falha|quebrou|quebra|funciona|funcionou|rodou|roda|parou)\b/
 // A noun-signal word followed by a determiner is the verb wherever it sits ("... so plan the steps", "review our API").
 // Portuguese este/esta are left out: folded, "esta" is also "esta" ("Nosso plano esta pronto").
 const VERB_OBJECT = /^\s+(?:the|a|an|our|my|your|this|these|those|all|each|every|o|os|as|um|uma|uns|umas|nosso|nossa|nossos|nossas|meu|minha|seu|sua|esse|essa|esses|essas|todos|todas|cada)\b/
@@ -1462,6 +1494,11 @@ const QUESTION_HEAD = /\b(?:do|does|did|can|could|should|would|will|may|might|is
 // Only this many characters around a match are inspected, so the scan stays linear on long drafts; the prefixes
 // NEGATED and SENTENCE_START look for are far shorter than this.
 const CONTEXT_WINDOW = 120
+const INTRO_CLAUSE = /^([^.!?,:;\n]{1,60}),\s+/
+// "The configure script is broken", "I tried to configure nginx yesterday": the verb names a thing or tells the past.
+const MODIFIER_USE = /\b(?:the|a|an|this|that|these|those|my|our|your|o|os|a|as|um|uma|este|esta|esse|essa|meu|minha|nosso|nossa|seu|sua)\s+$/
+const COMPOUND_AFTER = /^\s+(?!(?:the|a|an|this|that|these|those|my|our|your|all|each|every|o|os|as|um|uma|uns|umas|este|esta|esse|essa|meu|minha|nosso|nossa|seu|sua|todos|todas|cada|and|or|e|ou|to|for|para|de|do|da|with|com|in|em|on|at|by|por|it|them|me|us|is|are|was|were|e|esta|estao)\b)\w+/
+const NARRATIVE = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:i|we|they|he|she|eu|nos|a gente|eles|elas|ele|ela)\s+)?(?:tried|attempted|managed|failed|forgot|happened|used|started|began|finished|stopped|tentei|tentamos|tentou|tentaram|consegui|conseguimos|conseguiu|esqueci|esquecemos|comecei|comecamos|comecou|parei|paramos|parou|terminei|terminamos|terminou)\s+(?:to\s+|de\s+|a\s+)?$/
 // Languages: Portuguese (unaccented) + English.
 // Between two artifact words, only bare modifiers ("API announcement email"): a preposition, clause word or
 // participle ("email announcing the app", "script that sends an e-mail", "app de blog") means the first word is the
@@ -1509,6 +1546,15 @@ const YESNO_FORM = /^(?:(?:voce|voces)\s+(?:pode|podem|poderia|poderiam|consegue
 const EXPLAIN_FORM = /^(?:(?:(?:please|por favor),?\s+)?(?:(?:tell|show|explain to|describe to|walk) (?:me|us)|(?:me|nos) (?:diga|digam|explique|expliquem|mostre|mostrem|conte|contem|descreva|descrevam|esclareca|esclarecam)|(?:diga|digam|explique|expliquem|mostre|mostrem|conte|contem|descreva|descrevam|esclareca|esclarecam) (?:me|nos|pra mim|para mim|para nos))|(?:can|could|would|will) you (?:(?:please|kindly) )?(?:tell|say|explain|describe|clarify|show|walk|help (?:me |us )?(?:to )?(?:understand|figure out|learn|know|see|grasp|decide|choose))|(?:voce|voces) (?:pode|podem|poderia|poderiam|consegue|conseguem|sabe|sabem) (?:por favor )?(?:me )?(?:dizer|explicar|mostrar|contar|descrever|esclarecer|ajudar a (?:entender|compreender|saber|decidir|escolher)|orientar|indicar))\b(?:[^.?!\n]|\.(?=\S)|\n(?![ \t]*\n))*(?:\?|\.(?!\S)|$|(?=\n[ \t]*\n))/
 // The question form, unless its comma follows something that is not a question ("Como especialista, escreva").
 function isQuestion(goal) {
+  const direct = questionAt(goal)
+  if (direct) return direct
+  // "Before we begin, can I configure nginx without downtime?": a short clause without an order may introduce it.
+  const intro = INTRO_CLAUSE.exec(goal)
+  if (!intro || firstSignal(intro[1]).verb) return null
+  const rest = questionAt(goal.slice(intro[0].length))
+  return rest ? [intro[0] + rest[0]] : null
+}
+function questionAt(goal) {
   const explain = EXPLAIN_FORM.exec(goal)
   if (explain) return explain
   const yesNo = YESNO_FORM.exec(goal)
@@ -1542,6 +1588,8 @@ function firstSignal(text) {
       const requested = REQUESTED_NOUN.test(before) && !copula
       const isNoun = NOUN_SIGNAL.test(word) && (copula || (!SENTENCE_START.test(before) && !INFINITIVE_MARK.test(before) && !VERB_OBJECT.test(after) && !requested))
       if (isNoun) { if (m.index < nounAt) { noun = id; nounAt = m.index }; continue }
+      // A verb that names a thing ("the configure script") or tells the past ("I tried to configure") is context.
+      if (!NOUN_SIGNAL.test(word) && (NARRATIVE.test(before) || (MODIFIER_USE.test(before) && COMPOUND_AFTER.test(after)))) continue
       if (m.index < at) { signal = id; at = m.index }
       break
     }
