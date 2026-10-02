@@ -1,8 +1,12 @@
 #!/usr/bin/env node
-// Local Codex review before the push (bin/review): runs the Codex CLI over the branch diff against main and
-// blocks on P0, P1 or P2. Ported from the Compass project's bin/review; see AGENTS.md ("Pull requests").
+// Local Codex review before the push (bin/review): runs the Codex CLI over the branch diff against the repository's
+// base branch and blocks on P0, P1 or P2. Ported from the Compass project's bin/review; see AGENTS.md ("Pull requests").
+//
+// Base branch: BASE_BRANCH, else origin's default branch, else main (`--print-base` prints it). Codex run limit:
+// CODEX_TIMEOUT_SECONDS (default 900); a timeout or any failure never approves. `--summary-file <path>` writes the
+// review verdict as Markdown, which bin/pr puts into the pull request body.
 import { spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync, mkdirSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, mkdtempSync, rmSync, openSync, closeSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -32,6 +36,26 @@ export function parseReviewOutput(text) {
   return data.findings;
 }
 
+export const DEFAULT_CODEX_TIMEOUT_SECONDS = 900;
+
+export function codexTimeoutSeconds(env = process.env) {
+  const n = Number(env.CODEX_TIMEOUT_SECONDS);
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_CODEX_TIMEOUT_SECONDS;
+}
+
+// Markdown verdict of one review; goes into the pull request body.
+export function formatSummary({ head, base, findings, counts, blocking }) {
+  const lines = [
+    '## Local Codex review',
+    '',
+    `Commit \`${head.slice(0, 7)}\` against \`${base.slice(0, 7)}\`: ${blocking ? '**blocked** (P0, P1 or P2 found)' : '**approved** (no P0, P1 or P2)'}.`,
+    `Result: P0 ${counts.P0}, P1 ${counts.P1}, P2 ${counts.P2}, P3 ${counts.P3}.`,
+  ];
+  if (findings.length) lines.push('');
+  for (const f of findings) lines.push(`- [${f.severity}] ${f.title} (${f.path}:${f.line}): ${f.explanation}`);
+  return `${lines.join('\n')}\n`;
+}
+
 export function buildPrompt(template, { base, head }) {
   return template.replaceAll('{{DIFF}}', `git diff ${base}...${head}`).replaceAll('{{HEAD}}', head);
 }
@@ -48,10 +72,28 @@ function git(...args) {
   return r.stdout.trim();
 }
 
+// The branch pull requests go into: BASE_BRANCH, else the default branch of origin, else main.
+export function resolveBaseBranch(env = process.env) {
+  if (env.BASE_BRANCH && env.BASE_BRANCH.trim()) return env.BASE_BRANCH.trim();
+  try {
+    const sym = sh('git', ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD']);
+    const ref = sym.stdout.trim();
+    if (sym.status === 0 && ref.startsWith('origin/')) return ref.slice('origin/'.length);
+    const ls = sh('git', ['ls-remote', '--symref', 'origin', 'HEAD'], { timeout: 20000 });
+    const m = ls.status === 0 && /^ref: refs\/heads\/(\S+)\s+HEAD$/m.exec(ls.stdout);
+    if (m) return m[1];
+  } catch {
+    // no origin or no network: fall through
+  }
+  return 'main';
+}
+
 function parseArgs(argv) {
-  const opts = { base: 'origin/main', fetch: true, force: false };
+  const opts = { base: null, fetch: true, force: false, summaryFile: null, printBase: false };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--base') opts.base = argv[++i];
+    else if (argv[i] === '--summary-file') opts.summaryFile = argv[++i];
+    else if (argv[i] === '--print-base') opts.printBase = true;
     else if (argv[i] === '--no-fetch') opts.fetch = false;
     else if (argv[i] === '--force') opts.force = true;
     else throw new Error(`unknown option: ${argv[i]}`);
@@ -71,12 +113,22 @@ function main() {
   const opts = parseArgs(process.argv.slice(2));
   const root = git('rev-parse', '--show-toplevel');
   process.chdir(root);
-  if (opts.fetch) git('fetch', '--quiet', 'origin', 'main');
+  if (opts.printBase) {
+    console.log(resolveBaseBranch());
+    return 0;
+  }
+  if (!opts.base) opts.base = `origin/${resolveBaseBranch()}`;
+  const summarize = (text) => {
+    if (opts.summaryFile) writeFileSync(opts.summaryFile, text);
+  };
+  // bin/pr fetches once and passes --no-fetch; run on its own, this brings the base up to date.
+  if (opts.fetch && opts.base.startsWith('origin/')) git('fetch', '--quiet', 'origin', opts.base.slice('origin/'.length));
 
   const head = git('rev-parse', 'HEAD');
   const base = git('merge-base', opts.base, head);
   if (!git('diff', '--name-only', `${base}...${head}`)) {
     console.log('Nothing to review: the branch has no changes against the base.');
+    summarize('## Local Codex review\n\nNothing to review: the branch has no changes against the base.\n');
     return 0;
   }
 
@@ -86,6 +138,9 @@ function main() {
   if (!opts.force && existsSync(mark)) {
     if (moved(head)) return 2;
     console.log(`Commit ${head.slice(0, 7)} was already reviewed locally with no blocking finding.`);
+    const kept = readFileSync(mark, 'utf8');
+    summarize(kept.startsWith('## Local Codex review') ? kept
+      : `## Local Codex review\n\nCommit \`${head.slice(0, 7)}\` was already reviewed locally: **approved** (no P0, P1 or P2).\n`);
     return 0;
   }
   // Review redone: the old approval stops counting before the new result is known.
@@ -104,19 +159,34 @@ function main() {
     git('worktree', 'add', '--quiet', '--detach', tree, head);
     for (const f of ['review-prompt.md', 'review-schema.json']) {
       if (!existsSync(join(controls, f))) {
-        console.error(`The reviewed commit has no bin/lib/${f}: update the branch with main. Nothing was approved.`);
+        console.error(`The reviewed commit has no bin/lib/${f}: update the branch with the base branch. Nothing was approved.`);
         return 2;
       }
     }
     const prompt = buildPrompt(readFileSync(join(controls, 'review-prompt.md'), 'utf8'), { base, head });
-    const r = sh(codex, [
-      'exec', '--sandbox', 'read-only', '--ephemeral', '--color', 'never',
-      '-c', 'model_reasoning_effort="high"',
-      '--output-schema', join(controls, 'review-schema.json'),
-      '-o', out, prompt,
-    ], { cwd: tree, stdio: ['ignore', 'ignore', 'pipe'] });
+    // Codex errors go to a file, not a pipe: a hung Codex with children cannot keep this script waiting after the kill.
+    const errFile = join(work, 'codex-stderr.txt');
+    const errFd = openSync(errFile, 'w');
+    const seconds = codexTimeoutSeconds();
+    let r;
+    try {
+      r = spawnSync(codex, [
+        'exec', '--sandbox', 'read-only', '--ephemeral', '--color', 'never',
+        '-c', 'model_reasoning_effort="high"',
+        '--output-schema', join(controls, 'review-schema.json'),
+        '-o', out, prompt,
+      ], { cwd: tree, stdio: ['ignore', 'ignore', errFd], timeout: seconds * 1000, killSignal: 'SIGKILL' });
+    } finally {
+      closeSync(errFd);
+    }
+    if (r.error && r.error.code === 'ETIMEDOUT') {
+      console.error(`Codex did not answer within ${seconds}s (CODEX_TIMEOUT_SECONDS) and was stopped. Nothing was approved.`);
+      return 2;
+    }
+    if (r.error) throw r.error;
     if (r.status !== 0) {
-      console.error(`Codex failed (exit ${r.status}). Nothing was approved.\n${(r.stderr || '').split('\n').slice(-15).join('\n')}`);
+      const tail = existsSync(errFile) ? readFileSync(errFile, 'utf8').split('\n').slice(-15).join('\n') : '';
+      console.error(`Codex failed (exit ${r.status}). Nothing was approved.\n${tail}`);
       return 2;
     }
     const findings = parseReviewOutput(existsSync(out) ? readFileSync(out, 'utf8') : '');
@@ -125,12 +195,14 @@ function main() {
     }
     const { counts, blocking } = decide(findings);
     console.log(`Result: P0 ${counts.P0}, P1 ${counts.P1}, P2 ${counts.P2}, P3 ${counts.P3}.`);
+    const summary = formatSummary({ head, base, findings, counts, blocking });
+    summarize(summary);
     if (blocking) {
-      console.log('Fix the P0, P1 and P2 findings before the push. For an unfounded finding, ask Bruno; bin/pr --skip-review only with his authorization.');
+      console.log('Fix the P0, P1 and P2 findings before the push. For an unfounded finding, ask the maintainer; bin/pr --skip-review only with their authorization.');
       return 1;
     }
     mkdirSync(marksDir, { recursive: true });
-    writeFileSync(mark, `${new Date().toISOString()}\n`);
+    writeFileSync(mark, summary);
     // New commit during the review: the reviewed commit stays approved, the current HEAD does not.
     if (moved(head)) return 2;
     console.log('No blocking findings.');

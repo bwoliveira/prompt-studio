@@ -328,7 +328,9 @@ python3 scripts/docs_sources.py check --docs-dir <snapshot dir>   # every doc qu
   `node scripts/build.mjs --check` compares the same bytes on every system.
 - Pull requests: `AGENTS.md` has the flow. The agent fires the Hermes `/review` itself, then runs `bin/pr`, which runs
   the local Codex review (`bin/review`, Codex CLI); with no P0, P1 or P2 it pushes, opens the PR and merges it. The agent
-  checks every five minutes, fixes the findings and runs `bin/pr` again until it passes. Its tests:
+  checks every five minutes, fixes the findings and runs `bin/pr` again until it passes. The scripts read the base
+  branch from the repository (`BASE_BRANCH` overrides it), put the review verdict into the PR body and stop a Codex run
+  after `CODEX_TIMEOUT_SECONDS` (default 900; a timeout never approves). Their tests:
   `node --test bin/lib/local-review.test.mjs`.
 - Secret scanning: run `gitleaks` over the full history. `.gitleaksignore` lists the only accepted findings,
   fake secrets in the redaction tests of one early commit; later test fixtures are marked inline with

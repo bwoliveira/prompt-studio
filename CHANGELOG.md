@@ -120,6 +120,9 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
 - Fix: questions and suggestions stopped loading after picking, in Settings, a model whose route refuses JSON mode
   (for example the Claude subscription provider, `Only json_schema structured output is supported` in `agent.log`).
   The Studio now retries that call once without JSON mode and reads the JSON from the reply text.
+- Internal: `bin/pr` and `bin/review` work outside the maintainer's machine: no personal name, the base branch comes
+  from the repository (`BASE_BRANCH` overrides it), the local review verdict goes into the PR body, a hung Codex run
+  stops after `CODEX_TIMEOUT_SECONDS` (default 900) and never approves, and the base is fetched once.
 
 ## 1.8.0
 

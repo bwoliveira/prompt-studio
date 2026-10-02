@@ -7,7 +7,7 @@ import { mkdtempSync, writeFileSync, readFileSync, existsSync, readdirSync, chmo
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { decide, parseReviewOutput, buildPrompt } from './local-review.mjs';
+import { decide, parseReviewOutput, buildPrompt, formatSummary, codexTimeoutSeconds, SEVERITIES } from './local-review.mjs';
 
 const SCRIPT = fileURLToPath(new URL('./local-review.mjs', import.meta.url));
 
@@ -39,6 +39,24 @@ test('the prompt points to the exact diff and to the project rules', () => {
   for (const must of ['AGENTS.md', 'README.md', 'docs/CONTRACT.md', 'build.mjs --check', 'temperature', '{{DIFF}}', '{{HEAD}}']) assert.ok(real.includes(must), must);
 });
 
+test('the summary for the pull request body carries the verdict, the counts and every finding', () => {
+  const findings = [finding('P3', { title: 'nit' }), finding('P1', { title: 'broken' })];
+  const base = { head: 'abcdef1234', base: '1234567890', findings };
+  const blocked = formatSummary({ ...base, ...decide(findings) });
+  assert.match(blocked, /^## Local Codex review/);
+  assert.match(blocked, /abcdef1.*blocked/);
+  assert.match(blocked, /P0 0, P1 1, P2 0, P3 1/);
+  assert.match(blocked, /\[P1\] broken \(dashboard\/x\.py:3\)/);
+  const clean = formatSummary({ ...base, findings: [], ...decide([]) });
+  assert.match(clean, /\*\*approved\*\*/);
+  assert.doesNotMatch(clean, /^- \[/m);
+});
+
+test('the Codex timeout comes from CODEX_TIMEOUT_SECONDS, with a safe default', () => {
+  assert.equal(codexTimeoutSeconds({ CODEX_TIMEOUT_SECONDS: '30' }), 30);
+  for (const bad of [undefined, '', '0', '-5', 'soon']) assert.equal(codexTimeoutSeconds({ CODEX_TIMEOUT_SECONDS: bad }), 900, String(bad));
+});
+
 // ---- Entry point: real script, temporary repository and fake codex ----
 
 function git(cwd, ...args) {
@@ -50,9 +68,9 @@ function git(cwd, ...args) {
 // Test repository with the review controls (prompt and schema) committed, as in this repository.
 const CONTROLS = ['review-prompt.md', 'review-schema.json'];
 
-function makeRepo() {
+function makeRepo(baseBranch = 'main', withOrigin = false) {
   const dir = mkdtempSync(join(tmpdir(), 'ps-review-'));
-  git(dir, 'init', '-q', '-b', 'main');
+  git(dir, 'init', '-q', '-b', baseBranch);
   git(dir, 'config', 'user.email', 't@t');
   git(dir, 'config', 'user.name', 't');
   writeFileSync(join(dir, 'a.txt'), 'one\n');
@@ -60,6 +78,12 @@ function makeRepo() {
   for (const f of CONTROLS) writeFileSync(join(dir, 'bin', 'lib', f), readFileSync(new URL(`./${f}`, import.meta.url)));
   git(dir, 'add', '.');
   git(dir, 'commit', '-qm', 'base');
+  if (withOrigin) {
+    const origin = mkdtempSync(join(tmpdir(), 'ps-review-origin-'));
+    git(origin, 'init', '-q', '--bare', '-b', baseBranch);
+    git(dir, 'remote', 'add', 'origin', origin);
+    git(dir, 'push', '-q', 'origin', baseBranch);
+  }
   git(dir, 'switch', '-qc', 'feat/x');
   writeFileSync(join(dir, 'a.txt'), 'one\ntwo\n');
   git(dir, 'commit', '-qam', 'change');
@@ -81,6 +105,12 @@ if (process.env.FAKE_COMMIT) {
   const { execFileSync } = await import('node:child_process');
   appendFileSync(process.env.FAKE_REPO + '/a.txt', 'during the review\\n');
   execFileSync('git', ['-C', process.env.FAKE_REPO, 'commit', '-qam', 'during'], { stdio: 'ignore' });
+}
+if (process.env.FAKE_HANG) {
+  // A hung Codex with a child that keeps running: the script must stop waiting at the timeout.
+  const { spawn } = await import('node:child_process');
+  spawn('sleep', ['5'], { stdio: 'inherit' });
+  await new Promise(() => setInterval(() => {}, 1000));
 }
 const out = args[args.indexOf('-o') + 1];
 if (process.env.FAKE_OUTPUT !== undefined) writeFileSync(out, process.env.FAKE_OUTPUT);
@@ -193,6 +223,7 @@ test('bin/pr pushes exactly the reviewed commit and stops if the branch moved', 
   assert.match(pr, /git push --quiet origin "\$REVIEWED:refs\/heads\/\$BRANCH"/);
   assert.match(pr, /gh pr merge "\$PR" --squash --match-head-commit "\$REVIEWED"/, 'merges only the reviewed commit');
   assert.ok(pr.indexOf('bin/review --base') < pr.indexOf('gh pr merge'), 'the review runs before the merge');
+  assert.equal(pr.match(/git fetch/g).length, 1, 'one fetch');
 });
 
 // Fake git on PATH: passes everything to the real git, but on the first --git-common-dir query (right after the
@@ -222,23 +253,66 @@ test('entry: a cached approval does not count if HEAD moved after it was capture
   assert.equal(r.calls.length, 0);
 });
 
-test('AGENTS.md has the agent fire /review and follow the Codex review itself, fixes through bin/pr', () => {
-  const agents = readFileSync(new URL('../../AGENTS.md', import.meta.url), 'utf8');
-  assert.doesNotMatch(agents, /ask Bruno[^.]*`\/review`/);
-  assert.match(agents, /not live in the dashboard backend/);
-  assert.match(agents, /comes back a third time/);
-  const readme = readFileSync(new URL('../../README.md', import.meta.url), 'utf8');
-  assert.match(readme, /The agent fires the Hermes `\/review` itself/);
-  assert.match(agents, /fires `\/review` itself with\s+the `hermes-review` helper/);
-  assert.match(agents, /HERMES_SLASH_DIR/);
-  assert.match(agents, /when the helper is not installed or not executable/);
-  assert.match(agents, /skill `pr-review-autopilot`/);
-  assert.match(agents, /loop every five minutes/);
-  assert.match(agents, /until the review reports none and the PR is merged/);
-  assert.match(agents, /never\s+a plain `git push`/);
-  assert.match(agents, /merges it \(squash, only the reviewed commit\) without\s+waiting for Bruno/);
-  const pr = readFileSync(new URL('../pr', import.meta.url), 'utf8');
-  assert.match(pr, /bin\/review --base origin\/main/);
+test('contract: the review prompt and schema carry the tokens the script relies on', () => {
+  const prompt = readFileSync(new URL('./review-prompt.md', import.meta.url), 'utf8');
+  for (const token of [...SEVERITIES, '{{DIFF}}', '{{HEAD}}']) assert.ok(prompt.includes(token), `prompt lacks ${token}`);
+  const schema = JSON.parse(readFileSync(new URL('./review-schema.json', import.meta.url), 'utf8'));
+  assert.deepEqual(schema.properties.findings.items.properties.severity.enum, SEVERITIES);
+  assert.deepEqual(schema.properties.findings.items.required.sort(), ['explanation', 'line', 'path', 'severity', 'title']);
+});
+
+test('the scripts name no person and hard-code no base branch', () => {
+  for (const f of ['../pr', '../review', './local-review.mjs']) {
+    const text = readFileSync(new URL(f, import.meta.url), 'utf8');
+    assert.doesNotMatch(text, /Bruno/, f);
+    assert.doesNotMatch(text, /origin\/main|--base main|"main"|'main'.*git fetch/, f);
+  }
+});
+
+test('entry: a hung Codex is stopped at the timeout and never approves (exit 2)', () => {
+  const repo = makeRepo();
+  const started = Date.now();
+  const r = run(repo, { FAKE_HANG: '1', CODEX_TIMEOUT_SECONDS: '1', FAKE_OUTPUT: JSON.stringify({ findings: [] }) });
+  assert.equal(r.status, 2, r.stderr + r.stdout);
+  assert.match(r.stderr, /did not answer within 1s/);
+  assert.ok(Date.now() - started < 4500, 'the script did not wait for the hung child');
+  const dir = join(repo, '.git', 'prompt-studio-local-review');
+  assert.ok(!existsSync(dir) || readdirSync(dir).length === 0, 'no approval recorded');
+  assert.equal(git(repo, 'worktree', 'list').split('\n').length, 1, 'temporary worktree removed');
+});
+
+test('entry: --summary-file gets the verdict (blocked, approved and approved-again from the mark)', () => {
+  const repo = makeRepo();
+  const file = join(repo, 'summary.md');
+  const args = ['--base', 'main', '--no-fetch', '--summary-file', file];
+  const blocked = run(repo, { FAKE_OUTPUT: JSON.stringify({ findings: [finding('P2', { title: 'stale README' })] }) }, args);
+  assert.equal(blocked.status, 1);
+  assert.match(readFileSync(file, 'utf8'), /blocked[\s\S]*\[P2\] stale README/);
+  rmSync(file);
+  const ok = run(repo, { FAKE_OUTPUT: JSON.stringify({ findings: [finding('P3', { title: 'nit' })] }) }, args);
+  assert.equal(ok.status, 0, ok.stderr);
+  const summary = readFileSync(file, 'utf8');
+  assert.match(summary, /\*\*approved\*\*[\s\S]*\[P3\] nit/);
+  rmSync(file);
+  const again = run(repo, { FAKE_EXIT: '9' }, args);
+  assert.match(again.stdout, /already reviewed/);
+  assert.equal(readFileSync(file, 'utf8'), summary, 'the cached approval keeps its summary');
+});
+
+test('--print-base: BASE_BRANCH wins, then the default branch of origin, then main', () => {
+  const printBase = (repo, env = {}) => run(repo, { BASE_BRANCH: '', ...env }, ['--print-base']).stdout.trim();
+  const trunk = makeRepo('trunk', true);
+  assert.equal(printBase(trunk), 'trunk', 'read from origin, not assumed');
+  assert.equal(printBase(trunk, { BASE_BRANCH: 'develop' }), 'develop');
+  assert.equal(printBase(makeRepo()), 'main', 'no origin: fallback');
+});
+
+test('entry: with no --base, the base is origin\'s default branch and is fetched', () => {
+  const repo = makeRepo('trunk', true);
+  const r = run(repo, { BASE_BRANCH: '', FAKE_OUTPUT: JSON.stringify({ findings: [] }) }, []);
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.equal(r.calls.length, 1);
+  assert.equal(git(repo, 'rev-parse', '--verify', 'origin/trunk'), git(repo, 'rev-parse', 'trunk'));
 });
 
 test('entry: prompt and schema come from the reviewed commit, not from the working folder', () => {
@@ -268,23 +342,30 @@ test('entry: a commit without the review controls is not approved (update the br
 
 // ---- bin/pr with a fake gh and a fake bin/review: which pull request gets merged ----
 
-function prRepo() {
+function prRepo(baseBranch = 'main', extraBranch = null) {
   const origin = mkdtempSync(join(tmpdir(), 'ps-origin-'));
-  git(origin, 'init', '-q', '--bare', '-b', 'main');
+  git(origin, 'init', '-q', '--bare', '-b', baseBranch);
   const dir = mkdtempSync(join(tmpdir(), 'ps-pr-'));
-  git(dir, 'init', '-q', '-b', 'main');
+  git(dir, 'init', '-q', '-b', baseBranch);
   git(dir, 'config', 'user.email', 't@t');
   git(dir, 'config', 'user.name', 't');
-  mkdirSync(join(dir, 'bin'), { recursive: true });
+  mkdirSync(join(dir, 'bin', 'lib'), { recursive: true });
   writeFileSync(join(dir, 'bin', 'pr'), readFileSync(new URL('../pr', import.meta.url)));
-  writeFileSync(join(dir, 'bin', 'review'), '#!/bin/sh\nexit 0\n');
+  writeFileSync(join(dir, 'bin', 'lib', 'local-review.mjs'), readFileSync(SCRIPT));
+  // Fake bin/review: logs its arguments and writes a recognizable summary where --summary-file points.
+  writeFileSync(join(dir, 'bin', 'review'), `#!/bin/sh
+echo "$*" >> "$FAKE_REVIEW_LOG"
+while [ $# -gt 0 ]; do [ "$1" = "--summary-file" ] && echo "FAKE REVIEW SUMMARY" > "$2"; shift; done
+exit 0
+`);
   chmodSync(join(dir, 'bin', 'pr'), 0o755);
   chmodSync(join(dir, 'bin', 'review'), 0o755);
   writeFileSync(join(dir, 'a.txt'), 'one\n');
   git(dir, 'add', '.');
   git(dir, 'commit', '-qm', 'base');
   git(dir, 'remote', 'add', 'origin', origin);
-  git(dir, 'push', '-q', 'origin', 'main');
+  git(dir, 'push', '-q', 'origin', baseBranch);
+  if (extraBranch) git(dir, 'push', '-q', 'origin', `${baseBranch}:refs/heads/${extraBranch}`);
   git(dir, 'fetch', '-q', 'origin');
   git(dir, 'switch', '-qc', 'fix/x');
   writeFileSync(join(dir, 'a.txt'), 'one\ntwo\n');
@@ -300,7 +381,9 @@ function fakeGh() {
 echo "$*" >> "${bin}/log"
 case "$1 $2" in
   "pr list") printf '%s\\n' "$FAKE_OPEN_PR" ;;
-  "pr create") echo "https://github.com/o/r/pull/8" ;;
+  "pr create")
+    while [ $# -gt 0 ]; do [ "$1" = "--body-file" ] && cp "$2" "${bin}/body"; shift; done
+    echo "https://github.com/o/r/pull/8" ;;
   "pr view") case "$*" in *state*) echo "\${FAKE_STATE:-MERGED}" ;; *) echo "https://github.com/o/r/pull/1" ;; esac ;;
 esac
 exit 0
@@ -309,13 +392,27 @@ exit 0
   return bin;
 }
 
+function prEnv(gh, extra = {}) {
+  return { ...process.env, PATH: `${gh}:${process.env.PATH}`, BASE_BRANCH: '', FAKE_REVIEW_LOG: join(gh, 'review.log'), ...extra };
+}
+
+function runPr(repo, env = {}, args = []) {
+  const { dir, origin } = repo;
+  const gh = fakeGh();
+  const r = spawnSync('bash', ['bin/pr', ...args], { cwd: dir, encoding: 'utf8', env: prEnv(gh, env) });
+  const read = (f) => (existsSync(join(gh, f)) ? readFileSync(join(gh, f), 'utf8') : '');
+  const out = { ...r, log: read('log'), body: read('body'), review: read('review.log') };
+  for (const d of [dir, origin, gh]) rmSync(d, { recursive: true, force: true });
+  return out;
+}
+
 test('bin/pr merges the OPEN pull request of the branch, never an old merged one with the same name', () => {
   for (const [open, number, creates] of [['', '8', true], ['7', '7', false]]) {
     const { dir, origin } = prRepo();
     const gh = fakeGh();
     const head = git(dir, 'rev-parse', 'HEAD');
     const r = spawnSync('bash', ['bin/pr'], {
-      cwd: dir, encoding: 'utf8', env: { ...process.env, PATH: `${gh}:${process.env.PATH}`, FAKE_OPEN_PR: open },
+      cwd: dir, encoding: 'utf8', env: prEnv(gh, { FAKE_OPEN_PR: open }),
     });
     assert.equal(r.status, 0, r.stderr + r.stdout);
     const log = readFileSync(join(gh, 'log'), 'utf8');
@@ -332,11 +429,52 @@ test('bin/pr keeps the branch and fails when the merge command leaves the PR ope
   const gh = fakeGh();
   const r = spawnSync('bash', ['bin/pr'], {
     cwd: dir, encoding: 'utf8',
-    env: { ...process.env, PATH: `${gh}:${process.env.PATH}`, FAKE_OPEN_PR: '7', FAKE_STATE: 'OPEN' },
+    env: prEnv(gh, { FAKE_OPEN_PR: '7', FAKE_STATE: 'OPEN' }),
   });
   assert.notEqual(r.status, 0, r.stdout);
   assert.match(r.stderr, /not merged/);
   const log = readFileSync(join(gh, 'log'), 'utf8');
   assert.doesNotMatch(log, /git\/refs\/heads/, 'the branch must not be deleted while the PR is open');
   for (const d of [dir, origin, gh]) rmSync(d, { recursive: true, force: true });
+});
+
+test('bin/pr puts the local review summary and the commits into the PR body', () => {
+  const r = runPr(prRepo(), { FAKE_OPEN_PR: '' });
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.match(r.log, /^pr create --base main --head fix\/x --title change --body-file /m, r.log);
+  assert.doesNotMatch(r.log, /--fill/);
+  assert.match(r.body, /FAKE REVIEW SUMMARY/);
+  assert.match(r.body, /^- change$/m, 'the commit subjects are listed');
+});
+
+test('bin/pr --skip-review says so in the PR body and does not run the review', () => {
+  const r = runPr(prRepo(), { FAKE_OPEN_PR: '' }, ['--skip-review']);
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.equal(r.review, '', 'bin/review was not called');
+  assert.match(r.body, /Local review skipped/);
+  assert.doesNotMatch(r.body, /FAKE REVIEW SUMMARY/);
+});
+
+test('bin/pr reads the base branch from origin, fetches once and tells bin/review not to fetch again', () => {
+  const r = runPr(prRepo('trunk'), { FAKE_OPEN_PR: '' });
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.match(r.log, /pr list --head fix\/x --base trunk --state open/, r.log);
+  assert.match(r.log, /pr create --base trunk /, r.log);
+  assert.match(r.review, /--base origin\/trunk /);
+  assert.match(r.review, /--no-fetch/);
+});
+
+test('bin/pr: BASE_BRANCH overrides the base branch', () => {
+  const r = runPr(prRepo('main', 'develop'), { FAKE_OPEN_PR: '', BASE_BRANCH: 'develop' });
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.match(r.log, /pr list --head fix\/x --base develop --state open/, r.log);
+  assert.match(r.review, /--base origin\/develop /);
+});
+
+test('bin/pr refuses to run on the base branch itself', () => {
+  const repo = prRepo('trunk');
+  git(repo.dir, 'switch', '-q', 'trunk');
+  const r = runPr(repo);
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /Create a branch/);
 });
