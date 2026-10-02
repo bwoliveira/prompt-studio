@@ -20,7 +20,7 @@ git fetch --quiet origin "$BASE"
 REVIEWED="$(git rev-parse HEAD)"
 SUMMARY="$(mktemp)"
 BODY="$(mktemp)"
-trap 'rm -f "$SUMMARY" "$BODY"' EXIT
+trap 'rm -f "$SUMMARY" "$BODY" "$BODY.new"' EXIT
 if (( SKIP_REVIEW )); then
   echo "Local review skipped (--skip-review). Record the maintainer's authorization in the PR description." >&2
   printf '## Local Codex review\n\nLocal review skipped (--skip-review). Authorization of the maintainer: (record it here).\n' > "$SUMMARY"
@@ -36,10 +36,19 @@ git branch --quiet --set-upstream-to="origin/$BRANCH"
 # merged PR when a branch name is reused, and merging that one would report success with nothing reaching the base.
 PR="$(gh pr list --head "$BRANCH" --base "$BASE" --state open --json number -q '.[0].number')"
 if [[ -z "$PR" ]]; then
-  # Body: the commits plus the local review verdict (an existing PR keeps its own description).
-  { echo "## Commits"; echo; git log --reverse --format='- %s' "origin/$BASE..$REVIEWED"; echo; cat "$SUMMARY"; } > "$BODY"
+  # Body: the commits plus the local review verdict, the verdict between markers so a later run can replace it.
+  { echo "## Commits"; echo; git log --reverse --format='- %s' "origin/$BASE..$REVIEWED"; echo; } > "$BODY"
+  node bin/lib/local-review.mjs --splice-summary "$BODY" "$SUMMARY" > "$BODY.new"
+  mv "$BODY.new" "$BODY"
   PR="$(gh pr create --base "$BASE" --head "$BRANCH" --title "${1:-$(git log -1 --format=%s)}" --body-file "$BODY")"
   PR="${PR##*/}"
+else
+  # Existing PR: only the delimited review section changes; the description written by hand stays.
+  [[ "$PR" =~ ^[0-9]+$ ]] || { echo "Could not read the pull request number (got '$PR')." >&2; exit 1; }
+  gh pr view "$PR" --json body -q .body > "$BODY"
+  node bin/lib/local-review.mjs --splice-summary "$BODY" "$SUMMARY" > "$BODY.new"
+  mv "$BODY.new" "$BODY"
+  gh pr edit "$PR" --body-file "$BODY"
 fi
 [[ "$PR" =~ ^[0-9]+$ ]] || { echo "Could not find or open the pull request (got '$PR')." >&2; exit 1; }
 gh pr view "$PR" --json url -q .url

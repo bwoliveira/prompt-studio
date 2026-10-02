@@ -56,6 +56,20 @@ export function formatSummary({ head, base, findings, counts, blocking }) {
   return `${lines.join('\n')}\n`;
 }
 
+export const REVIEW_START = '<!-- local-review:start -->';
+export const REVIEW_END = '<!-- local-review:end -->';
+
+// Puts the review summary between the markers of a pull request body: replaces the section when the markers are
+// there, appends it otherwise. Text written by hand outside the markers is never touched.
+export function withReviewSection(body, summary) {
+  const section = `${REVIEW_START}\n${summary.replace(/\n+$/, '')}\n${REVIEW_END}\n`;
+  const start = body.indexOf(REVIEW_START);
+  const end = start < 0 ? -1 : body.indexOf(REVIEW_END, start + REVIEW_START.length);
+  if (start >= 0 && end >= 0) return body.slice(0, start) + section + body.slice(end + REVIEW_END.length).replace(/^\n/, '');
+  const text = body.replace(/\n*$/, '');
+  return text ? `${text}\n\n${section}` : section;
+}
+
 export function buildPrompt(template, { base, head }) {
   return template.replaceAll('{{DIFF}}', `git diff ${base}...${head}`).replaceAll('{{HEAD}}', head);
 }
@@ -94,6 +108,7 @@ function parseArgs(argv) {
     if (argv[i] === '--base') opts.base = argv[++i];
     else if (argv[i] === '--summary-file') opts.summaryFile = argv[++i];
     else if (argv[i] === '--print-base') opts.printBase = true;
+    else if (argv[i] === '--splice-summary') { opts.spliceBody = argv[++i]; opts.spliceSummary = argv[++i]; }
     else if (argv[i] === '--no-fetch') opts.fetch = false;
     else if (argv[i] === '--force') opts.force = true;
     else throw new Error(`unknown option: ${argv[i]}`);
@@ -111,6 +126,11 @@ function moved(head) {
 
 function main() {
   const opts = parseArgs(process.argv.slice(2));
+  if (opts.spliceBody) {
+    // bin/pr: prints the pull request body (file) with the review summary (file) in its delimited section.
+    process.stdout.write(withReviewSection(readFileSync(opts.spliceBody, 'utf8'), readFileSync(opts.spliceSummary, 'utf8')));
+    return 0;
+  }
   const root = git('rev-parse', '--show-toplevel');
   process.chdir(root);
   if (opts.printBase) {
@@ -175,11 +195,16 @@ function main() {
         '-c', 'model_reasoning_effort="high"',
         '--output-schema', join(controls, 'review-schema.json'),
         '-o', out, prompt,
-      ], { cwd: tree, stdio: ['ignore', 'ignore', errFd], timeout: seconds * 1000, killSignal: 'SIGKILL' });
+      ], { cwd: tree, stdio: ['ignore', 'ignore', errFd], timeout: seconds * 1000, killSignal: 'SIGKILL',
+        // Own process group: the installed codex is a wrapper that starts the real binary, and SIGKILL on the wrapper
+        // alone would leave that child running.
+        detached: true });
     } finally {
       closeSync(errFd);
     }
     if (r.error && r.error.code === 'ETIMEDOUT') {
+      // spawnSync killed only the direct child; the group (pgid = its pid) takes the descendants with it.
+      try { process.kill(-r.pid, 'SIGKILL'); } catch { /* the whole group was already gone */ }
       console.error(`Codex did not answer within ${seconds}s (CODEX_TIMEOUT_SECONDS) and was stopped. Nothing was approved.`);
       return 2;
     }

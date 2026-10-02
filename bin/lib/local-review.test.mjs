@@ -7,7 +7,7 @@ import { mkdtempSync, writeFileSync, readFileSync, existsSync, readdirSync, chmo
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { decide, parseReviewOutput, buildPrompt, formatSummary, codexTimeoutSeconds, SEVERITIES } from './local-review.mjs';
+import { decide, parseReviewOutput, buildPrompt, formatSummary, codexTimeoutSeconds, withReviewSection, REVIEW_START, REVIEW_END, SEVERITIES } from './local-review.mjs';
 
 const SCRIPT = fileURLToPath(new URL('./local-review.mjs', import.meta.url));
 
@@ -109,7 +109,8 @@ if (process.env.FAKE_COMMIT) {
 if (process.env.FAKE_HANG) {
   // A hung Codex with a child that keeps running: the script must stop waiting at the timeout.
   const { spawn } = await import('node:child_process');
-  spawn('sleep', ['5'], { stdio: 'inherit' });
+  const child = spawn('sleep', ['5'], { stdio: 'inherit' });
+  appendFileSync(process.env.FAKE_LOG + '.child', String(child.pid));
   await new Promise(() => setInterval(() => {}, 1000));
 }
 const out = args[args.indexOf('-o') + 1];
@@ -281,6 +282,25 @@ test('entry: a hung Codex is stopped at the timeout and never approves (exit 2)'
   assert.equal(git(repo, 'worktree', 'list').split('\n').length, 1, 'temporary worktree removed');
 });
 
+// A process is gone when it does not exist or is only a zombie waiting to be reaped.
+function isGone(pid) {
+  const r = spawnSync('ps', ['-o', 'stat=', '-p', String(pid)], { encoding: 'utf8' });
+  return r.stdout.trim() === '' || r.stdout.trim().startsWith('Z');
+}
+
+test('entry: the timeout also kills the descendants of Codex, not only the wrapper process', async () => {
+  const repo = makeRepo();
+  const r = run(repo, { FAKE_HANG: '1', CODEX_TIMEOUT_SECONDS: '1', FAKE_OUTPUT: JSON.stringify({ findings: [] }) });
+  assert.equal(r.status, 2, r.stderr + r.stdout);
+  const pidFile = join(repo, '.fake-log.child');
+  assert.ok(existsSync(pidFile), 'the fake Codex started a child');
+  const pid = Number(readFileSync(pidFile, 'utf8'));
+  for (let i = 0; i < 20 && !isGone(pid); i++) await new Promise((res) => setTimeout(res, 100));
+  const gone = isGone(pid);
+  if (!gone) process.kill(pid, 'SIGKILL');
+  assert.ok(gone, `child ${pid} of the timed-out Codex is still running`);
+});
+
 test('entry: --summary-file gets the verdict (blocked, approved and approved-again from the mark)', () => {
   const repo = makeRepo();
   const file = join(repo, 'summary.md');
@@ -384,7 +404,9 @@ case "$1 $2" in
   "pr create")
     while [ $# -gt 0 ]; do [ "$1" = "--body-file" ] && cp "$2" "${bin}/body"; shift; done
     echo "https://github.com/o/r/pull/8" ;;
-  "pr view") case "$*" in *state*) echo "\${FAKE_STATE:-MERGED}" ;; *) echo "https://github.com/o/r/pull/1" ;; esac ;;
+  "pr edit")
+    while [ $# -gt 0 ]; do [ "$1" = "--body-file" ] && cp "$2" "${bin}/edited"; shift; done ;;
+  "pr view") case "$*" in *body*) printf '%s\\n' "$FAKE_PR_BODY" ;; *state*) echo "\${FAKE_STATE:-MERGED}" ;; *) echo "https://github.com/o/r/pull/1" ;; esac ;;
 esac
 exit 0
 `);
@@ -401,7 +423,7 @@ function runPr(repo, env = {}, args = []) {
   const gh = fakeGh();
   const r = spawnSync('bash', ['bin/pr', ...args], { cwd: dir, encoding: 'utf8', env: prEnv(gh, env) });
   const read = (f) => (existsSync(join(gh, f)) ? readFileSync(join(gh, f), 'utf8') : '');
-  const out = { ...r, log: read('log'), body: read('body'), review: read('review.log') };
+  const out = { ...r, log: read('log'), body: read('body'), edited: read('edited'), review: read('review.log') };
   for (const d of [dir, origin, gh]) rmSync(d, { recursive: true, force: true });
   return out;
 }
@@ -444,6 +466,7 @@ test('bin/pr puts the local review summary and the commits into the PR body', ()
   assert.match(r.log, /^pr create --base main --head fix\/x --title change --body-file /m, r.log);
   assert.doesNotMatch(r.log, /--fill/);
   assert.match(r.body, /FAKE REVIEW SUMMARY/);
+  assert.ok(r.body.includes(REVIEW_START) && r.body.includes(REVIEW_END), 'the summary is delimited so a later run can replace it');
   assert.match(r.body, /^- change$/m, 'the commit subjects are listed');
 });
 
@@ -477,4 +500,46 @@ test('bin/pr refuses to run on the base branch itself', () => {
   const r = runPr(repo);
   assert.notEqual(r.status, 0);
   assert.match(r.stderr, /Create a branch/);
+});
+
+test('withReviewSection replaces only the delimited section and keeps the human text', () => {
+  const human = 'Closes #35\n\nWhy: portable scripts.\n';
+  const old = `${human}\n${REVIEW_START}\nOLD SUMMARY\n${REVIEW_END}\n\nFooter written by hand.\n`;
+  const next = withReviewSection(old, 'NEW SUMMARY\n');
+  assert.ok(next.includes('NEW SUMMARY') && !next.includes('OLD SUMMARY'));
+  assert.ok(next.startsWith(human) && next.endsWith('\n\nFooter written by hand.\n'));
+  assert.equal(next.split(REVIEW_START).length, 2);
+  assert.equal(withReviewSection(next, 'NEW SUMMARY\n'), next, 'idempotent');
+  // No markers (or a broken pair): the section is appended and nothing written by hand is lost.
+  for (const body of [human, `${human}${REVIEW_END}\n${REVIEW_START}\nx\n`, '']) {
+    const out = withReviewSection(body, 'S\n');
+    assert.ok(out.startsWith(body) && out.includes(`${REVIEW_START}\nS\n${REVIEW_END}`), JSON.stringify(out));
+  }
+});
+
+test('bin/pr updates the review section of an EXISTING pull request and keeps the human text', () => {
+  const human = 'Closes #35\n\nWhy: portable scripts.';
+  const stale = `${human}\n\n${REVIEW_START}\n## Local Codex review\nSTALE VERDICT abc1234\n${REVIEW_END}\n`;
+  for (const [body, label] of [[stale, 'stale section'], [human, 'no section yet']]) {
+    const r = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: body });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    assert.match(r.log, /^pr edit 7 --body-file /m, `${label}: ${r.log}`);
+    assert.ok(r.log.indexOf('pr edit') < r.log.indexOf('pr merge'), 'the body is updated before the merge');
+    assert.doesNotMatch(r.log, /^pr create/m);
+    assert.match(r.edited, /Closes #35/);
+    assert.match(r.edited, /Why: portable scripts\./);
+    assert.match(r.edited, /FAKE REVIEW SUMMARY/, label);
+    assert.doesNotMatch(r.edited, /STALE VERDICT/, label);
+    assert.equal(r.edited.split(REVIEW_START).length, 2, label);
+  }
+});
+
+test('bin/pr does not merge when the body of an existing pull request cannot be updated', () => {
+  const { dir, origin } = prRepo();
+  const gh = fakeGh();
+  writeFileSync(join(gh, 'gh'), readFileSync(join(gh, 'gh'), 'utf8').replace('"pr edit")', '"pr edit") exit 1 ;;\n  "pr edit-unused")'));
+  const r = spawnSync('bash', ['bin/pr'], { cwd: dir, encoding: 'utf8', env: prEnv(gh, { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x' }) });
+  assert.notEqual(r.status, 0);
+  assert.doesNotMatch(readFileSync(join(gh, 'log'), 'utf8'), /^pr merge/m);
+  for (const d of [dir, origin, gh]) rmSync(d, { recursive: true, force: true });
 });
