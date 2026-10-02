@@ -65,7 +65,9 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   the same reading of goal and requirements as the analysis. Documentation about code ("Write instructions for
   running the unit tests") is text, and a yes/no question ("Can I configure nginx?") is a question, while "Can you
   configure nginx?" stays a request. A question closed by a period and followed by a note ("How do I configure
-  nginx. Be brief.") is still a question, and a draft with a long run of spaces no longer freezes the Studio.
+  nginx. Be brief.") is still a question, and a draft with a long run of spaces no longer freezes the Studio. "A plan
+  to configure nginx" asks for the plan, and "Do not access production. Can you build the app?" is a request, not
+  a question.
 - Fix: *Gere um e-mail*, *Monte uma mensagem* and the like stay text, reports and summaries are text even when they
   mention tests ("Write a summary of the test results", "Escreva um relatório dos testes"), and a question such as
   "Como instalar o Docker?" or "Como resumir um livro?" stays an answer on Opus, Sonnet and Astra.

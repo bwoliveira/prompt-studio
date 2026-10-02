@@ -249,6 +249,11 @@ const NOUN_SIGNAL = /^(plano|planos|plan|roadmap|cronograma|estrategia|strategy|
 const SENTENCE_START = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:can|could|would|will) you|(?:i|we) (?:need|want) you to|voce pode|preciso que voce|precisamos que voce|quero que voce|queremos que voce)\s+(?:please\s+)?)?$/
 // A noun-signal word after an infinitive or modal marker is the verb ("we need to plan before ...", "let's plan").
 const INFINITIVE_MARK = /\b(?:(?:need|needs|needed|want|wants|wanted|have|has|had|going|ought|able|like|try|trying|time|ready|how)\s+to|let'?s|let us|(?:we|you|i|they)\s+(?:should|must|will|can|could|shall|may|might)(?:\s+(?:also|first|then|now|just))?|precisamos|devemos|vamos|queremos|preciso|quero|devo|vou)\s*$/
+// A noun-signal word that heads a requested noun phrase ("A plan to configure nginx", "Preciso de um plano para ...")
+// names the request: a determiner (after an optional request opener) opens its sentence, and no copula follows it
+// ("The plan is ready. Build ..." is context).
+const REQUESTED_NOUN = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?(?:(?:(?:i|we) (?:need|want|would like)|i'd like|we'd like|give me|send me|preciso de|precisamos de|quero|queremos|gostaria de|gostariamos de|me de|me passe|me envie|me mande)\s+)?(?:a|an|the|um|uma|o|os|as|some|algum|alguma|alguns|algumas)\s+(?:(?:new|novo|nova|detailed|detalhado|detalhada|simple|simples|quick|rapido|rapida|good|bom|boa|short|curto|curta)\s+)?$/
+const COPULA = /^\s+(?:is|are|was|were|will|would|has|have|had|e|esta|estao|era|eram|foi|foram|sera|serao|ja|fica|ficou|seems|looks|parece)\b/
 // A noun-signal word followed by a determiner is the verb wherever it sits ("... so plan the steps", "review our API").
 // Portuguese este/esta are left out: folded, "esta" is also "esta" ("Nosso plano esta pronto").
 const VERB_OBJECT = /^\s+(?:the|a|an|our|my|your|this|these|those|all|each|every|o|os|as|um|uma|uns|umas|nosso|nossa|nossos|nossas|meu|minha|seu|sua|esse|essa|esses|essas|todos|todas|cada)\b/
@@ -283,8 +288,9 @@ function prohibited(text, at, hops = 0) {
 }
 // Languages: Portuguese (unaccented) + English.
 // A yes/no question, closed by its mark ("Can I configure nginx?", "Posso reiniciar o servidor?"). "Can you ..." and
-// "Voce pode ..." are requests, not questions, unless they ask what the reader thinks or knows.
-const YESNO_FORM = /^(?:(?:can|could|should|would|will|may|might|shall|must|do|does|did|is|are|was|were|am|have|has|posso|podemos|devo|devemos|consigo|conseguimos|preciso|precisamos|existe|existem|ha|tem como|da para|e possivel|e preciso|e necessario|e seguro|e melhor|sera que|vale)(?!\s+(?:you|voce|voces)\b(?!\s+(?:think|know|believe|recommend|suggest|mean|see|acha|sabe|recomenda|sugere|conhece)\b)))\b(?:[^?!\n]|\n(?![ \t]*\n))*\?/
+// "Voce pode ..." are requests, not questions, unless they ask what the reader thinks or knows; "Do not ..." is a
+// prohibition, and the question ends at its own sentence, so a later request is read on its own.
+const YESNO_FORM = /^(?:(?:can|could|should|would|will|may|might|shall|must|do|does|did|is|are|was|were|am|have|has|posso|podemos|devo|devemos|consigo|conseguimos|preciso|precisamos|existe|existem|ha|tem como|da para|e possivel|e preciso|e necessario|e seguro|e melhor|sera que|vale)(?!\s+(?:you|voce|voces)\b(?!\s+(?:think|know|believe|recommend|suggest|mean|see|acha|sabe|recomenda|sugere|conhece)\b))(?!\s+not\b|n't\b))\b(?:[^.?!\n]|\.(?=\S)|\n(?![ \t]*\n))*\?/
 // The question form, unless its comma follows something that is not a question ("Como especialista, escreva").
 function isQuestion(goal) {
   const yesNo = YESNO_FORM.exec(goal)
@@ -310,7 +316,9 @@ function firstSignal(text) {
       if (prohibited(text, m.index)) continue
       const before = contextBefore(text, m.index)
       const end = m.index + m[0].length
-      const isNoun = NOUN_SIGNAL.test(word) && !SENTENCE_START.test(before) && !INFINITIVE_MARK.test(before) && !VERB_OBJECT.test(text.slice(end, end + CONTEXT_WINDOW))
+      const after = text.slice(end, end + CONTEXT_WINDOW)
+      const requested = REQUESTED_NOUN.test(before) && !COPULA.test(after)
+      const isNoun = NOUN_SIGNAL.test(word) && !SENTENCE_START.test(before) && !INFINITIVE_MARK.test(before) && !VERB_OBJECT.test(after) && !requested
       if (isNoun) { if (m.index < nounAt) { noun = id; nounAt = m.index }; continue }
       if (m.index < at) { signal = id; at = m.index }
       break
