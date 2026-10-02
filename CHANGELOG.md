@@ -106,7 +106,8 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   optimizing SQL queries" stays text. "How do I build a React app? Add examples; then fix the login bug." is the fix
   and "Write a review without modifying the API." is the review. "Write a Python script but not documentation." is
   code, "Please show me a script that extracts data." is code and "Can you show me a plan to configure nginx?" is a
-  plan, and "Create a workflow using GitHub Actions." is a workflow.
+  plan, and "Create a workflow using GitHub Actions." is a workflow. "Escreva uma revisão desta API" is the review, and a
+  draft that repeats a stated goal thousands of times is analysed in milliseconds.
 - Fix: *Gere um e-mail*, *Monte uma mensagem* and the like stay text, reports and summaries are text even when they
   mention tests ("Write a summary of the test results", "Escreva um relatório dos testes"), and a question such as
   "Como instalar o Docker?" or "Como resumir um livro?" stays an answer on Opus, Sonnet and Astra.

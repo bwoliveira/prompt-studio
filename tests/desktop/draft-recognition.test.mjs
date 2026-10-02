@@ -696,6 +696,11 @@ const TABLE = [
   ['Create a workflow automating backups.', 'workflow', 'workflow automating'],
   ['Crie um pipeline usando GitHub Actions', 'workflow', 'pt pipeline usando'],
   ['Create a workflow engine in Python', 'implementation', 'near miss: a workflow engine is code'],
+  // Portuguese contractions after the review, workflow and data nouns (Codex P2)
+  ['Escreva uma revisão desta API', 'review', 'pt revisao desta'],
+  ['Escreva uma revisão deste código', 'review', 'pt revisao deste'],
+  ['Escreva uma revisão naquele repositório', 'review', 'pt revisao naquele'],
+  ['Faça uma planilha destes dados', 'data', 'pt planilha destes'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
@@ -728,6 +733,19 @@ test('draft recognition: a question form that fails on a long run of spaces is s
       assert.ok(took < 1500, `${id}: analyze took ${Math.round(took)} ms on a ${goal.length}-character draft`)
     }
   }
+})
+
+test('draft recognition: repeated stated goals are analysed in linear time on every engine (Codex P2)', () => {
+  for (const goal of ['Aim is fix. '.repeat(10000), 'The goal is to fix the bug. '.repeat(5000), 'O objetivo e corrigir. '.repeat(6000), 'Aim is fix. '.repeat(300) + 'Review the code.']) {
+    for (const [id, engine] of Object.entries(ENGINES)) {
+      const started = performance.now()
+      const out = engine.analyze({ goal })
+      const took = performance.now() - started
+      assert.ok(typeof out.deliverable === 'string', id)
+      assert.ok(took < 1500, `${id}: analyze took ${Math.round(took)} ms on a ${goal.length}-character draft`)
+    }
+  }
+  for (const [id, engine] of Object.entries(ENGINES)) assert.equal(engine.analyze({ goal: 'Aim is fix. Aim is fix. Review the code.' }).deliverable, 'review', id)
 })
 
 test('draft recognition: an instruction in the requirements field is not a modifier of the goal artifact on any engine (Codex P1)', () => {
