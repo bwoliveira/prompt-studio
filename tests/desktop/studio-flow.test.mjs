@@ -2043,6 +2043,26 @@ test('CX-1: a context read answered host_incompatible tells the user to update t
   assert.ok(!status.includes(errorText('unavailable')), 'not the generic "model could not be reached" note')
 })
 
+test('CX-1: /suggest and /compose answered host_incompatible show the update-the-plugin tooltip in en and pt, not the generic one', { skip }, async () => {
+  backend.suggest = () => ({ ok: false, code: 'host_incompatible', error: 'Hermes changed in a way this Prompt Studio version does not support; update the plugin (details in the Hermes log)' })
+  backend.compose = () => ({ ok: false, code: 'host_incompatible', error: 'Hermes changed in a way this Prompt Studio version does not support; update the plugin (details in the Hermes log)' })
+  for (const locale of ['en', 'pt']) {
+    ui.i18n.locale = locale
+    await ui.act(async () => { ui.$locale.set(locale) })
+    await openStudio()
+    await pasteStep('')
+    await waitFor(() => $('[data-studio-ai-error]'))
+    assert.ok($('[data-studio-ai-error]').getAttribute('title') === errorText('host_incompatible', locale), `suggest tooltip (${locale})`)
+    assert.ok($('[data-studio-ai-error]').getAttribute('title') !== errorText('unavailable', locale))
+    await click('[data-studio-generate]')
+    await waitFor(() => $('[data-studio-preview-note]'))
+    assert.ok($('[data-studio-preview-note]').getAttribute('title') === errorText('host_incompatible', locale), `compose tooltip (${locale})`)
+    await click('[data-studio-cancel]')
+  }
+  ui.i18n.locale = 'en'
+  await ui.act(async () => { ui.$locale.set('en') })
+})
+
 test('CX-1: language "pt" with Hermes in English shows Portuguese strings and questions and sends locale pt; "auto" follows Hermes', { skip }, async () => {
   await freshSettings('sess-1')
   await openStudio(INTENT, 'auto')

@@ -154,7 +154,7 @@ back to `error` when the code is unknown or absent.
 | `provider_refused` | both | the provider denies the model to the account/key/plan (401/403, "MODEL_NOT_IN_PLAN" / "not in plan"; 404 stays `model_not_found`) | `provider refused: <ExceptionClassName>` |
 | `provider_payment` | both | billing refusal (402, "insufficient_quota", "insufficient credits", "payment required", "billing_hard_limit", "credit balance is too low") | `provider payment: <ExceptionClassName>` |
 | `provider_bad_request` | both | the provider rejects the request (400 / BadRequestError) and no code above matched | `provider bad request: <ExceptionClassName>` |
-| `host_incompatible` | both | the installed Hermes changed a signature the plugin relies on (see "Hermes host" below); no provider call was made. The desktop falls back to `error` (no localized text yet) | `Hermes changed in a way this Prompt Studio version does not support; update the plugin (details in the Hermes log)` |
+| `host_incompatible` | both | the installed Hermes changed a signature the plugin relies on (see "Hermes host" below); no provider call was made. The desktop shows a localized (en/pt) "update the plugin" text in the context note and in the /suggest and /compose tooltips | `Hermes changed in a way this Prompt Studio version does not support; update the plugin (details in the Hermes log)` |
 | `empty_reply` | both | empty reply twice, or once when it ended on `finish_reason: length` (no retry: the same cap ends the same way) (also `empty: true`) | fixed sentence |
 
 `timeout`, `unavailable`, `model_not_found`, `provider_refused`, `provider_payment`, `provider_bad_request`, `host_incompatible` and `empty_reply` also carry `model`. The route-level errors (400 for a blank draft, 500
