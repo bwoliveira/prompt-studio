@@ -147,6 +147,21 @@ test('walk: a regex literal after a control-flow condition is a regex, and a mis
   assert.ok(stripExports('export const t = `a\nexport { x }\n`\n').includes('`a\nexport { x }\n`'))
 })
 
+test('walk: a slash after a postfix ++ or -- divides (Codex P2)', () => {
+  for (const source of [
+    'export function nextHalf(count) { return count++ / 2 } // a single ` in this comment\nexport const ENGINE = { nextHalf }\n',
+    "export function f(a) { return a[0]-- / 2 + '/' }\nexport const ENGINE = { f }\n",
+    "export function g(a) { return (a)++ / 2 } // '\nexport const ENGINE = { g }\n",
+  ]) {
+    const out = stripExports(source)
+    assert.ok(!/^export\b/m.test(out), out)
+    assert.ok(/^const ENGINE = \{ \w+ \}$/m.test(out), out)
+  }
+  // Near misses: a binary + or - before a regex keeps the regex.
+  assert.ok(stripExports("const n = 1 + /'/.test(s)\nexport const r = 1\n").includes('const r = 1'))
+  assert.ok(stripExports("const n = a - -/'/.source.length\nexport const r = 1\n").includes('const r = 1'))
+})
+
 test('topLevelNames: astral characters (emoji) in a comment do not shift the masks after them (Codex P2)', () => {
   const source = `// ${'😀'.repeat(15)}\nconst real = \`\nconst fake = 1\n\`\n`
   assert.deepEqual([...topLevelNames(source)], ['real'])

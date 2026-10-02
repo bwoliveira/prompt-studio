@@ -60,6 +60,13 @@ function replaceInCode(source, pattern, replacement) {
 const REGEX_KEYWORDS = new Set(['return', 'typeof', 'instanceof', 'in', 'of', 'new', 'delete', 'void', 'throw', 'case', 'do', 'else', 'yield', 'await'])
 // A slash right after the closing parenthesis of one of these conditions starts a statement: a regex (`if (s) /'/`).
 const CONTROL_WORDS = new Set(['if', 'while', 'for', 'with'])
+// `count++ / 2`: a `++` or `--` right after a value (a name, `)` or `]`) is postfix, so the slash after it divides.
+function postfixBefore(source, prev, prevAt) {
+  if ((prev !== '+' && prev !== '-') || prevAt < 1 || source[prevAt - 1] !== prev) return false
+  let k = prevAt - 2
+  while (k >= 0 && /\s/.test(source[k])) k--
+  return k >= 0 && /[\w$)\]]/.test(source[k])
+}
 function walk(source, visit, from = 0, onSkip = () => {}) {
   const quoted = new Set(['"', "'", '`'])
   let depth = 0
@@ -69,6 +76,7 @@ function walk(source, visit, from = 0, onSkip = () => {}) {
   let wordAfterDot = false
   const parens = []
   let afterControl = false
+  let prevAt = -1
   let i = from
   // A '…' or "…" string cannot cross a line break (JavaScript forbids it), so a quote misread inside a regex hides at
   // most the rest of its own line, never the declarations after it.
@@ -98,7 +106,7 @@ function walk(source, visit, from = 0, onSkip = () => {}) {
     if (ch === '/' && source[i + 1] === '/') { const start = i; while (i < source.length && source[i] !== '\n') i++; onSkip(start, i); continue }
     if (ch === '/' && source[i + 1] === '*') { const start = i; const close = source.indexOf('*/', i + 2); i = close < 0 ? source.length : close + 2; onSkip(start, i); continue }
     if (quoted.has(ch)) { const start = i; i = skipString(i); onSkip(start, i); prev = 'x'; word = ''; continue }
-    if (ch === '/' && (prev === '' || '=(,:[!&|?{};+-*%<>~^'.includes(prev) || (!wordAfterDot && REGEX_KEYWORDS.has(word)) || (prev === ')' && afterControl))) {
+    if (ch === '/' && !postfixBefore(source, prev, prevAt) && (prev === '' || '=(,:[!&|?{};+-*%<>~^'.includes(prev) || (!wordAfterDot && REGEX_KEYWORDS.has(word)) || (prev === ')' && afterControl))) {
       let j = i + 1
       let inClass = false
       while (j < source.length && source[j] !== '\n' && (inClass || source[j] !== '/')) {
@@ -123,7 +131,7 @@ function walk(source, visit, from = 0, onSkip = () => {}) {
       word += ch
       wordEnd = i
     } else if (!/\s/.test(ch)) word = ''
-    if (!/\s/.test(ch)) prev = ch
+    if (!/\s/.test(ch)) { prev = ch; prevAt = i }
     i++
   }
   return i
