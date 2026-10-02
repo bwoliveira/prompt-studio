@@ -2,7 +2,6 @@
 // negative ones (no verb, a question) and near misses (a word that looks like a signal but is not one).
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
 import { ENGINE as OPUS } from '../../desktop/src/engine-opus.js'
 import { ENGINE as SONNET } from '../../desktop/src/engine-sonnet.js'
 import { ENGINE as ASTRA } from '../../desktop/src/engine-astra.js'
@@ -812,39 +811,5 @@ test('marketing copy is text: the Studio asks for examples, not design patterns,
   for (const [id, engine] of Object.entries({ opus: OPUS, sonnet: SONNET })) {
     assert.equal(engine.analyze({ goal: 'Write the copy for the landing page' }).interface, false, id)
     assert.equal(engine.analyze({ goal: 'Build a landing page for my bakery' }).interface, true, id)
-  }
-})
-
-// ------------------------------------------------------------ parity
-
-const src = name => readFile(new URL(`../../desktop/src/${name}`, import.meta.url), 'utf8')
-const withoutComments = text => text.split('\n').filter(line => !/^\s*\/\//.test(line)).join('\n')
-
-// The detection block of an engine: its constants and the functions that use them, comments dropped
-// (the comments name each engine's own doc key).
-function detection(source) {
-  const start = source.indexOf('function pick(')
-  const endMarker = 'function analyzeNormalized'
-  const end = source.indexOf('\n}\n', source.indexOf(endMarker)) + 3
-  assert.ok(start >= 0 && end > start, 'detection block found')
-  return withoutComments(source.slice(start, end))
-}
-
-test('parity: Opus and Sonnet carry the identical detection block', async () => {
-  const [opus, sonnet] = await Promise.all([src('engine-opus.js'), src('engine-sonnet.js')])
-  const a = detection(opus)
-  const b = detection(sonnet)
-  for (const needle of ['CATEGORY_RULES', 'DELIVERABLE_RULES', 'MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'UNMARKED_YESNO', 'YESNO_FORM', 'EXPLAIN_FORM', 'QUESTION_START', 'NOUN_SIGNAL', 'SENTENCE_START', 'VERB_OBJECT', 'REQUESTED_NOUN', 'COPULA', 'VERB_COPULA', 'PREDICATE', 'INFINITIVE_MARK', 'NEGATED', 'COORDINATED', 'PREDICATE_NEGATION', 'CLAUSE_NEGATION', 'LIST_TAIL', 'QUESTION_HEAD', 'ROLE_HEAD', 'DECLARATIVE', 'TOPIC_TAIL', 'TOPIC_AGENT', 'TOPIC_HEAD', 'ADDRESSED', 'RESPONSE_NOTE', 'ORDER_LEAD', 'ORDER_JOIN', 'INTRO_CLAUSE', 'PT_INFINITIVE', 'AFTER_A', 'STATED_GOAL', 'MODIFIER_USE', 'COMPOUND_AFTER', 'NARRATIVE', 'CONTEXT_WINDOW', 'PRONOUN_OBJECT', 'PRIOR_REQUEST', 'REQUESTED_ARTIFACT', 'MODIFIER_GAP', 'INTERFACE', 'function contextBefore', 'function prohibited', 'function isQuestion', 'function questionAt', 'function coordinatedOrder', 'function orderAfterSentence', 'function questionStart', 'function pickArtifact', 'function firstSignal', 'function detect', 'function analyzeNormalized']) {
-    assert.ok(a.includes(needle), `opus block has ${needle}`)
-  }
-  assert.equal(a, b, 'Opus and Sonnet detection blocks drifted apart: change both engines identically')
-})
-
-test('parity: the artifact constants are the same text on all three engines', async () => {
-  const sources = await Promise.all(['engine-opus.js', 'engine-sonnet.js', 'engine-astra.js'].map(src))
-  for (const name of ['MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'UNMARKED_YESNO', 'YESNO_FORM', 'EXPLAIN_FORM', 'NOUN_SIGNAL', 'SENTENCE_START', 'VERB_OBJECT', 'REQUESTED_NOUN', 'COPULA', 'VERB_COPULA', 'PREDICATE', 'INFINITIVE_MARK', 'NEGATED', 'COORDINATED', 'PREDICATE_NEGATION', 'CLAUSE_NEGATION', 'LIST_TAIL', 'QUESTION_HEAD', 'ROLE_HEAD', 'DECLARATIVE', 'TOPIC_TAIL', 'TOPIC_AGENT', 'TOPIC_HEAD', 'ADDRESSED', 'RESPONSE_NOTE', 'ORDER_LEAD', 'ORDER_JOIN', 'INTRO_CLAUSE', 'PT_INFINITIVE', 'AFTER_A', 'STATED_GOAL', 'MODIFIER_USE', 'COMPOUND_AFTER', 'NARRATIVE', 'CONTEXT_WINDOW', 'PRONOUN_OBJECT', 'PRIOR_REQUEST', 'REQUESTED_ARTIFACT', 'MODIFIER_GAP', 'REVIEW_OBJECT', 'PLAN_OBJECT', 'DATA_OBJECT', 'WORKFLOW_OBJECT']) {
-    const lines = sources.map(source => source.split('\n').find(line => line.startsWith(`const ${name} =`)))
-    assert.ok(lines.every(Boolean), `${name} exists in every engine`)
-    assert.equal(new Set(lines).size, 1, `${name} differs between engines:\n${lines.join('\n')}`)
   }
 })

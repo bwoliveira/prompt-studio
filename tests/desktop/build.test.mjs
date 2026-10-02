@@ -3,7 +3,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { cp, mkdtemp, rm, unlink, writeFile, mkdir } from 'node:fs/promises'
+import { cp, mkdtemp, readFile, rm, unlink, writeFile, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -305,6 +305,57 @@ test('CLI: a duplicate hidden behind a template literal or a comment fails the b
     const result = run(dir)
     assert.notEqual(result.status, 0)
     assert.match(result.stderr, /name collision: hiddenTwin declared by both ui-prefs\.js and ui-flow\.js/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('CLI: the detection core is inlined once, before the engines, and an engine sees it as DETECTION (ticket #29)', async () => {
+  const dir = await buildCopy()
+  try {
+    assert.equal(run(dir).status, 0)
+    const plugin = await readFile(join(dir, 'desktop/plugin.js'), 'utf8')
+    const mjs = await readFile(join(dir, 'desktop/studio-core.mjs'), 'utf8')
+    for (const out of [plugin, mjs]) {
+      assert.equal(out.split('const DETECTION = (() => {').length - 1, 1, 'one detection core in the output')
+      assert.ok(out.indexOf('const DETECTION = (() => {') < out.indexOf('const OPUS_ENGINE = (() => {'), 'the core comes before the first engine')
+      assert.ok(!/^import\s[^\n]*detection-core/m.test(out), 'no import of the core is left in the output')
+    }
+    assert.ok(!/^import\b[^\n]*(?:engine-|detection-core)/m.test(mjs), 'the Node bundle has no import of the sources')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('CLI: an engine may import only the detection core, written as { DETECTION } (ticket #29)', async () => {
+  for (const [line, message] of [
+    ["import { CORE_MESSAGES } from './i18n-core.js'", /engine-opus\.js may import only the detection core: import \{ DETECTION \} from '\.\/detection-core\.js'/],
+    ["import { DETECTION as D } from './detection-core.js'", /engine-opus\.js may import only the detection core/],
+    ["import { DETECTION, fold } from './detection-core.js'", /engine-opus\.js may import only the detection core/],
+    ["import { ENGINE } from './engine-sonnet.js'", /engine-opus\.js may import only the detection core/]
+  ]) {
+    const dir = await buildCopy()
+    try {
+      const file = join(dir, 'desktop/src/engine-opus.js')
+      const source = await readFile(file, 'utf8')
+      await writeFile(file, `${line}\n${source.replace(/^import \{ DETECTION \} from '\.\/detection-core\.js'\n/m, '')}`)
+      const result = run(dir)
+      assert.notEqual(result.status, 0, line)
+      assert.match(result.stderr, message, line)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  }
+})
+
+test('CLI: the detection core itself imports nothing (ticket #29)', async () => {
+  const dir = await buildCopy()
+  try {
+    const file = join(dir, 'desktop/src/detection-core.js')
+    await writeFile(file, `import { CORE_MESSAGES } from './i18n-core.js'\n${await readFile(file, 'utf8')}`)
+    const result = run(dir)
+    assert.notEqual(result.status, 0)
+    assert.match(result.stderr, /detection-core\.js must not import anything/)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
