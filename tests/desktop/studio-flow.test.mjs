@@ -3258,3 +3258,47 @@ test('KEY-4: running the binding while the studio is open or opening does nothin
   }
   await press(K().close)
 })
+
+// R2 (#20 x #21): Desktop has no overlay guard for a contributed keybind, so the binding checks the same predicate as F4.
+for (const role of ['dialog', 'menu', 'listbox', 'settings']) {
+  test(`KEY-5: the binding does nothing behind ${role === 'settings' ? "the studio's Settings" : `a foreign role=${role}`}: no opening, no notice, the draft stays; the palette command is not guarded`, { skip }, async () => {
+    resetComposer()
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    let overlay = null
+    if (role === 'settings') {
+      await openStudio(INTENT, 'off')
+      await openSettings()
+      await ui.act(async () => { $('[data-studio-cancel]').click() })
+      // The Settings state outlives the strip, so it is still "open" for the guard.
+      assert.ok($('[data-studio-strip]') === null)
+      $('[data-slot="composer-rich-input"]').textContent = INTENT
+    } else {
+      overlay = document.createElement('div')
+      overlay.setAttribute('role', role)
+      document.body.appendChild(overlay)
+    }
+    try {
+      ui.notifications.length = 0
+      const writes = composer().writes.length
+      await ui.act(async () => { await keybind().run() })
+      await settle()
+      assert.ok($('[data-studio-strip]') === null, 'studio stayed closed')
+      assert.equal(draft(), INTENT, 'draft untouched')
+      assert.equal(composer().writes.length, writes, 'composer not written')
+      assert.equal(ui.notifications.length, 0, 'no notice')
+      // The palette command is chosen from the palette itself (an overlay): not guarded.
+      if (role !== 'settings') {
+        await ui.act(async () => { await ui.slots.palette.data.run() })
+        await waitFor(() => $('[data-studio-strip]'), { label: 'palette command opened the studio' })
+        await press(K().close)
+      }
+    } finally {
+      overlay?.remove()
+      if (role === 'settings') {
+        if (!$('[data-studio-strip]')) await openStudio(INTENT, 'off')
+        if ($('[data-studio-settings-dialog]')) await press(K().settings)
+        await press(K().close)
+      }
+    }
+  })
+}

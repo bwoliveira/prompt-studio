@@ -5153,7 +5153,9 @@ export default {
         area: KEYBINDS_AREA,
         // The same entry as the palette command (same id, so ⌘K shows the live key), and F4's own path: the
         // draft is read, a short or empty one is reported, a missing composer is reported.
-        data: { id: `${ID}.start`, defaults: [OPEN_BINDING], label: tr('palette.keybind'), run: startFromComposer }
+        // Desktop guards nothing for a contributed keybind: behind a dialog, menu, listbox or the Studio's own Settings it
+        // does nothing, like F4. The palette command below is chosen from the palette itself, so it is not guarded.
+        data: { id: `${ID}.start`, defaults: [OPEN_BINDING], label: tr('palette.keybind'), run: () => (foreignOverlayOpen() || $settingsOpen.get() ? undefined : startFromComposer()) }
       },
       {
         id: 'palette-start',
