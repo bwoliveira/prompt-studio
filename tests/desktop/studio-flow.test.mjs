@@ -564,6 +564,20 @@ test('a draft the engine misreads still gets the deliverable step with all nine 
   }
 })
 
+test('a deliverable that contradicts the draft is kept and its conflict note is shown in the preview (Codex P2)', { skip }, async () => {
+  await openStudio('Create a plan for the product launch', 'off', { deliverable: true })
+  assert.equal(field(), 'deliverable')
+  const plan = [...document.querySelectorAll('[data-studio-option]')].map(el => el.getAttribute('data-studio-option')).find(label => /^(Plano|Plan)\b/i.test(label))
+  assert.ok(plan, 'the plan option is offered although the engine read the draft as an implementation')
+  await click(`[data-studio-option="${plan}"]`)
+  assert.equal(field(), 'thirdPartyText')
+  await click('[data-studio-generate]')
+  await waitFor(() => $('[data-studio-preview-note]'))
+  assert.match($('[data-studio-preview-note]').textContent, /conflict|reads as|contradict/i, 'the engine conflict note reaches the preview with the AI off')
+  await click('[data-studio-use-prompt]')
+  assert.ok(draft().length > 100, 'the prompt built for the chosen deliverable is placed')
+})
+
 test('an empty AI suggestion on a step with a default offers "Use the recommended"; with no default only the step’s own Skip remains', { skip }, async () => {
   backend.suggest = () => ({ ok: true, value: '', reason: 'nada a acrescentar' })
   await openStudio()

@@ -2856,6 +2856,9 @@ async function generatePrompt() {
   }
   clearSuggestion()
   let prompt = engineResult.prompt
+  // The engine's notes (e.g. a deliverable that contradicts the draft) reach the preview whatever the AI mode:
+  // the AI prompt is written from the same baseline and choices, so they apply to both versions.
+  const engineNote = (engineResult.notes || []).join(' ')
   let note = ''
   let noteDetail = ''
   if ($aiMode.get() !== 'off' && pluginContext) {
@@ -2886,7 +2889,7 @@ async function generatePrompt() {
       }
     }
   }
-  update({ type: 'BRIEF_READY', ai: prompt !== engineResult.prompt ? prompt : '', engine: engineResult.prompt, note, noteDetail })
+  update({ type: 'BRIEF_READY', ai: prompt !== engineResult.prompt ? prompt : '', engine: engineResult.prompt, note: [engineNote, note].filter(Boolean).join(' '), noteDetail })
 }
 
 // Preview accepted: the prompt goes to the composer (not sent). setDraft replaces only the text,
