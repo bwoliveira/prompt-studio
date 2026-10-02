@@ -294,7 +294,7 @@ const CONTEXT_WINDOW = 120
 const REQUESTED_ARTIFACT = /((?:(?:i|we) (?:need|want|would like)|i'd like|we'd like|give me|send me|preciso de|precisamos de|quero|queremos|gostaria de|gostariamos de|me de|me passe|me envie|me mande|what (?:i|we) (?:need|want|would like) is|o que (?:eu|nos) (?:preciso|precisamos|quero|queremos) e)\s+(?:me\s+)?)?(?:a|an|the|um|uma|o|os|as|some|algum|alguma|alguns|algumas)\s+(?:(?!(?:to|for|and|or|that|which|para|que|e|ou)\s)[\w-]+\s+){1,3}(?:to|that|which|para|que)\s+(?:(?:will|would|can|could|should|must|might|may|shall|vai|va|pode|possa|deve|deva|ira|iria|consiga|safely|quickly|carefully|properly|automatically|reliably|correctly|fully|gently|kindly|please|\w+ly|\w+mente)\s+){0,2}$/
 // "and fix the login bug", "e corrigir o bug": a coordinator followed by an order inside an explanation request.
 // "how to configure nginx and deploy the app", "the architecture and how to configure nginx": a topic, not an order.
-const TOPIC_TAIL = /\b(?:how to|como)\s+\w+[^.!?,;]*$/
+const TOPIC_TAIL = /\b(?:how to|how|why|when|where|what|which|whether|como|por que|porque|quando|onde|o que|qual|quais|se)\s+\w+[^.!?,;]*$/
 const TOPIC_HEAD = /^\s*(?:how|what|why|when|where|which|whether|como|o que|por que|quando|onde|qual|quais)\b/
 // "and fix the login bug": the order verb opens right after the coordinator, at most behind please/then/an adverb.
 const ORDER_LEAD = /^\s*(?:(?:please|por favor|then|depois|also|tambem|now|agora|\w+ly|\w+mente)\s+){0,2}$/
@@ -317,6 +317,19 @@ const INTRO_CLAUSE = /^([^.!?,:;\n]{1,60}),\s+/
 // "Ajude-me a revisar codigo": before a Portuguese infinitive, "a" is the preposition, not an article.
 const PT_INFINITIVE = /(?:ar|er|ir)$/
 const AFTER_A = /\ba\s+$/
+// "The goal is to write a Python script. Review the existing code.": the stated goal is context for the order after it.
+const STATED_GOAL = /\b(?:goal|aim|objective|purpose|idea|plan|objetivo|meta|ideia|proposito|intencao)\s+(?:is|was|e|era|foi)\s+(?:to\s+|de\s+)?$/
+function orderAfterSentence(text, from) {
+  const m = /[.!?;:\n]/.exec(text.slice(from, from + CONTEXT_WINDOW))
+  return !!m && firstSignal(text.slice(from + m.index + 1, from + m.index + 1 + CONTEXT_WINDOW)).verb
+}
+// "Do not install anything. How do I configure nginx?": the verb found sits inside a later question.
+function questionStart(text, at) {
+  let start = 0
+  for (let i = at - 1; i >= 0; i--) if (/[.!?;\n]/.test(text[i])) { start = i + 1; break }
+  start += text.slice(start).length - text.slice(start).trimStart().length
+  return isQuestion(text.slice(start)) ? start : null
+}
 const MODIFIER_USE = /\b(?:the|a|an|this|that|these|those|my|our|your|o|os|a|as|um|uma|este|esta|esse|essa|meu|minha|nosso|nossa|seu|sua)\s+$/
 const COMPOUND_AFTER = /^\s+(?!(?:the|a|an|this|that|these|those|my|our|your|all|each|every|o|os|as|um|uma|uns|umas|este|esta|esse|essa|meu|minha|nosso|nossa|seu|sua|todos|todas|cada|and|or|e|ou|to|for|para|de|do|da|with|com|in|em|on|at|by|por|it|them|me|us|is|are|was|were|e|esta|estao)\b)\w+/
 const NARRATIVE = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:i|we|they|he|she|eu|nos|a gente|eles|elas|ele|ela)\s+)?(?:tried|attempted|managed|failed|forgot|happened|used|started|began|finished|stopped|tentei|tentamos|tentou|tentaram|consegui|conseguimos|conseguiu|esqueci|esquecemos|comecei|comecamos|comecou|parei|paramos|parou|terminei|terminamos|terminou)\s+(?:to\s+|de\s+|a\s+)?$/
@@ -419,6 +432,7 @@ function firstSignal(text) {
       // "The build is broken", "The fix is ready": a copula right after any verb word makes it a thing, not an order.
       if (!NOUN_SIGNAL.test(word) && (VERB_COPULA.test(after) || (PREDICATE.test(after) && !SENTENCE_START.test(before) && !INFINITIVE_MARK.test(before)))) continue
       // A verb that names a thing ("the configure script") or tells the past ("I tried to configure") is context.
+      if (!NOUN_SIGNAL.test(word) && STATED_GOAL.test(before) && orderAfterSentence(text, end)) continue
       const article = MODIFIER_USE.test(before) && !(AFTER_A.test(before) && PT_INFINITIVE.test(word))
       if (!NOUN_SIGNAL.test(word) && (NARRATIVE.test(before) || (article && COMPOUND_AFTER.test(after)))) continue
       if (m.index < at) { signal = id; at = m.index }
@@ -434,9 +448,14 @@ function detect(goal, requirements) {
   let { signal: kind, at } = firstSignal(text)
   // A question stays an answer, whatever verbs it contains; only an order after it ("How does it work? Fix the bug.")
   // is a task, and a style note ("Seja breve.") is not.
-  const question = isQuestion(fold(goal).trim())
+  let question = isQuestion(fold(goal).trim())
+  let questionAt = text.length - text.trimStart().length
+  if (!question && Number.isFinite(at)) {
+    const open = questionStart(text, at)
+    if (open !== null) { question = isQuestion(text.slice(open)); questionAt = open }
+  }
   if (question) {
-    let restAt = (text.length - text.trimStart().length) + question[0].length
+    let restAt = questionAt + question[0].length
     // Further questions ("Como instalar o Docker? Como configurar o nginx?") are still questions, not orders.
     for (;;) {
       const rest = text.slice(restAt)
