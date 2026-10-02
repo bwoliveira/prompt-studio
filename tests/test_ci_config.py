@@ -70,6 +70,7 @@ def test_gitleaks_scans_every_commit_of_the_explicit_range_not_what_gitleaks_act
     scan = "\n".join(s["run"] for s in steps if "gitleaks detect" in s.get("run", ""))
     assert "--first-parent" not in scan and "--no-merges" not in scan
     assert "--log-opts" in scan
+    assert "--diff-merges=first-parent" in scan, "git log -p omits merge patches by default: a secret typed in a conflict resolution would pass"
     envs = {k: v for s in steps if "gitleaks detect" in s.get("run", "") for k, v in s.get("env", {}).items()}
     assert "pull_request.base.sha" in " ".join(envs.values()) and "pull_request.head.sha" in " ".join(envs.values())
     assert "github.event.before" in " ".join(envs.values())

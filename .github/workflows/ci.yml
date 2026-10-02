@@ -81,12 +81,10 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
             range="$PR_BASE..$PR_HEAD"
           elif [ "${PUSH_BEFORE#0000000}" != "$PUSH_BEFORE" ] || ! git cat-file -e "$PUSH_BEFORE^{commit}" 2>/dev/null; then
-            range="" # a new branch or a force push: the old tip is not a commit here, scan the whole history
+            range="--all" # a new branch or a force push: the old tip is not a commit here, scan the whole history
           else
             range="$PUSH_BEFORE..$PUSH_AFTER"
           fi
-          if [ -n "$range" ]; then
-            ./gitleaks detect --redact -v --exit-code 2 --log-opts="$range"
-          else
-            ./gitleaks detect --redact -v --exit-code 2
-          fi
+          # git log -p shows no patch for a merge commit unless asked: --diff-merges=first-parent covers what a merge
+          # (a conflict resolution included) brings in, while the walk still visits every commit of the range
+          ./gitleaks detect --redact -v --exit-code 2 --log-opts="--diff-merges=first-parent $range"
