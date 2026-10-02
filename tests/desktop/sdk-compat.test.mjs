@@ -43,11 +43,3 @@ for (const file of fixtures) {
     assert.deepEqual(imported.filter(name => !exported.has(name)), [])
   })
 }
-
-test('the Settings rows are the SDK ListRow/ToggleRow: plugin.js carries no local stand-in and reads them from the namespace', () => {
-  // requires_hermes is >=0.21.5, which exports both; a Desktop older than that only has to load the plugin far
-  // enough to tell the user to update, so the names are read from the namespace, never imported by name.
-  assert.ok(!/LocalListRow|LocalToggleRow|data-studio-list-row/.test(plugin), 'no local ListRow/ToggleRow fallback')
-  assert.ok(/const \{[^}]*\bListRow\b[^}]*\bToggleRow\b[^}]*\} = hermesSdk/.test(plugin) || /hermesSdk\.ListRow/.test(plugin), 'rows read from the SDK namespace')
-  assert.ok(!namedSdkImports(plugin).some(name => name === 'ListRow' || name === 'ToggleRow'), 'not imported by name')
-})

@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+import time
 from pathlib import Path
 from typing import Literal, get_args
 
@@ -13,12 +14,11 @@ from fastapi.testclient import TestClient
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "dashboard"))
-import hermes_host  # noqa: E402
-import llm_adapter  # noqa: E402
 import plugin_api  # noqa: E402
+sys.path.insert(0, str(ROOT / "tests"))
+from test_hermes_host import _fake_hermes, _override  # noqa: E402
 
 DOC = (ROOT / "docs" / "CONTRACT.md").read_text(encoding="utf-8")
-UI_BUNDLE = (ROOT / "desktop" / "src" / "i18n-ui.js").read_text(encoding="utf-8")
 
 
 def _block(route: str) -> dict:
@@ -164,52 +164,166 @@ def test_the_status_table_of_the_contract_names_what_the_routes_answer():
 
 
 # --- error codes ----------------------------------------------------------------------------------------------
+# The code tables of CONTRACT.md are checked against what the real routes answer (the real engines and adapter over a
+# fake Hermes), one scenario per code; the UI texts for these codes are checked in tests/desktop/studio-core.test.mjs.
 
-def _doc_codes(header: str) -> dict[str, str]:
+def _doc_rows(header: str) -> dict[str, str]:
     """code -> table row, for the table that starts with ``header``."""
     table = DOC.split(header)[1].split("\n\n")[0]
     return {m.group(1): line for line in table.splitlines() if (m := re.match(r"\| `(\w+)` \|", line))}
 
 
-def _source(name: str) -> str:
-    return (ROOT / "dashboard" / f"{name}.py").read_text(encoding="utf-8")
+CONTEXT_HEADER = "| `code` | When | `error` |"
+ENGINE_HEADER = "| `code` | Route | When | `error` |"
+UNREACHABLE = "Not reachable over REST"
 
 
-PROVIDER_CODES = {row[0] for row in llm_adapter.PROVIDER_ERRORS}
+def _doc_engine_pairs() -> set[tuple[str, str]]:
+    pairs = set()
+    for code, row in _doc_rows(ENGINE_HEADER).items():
+        route = row.split("|")[2].strip()
+        if UNREACHABLE in row:
+            continue
+        pairs |= {(r, code) for r in (("/suggest", "/compose") if route == "both" else (route,))}
+    return pairs
 
 
-def test_context_codes_in_the_doc_are_the_codes_session_context_returns():
-    doc = set(_doc_codes("| `code` | When | `error` |"))
-    code = set(re.findall(r'_error\("(\w+)"', _source("session_context"))) | PROVIDER_CODES | {hermes_host.CODE}
-    assert doc == code
+def _doc_context_codes() -> set[str]:
+    return {code for code, row in _doc_rows(CONTEXT_HEADER).items() if UNREACHABLE not in row}
 
 
-def test_engine_codes_in_the_doc_are_the_codes_suggest_and_compose_return():
-    doc = set(_doc_codes("| `code` | Route | When | `error` |"))
-    code = set(re.findall(r'"code": "(\w+)"', _source("suggest_engine"))) | PROVIDER_CODES | {hermes_host.CODE, "unavailable"}
-    assert doc == code
+class _Provider(Exception):
+    def __init__(self, status: int):
+        super().__init__("provider said no")
+        self.status_code = status
 
 
-def test_bad_request_is_documented_as_unreachable_over_rest_and_is():
-    for header in ("| `code` | When | `error` |", "| `code` | Route | When | `error` |"):
-        assert "Not reachable over REST" in _doc_codes(header)["bad_request"]
-    # The routes validate first, so the engines' own bad_request never reaches a client (the engines keep it for direct callers).
-    sys.path.insert(0, str(ROOT / "dashboard"))
-    import session_context
-    import suggest_engine
-    assert suggest_engine.suggest({"intent": "", "field": {"question": "q"}})["code"] == "bad_request"
-    assert suggest_engine.compose({"intent": ""})["code"] == "bad_request"
-    assert session_context.context({"session_id": "has space"})["code"] == "bad_request"
+def _world(monkeypatch, *, reply: str = "{}", raises: Exception | None = None, delay: float = 0.0, **overrides):
+    """A fake Hermes whose model answers ``reply``, raises ``raises`` or answers after ``delay`` seconds."""
+    def call_llm(*, task=None, provider=None, model=None, messages, max_tokens=None, timeout=None, extra_body=None,
+                 reasoning_config=None, route_info=None):
+        time.sleep(delay)
+        if raises is not None:
+            raise raises
+        return {"choices": []}
+
+    _fake_hermes(monkeypatch, **{
+        "agent.auxiliary_client.call_llm": call_llm,
+        "agent.auxiliary_client.extract_content_or_reasoning": lambda response, *, max_reasoning_chars=None: reply,
+        **overrides,
+    })
 
 
-def _ui_error_codes(locale: str) -> set[str]:
-    bundle = UI_BUNDLE.split(f"\n  {locale}: {{")[1].split("\n  },\n")[0]
-    block = bundle.split("\n    errors: {\n")[1].split("\n    },\n")[0]
-    return set(re.findall(r"^      (\w+):", block, re.M))
+def _real_client() -> TestClient:
+    """The real routes, engines and adapter (no stub engine): only Hermes is fake."""
+    app = FastAPI()
+    app.include_router(plugin_api.router)
+    return TestClient(app)
 
 
-@pytest.mark.parametrize("locale", ["en", "pt"])
-def test_every_code_a_client_can_receive_has_a_ui_text_and_nothing_else_does(locale):
-    reachable = {code for header in ("| `code` | When | `error` |", "| `code` | Route | When | `error` |")
-                 for code, row in _doc_codes(header).items() if "Not reachable over REST" not in row}
-    assert _ui_error_codes(locale) == reachable
+ENUM_FIELD = {"id": "a", "kind": "enum", "question": "Q?", "options": ["Yes", "No"], "recommended": "Yes"}
+SUGGEST = ("/suggest", {"intent": "Crie um app web", "field": ENUM_FIELD})
+COMPOSE = ("/compose", {"intent": "Crie um app web", "answers": [{"id": "a", "question": "Q", "answer": "A"}], "baseline": "B"})
+PROVIDER_STATUS = {"model_not_found": 404, "auth_failed": 401, "provider_refused": 403, "provider_payment": 402,
+                   "provider_bad_request": 400, "rate_limited": 429, "provider_timeout": 408}
+
+
+def _engine_codes(monkeypatch) -> set[tuple[str, str]]:
+    """(route, code) of every error the real /suggest and /compose answer in the scenarios below."""
+    seen: set[tuple[str, str]] = set()
+
+    def ask(route_body, **world):
+        route, body = route_body
+        _world(monkeypatch, **world)
+        answer = _real_client().post(route, json=body)
+        assert answer.status_code == 200, (route, world, answer.text)
+        result = answer.json()
+        assert result["ok"] is False, (route, world, result)
+        seen.add((route, result["code"]))
+
+    # Ends before any model call.
+    ask(("/suggest", {**SUGGEST[1], "mode": "improve"}))
+    ask(("/suggest", {"intent": "x", "mode": "improve", "answer": "y" * 1201, "field": {"question": "Q?"}}))
+    # The model answers, wrongly.
+    ask(SUGGEST, reply="not json")
+    ask(SUGGEST, reply=json.dumps({"value": "Maybe"}))
+    ask(COMPOSE, reply=json.dumps({"prompt": "too short"}))
+    for route_body in (SUGGEST, COMPOSE):
+        ask(route_body, reply="")
+        # The provider call fails.
+        ask(route_body, raises=RuntimeError("down"))
+        for status in PROVIDER_STATUS.values():
+            ask(route_body, raises=_Provider(status))
+        # Hermes changed under the plugin: the model call lost a keyword the plugin sends.
+        ask(route_body, **_override("agent.auxiliary_client", "call_llm", lambda *, task, messages: None))
+        # No reply before the deadline.
+        engine = plugin_api._load("suggest_engine", "suggest")
+        monkeypatch.setattr(engine, "SUGGEST_DEADLINE", 0.2)
+        monkeypatch.setattr(engine, "COMPOSE_DEADLINE", 0.2)
+        ask(route_body, delay=0.6)
+    return seen
+
+
+def test_engine_codes_in_the_doc_are_the_codes_the_routes_answer(monkeypatch):
+    assert _engine_codes(monkeypatch) == _doc_engine_pairs()
+
+
+class _Store:
+    def __init__(self, rows=None, known=True, raises: Exception | None = None):
+        self.rows, self.known, self.raises = rows if rows is not None else [{"role": "user", "content": "hello", "active": 1, "compacted": 0}], known, raises
+
+    def resolve_session_id(self, session_id):
+        if self.raises:
+            raise self.raises
+        return session_id if self.known else None
+
+    def get_messages(self, session_id, **kw):
+        return self.rows
+
+    def close(self):
+        pass
+
+
+def _context_codes(monkeypatch) -> set[str]:
+    seen: set[str] = set()
+
+    def ask(store=None, reply='{"summary": "ok"}', **world):
+        overrides = {"hermes_cli.web_server_sessions._open_session_db_for_profile": lambda profile, *, read_only: store or _Store()}
+        _world(monkeypatch, reply=reply, **overrides, **world)
+        answer = _real_client().post("/context", json={"session_id": "s1"})
+        assert answer.status_code == 200, answer.text
+        result = answer.json()
+        if result["ok"] is False:
+            seen.add(result["code"])
+
+    ask(_Store(known=False))
+    ask(_Store(rows=[]))
+    ask(_Store(raises=RuntimeError("db locked")))
+    ask(reply="not json")
+    ask(raises=RuntimeError("down"))
+    for status in PROVIDER_STATUS.values():
+        ask(raises=_Provider(status))
+    ask(**_override("agent.auxiliary_client", "call_llm", lambda *, task, messages: None))
+    monkeypatch.setattr(plugin_api._load("session_context", "context"), "CONTEXT_DEADLINE", 0.2)
+    ask(delay=0.6)
+    return seen
+
+
+def test_context_codes_in_the_doc_are_the_codes_the_route_answers(monkeypatch):
+    assert _context_codes(monkeypatch) == _doc_context_codes()
+
+
+def test_bad_request_is_documented_as_unreachable_over_rest_and_is(monkeypatch):
+    for header in (CONTEXT_HEADER, ENGINE_HEADER):
+        assert UNREACHABLE in _doc_rows(header)["bad_request"]
+    # The routes validate first: a client sees the 400/422 of the status table, never the engines' own bad_request.
+    _world(monkeypatch)
+    api = _real_client()
+    assert "code" not in api.post("/suggest", json={"intent": " ", "field": {"question": "q"}}).json()
+    assert "code" not in api.post("/compose", json={"intent": " "}).json()
+    assert api.post("/context", json={"session_id": "has space"}).status_code == 422
+    # The engines keep it for direct callers.
+    engine, compose = plugin_api._load("suggest_engine", "suggest"), plugin_api._load("suggest_engine", "compose")
+    assert engine.suggest({"intent": "", "field": {"question": "q"}})["code"] == "bad_request"
+    assert compose.compose({"intent": ""})["code"] == "bad_request"
+    assert plugin_api._load("session_context", "context").context({"session_id": "has space"})["code"] == "bad_request"

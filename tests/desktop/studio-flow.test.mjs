@@ -39,7 +39,7 @@ const INTENT = 'Crie um app web simples para registrar gastos da casa por catego
 const VAGUE = 'me ajuda com o projeto da empresa, preciso de algo bom'
 
 // The one global the plugin reads its test seams from (docs/DESKTOP-DEV.md, "Test seams"); the SDK stub below keeps its own flags on it too.
-globalThis.__promptStudioTest = {}
+globalThis.__promptStudioTest = { translated: new Set() } // translated: every key the UI asked ctx.i18n.t for
 let ui // the loaded bundle + DOM helpers
 const openPorts = []
 let tmp
@@ -134,6 +134,7 @@ function resolve(locale, key, args) {
   return typeof value === 'function' ? value(...args) : typeof value === 'string' ? value : null
 }
 export function translate(key, ...args) {
+  if (typeof key === 'string') globalThis.__promptStudioTest.translated?.add(key)
   return resolve(i18n.locale, key, args) ?? resolve('en', key, args) ?? key
 }
 export const $locale = nanoAtom('en')
@@ -1644,6 +1645,7 @@ test('CT-01: an error code from the backend shows a localized tooltip; unknown o
   await pasteStep('')
   await waitFor(() => $('[data-studio-ai-error]'))
   assert.equal($('[data-studio-ai-error]').getAttribute('title'), 'raw detail 1')
+  globalThis.__promptStudioTest.translated.delete('errors.brand_new_code') // asked on purpose: it has no text
 })
 
 test('#32: auth_failed, rate_limited and provider_timeout show their own text in the /suggest and /compose tooltips and the context note, in en and pt', { skip }, async () => {
@@ -2612,6 +2614,63 @@ test('SDK-1: the Settings rows are the SDK ListRow/ToggleRow', { skip }, async (
   await closeSettings()
 })
 
+test('SDK-2: on a Desktop SDK that has no ListRow/ToggleRow the plugin still links, registers and draws its entry button', { skip }, async () => {
+  // Hermes Desktop older than the supported minimum lacks the two settings rows. A named import of a missing export
+  // is a link error that kills the whole plugin (the 0.21.4 bug); read from the namespace, it loads and the user
+  // can still be told to update.
+  const esbuild = createRequire(join(nodeModules, 'noop.js'))('esbuild')
+  writeFileSync(join(tmp, 'sdk-no-rows.js'), readFileSync(join(tmp, 'sdk.js'), 'utf8').replace(/^export const (ListRow|ToggleRow) = .*\n/gm, ''))
+  writeFileSync(join(tmp, 'entry-no-rows.js'), `
+export { default as plugin } from ${JSON.stringify(process.env.PROMPT_STUDIO_PLUGIN || join(repo, 'desktop', 'plugin.js'))}
+export { i18n, translate } from './sdk-no-rows.js'
+export { createRoot } from 'react-dom/client'
+export { act } from 'react'
+export { jsx } from 'react/jsx-runtime'
+`)
+  await esbuild.build({
+    entryPoints: [join(tmp, 'entry-no-rows.js')],
+    bundle: true,
+    format: 'esm',
+    platform: 'browser',
+    outfile: join(tmp, 'bundle-no-rows.mjs'),
+    nodePaths: [nodeModules],
+    alias: { '@hermes/plugin-sdk': join(tmp, 'sdk-no-rows.js') },
+    define: { 'process.env.NODE_ENV': '"development"' },
+    logLevel: 'error'
+  })
+  const legacy = await import(pathToFileURL(join(tmp, 'bundle-no-rows.mjs')).href)
+  const slots = {}
+  const disposers = []
+  const ctx = {
+    i18n: { register(bundles) { Object.assign(legacy.i18n.bundles, bundles); return () => {} }, t: legacy.translate, onLocaleChange: () => () => {} },
+    storage: { get: (_key, fallback) => fallback, set() {}, remove() {} },
+    addEventListener(target, type, listener, options) {
+      target.addEventListener(type, listener, options)
+      const off = () => target.removeEventListener(type, listener, options)
+      disposers.push(off)
+      return off
+    },
+    setTimeout(fn, ms) { const id = setTimeout(fn, ms); const clear = () => clearTimeout(id); disposers.push(clear); return clear },
+    onDispose(fn) { disposers.push(fn) },
+    registerMany(items) { for (const item of items) slots[item.area] = item },
+    async rest() { throw new Error('no backend in this test') }
+  }
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  const root = legacy.createRoot(container)
+  try {
+    legacy.plugin.register(ctx)
+    await legacy.act(async () => { root.render(legacy.jsx(() => slots.actions.render(), {})) })
+    const button = container.querySelector('[data-studio-open]')
+    assert.ok(button, 'the F4 entry button is drawn')
+    assert.ok(button.textContent.trim() !== '' || button.getAttribute('aria-label'), 'and it is labelled')
+  } finally {
+    await legacy.act(async () => { root.unmount() })
+    for (const dispose of disposers.splice(0).reverse()) dispose()
+    container.remove()
+  }
+})
+
 test('SDK composer: the draft is read and written only through host.composer, addressed to its conversation', { skip }, async () => {
   resetComposer()
   await openStudio()
@@ -3422,4 +3481,17 @@ test('CLOSE-1: a dispose with Settings open closes both, and the reloaded plugin
   assert.ok($('[data-studio-settings-dialog]') === null, 'Settings closed with it')
   assert.deepEqual(composer().writes.at(-1), { sessionId: 'sess-live', text: INTENT }, 'the draft is back in its composer')
   await reopenAndExpectNoSettings('the reloaded plugin starts without Settings')
+})
+
+// Last on purpose: it reads what every test above made the UI ask the SDK to translate (a screen that renders a key
+// missing from a locale shows the raw key to the user).
+test('i18n: every key the UI asked ctx.i18n.t for in this file exists in en and pt', { skip }, () => {
+  const has = (locale, key) => {
+    let value = ui.i18n.bundles[locale]
+    for (const part of key.split('.')) value = value?.[part]
+    return typeof value === 'string' || typeof value === 'function'
+  }
+  const asked = [...globalThis.__promptStudioTest.translated]
+  assert.ok(asked.length > 0, 'the UI translated nothing')
+  assert.deepEqual(asked.flatMap(key => ['en', 'pt'].filter(locale => !has(locale, key)).map(locale => `${locale}: ${key}`)), [])
 })

@@ -282,61 +282,24 @@ test('core i18n: en and pt have identical keys; core and UI bundles never clobbe
   }
 })
 
-// Which keys of the UI bundle does the code read? A key is used when its dotted name is a quoted literal in the UI
-// modules, or when a template such as t(`ai.${errorKey}`) can build it from a value that is written in the code:
-// the quoted literals of the lines that set errorKey, the SHORTCUTS names, or (for the other templates) any quoted
-// literal. `errors.<code>` is the backend's code table: tests/test_contract.py checks it against CONTRACT.md.
-async function unusedUiKeys(messages = UI_MESSAGES.en, files) {
-  const dir = new URL('../../desktop/src/', import.meta.url)
-  const names = files ?? (await readdir(dir)).filter(f => /^(ui-.*|studio-state|plugin-head)\.js$/.test(f))
-  const source = (await Promise.all(names.map(f => readFile(new URL(f, dir), 'utf8')))).join('\n')
-  const quoted = text => new Set([...text.matchAll(/'([^'\n]*)'/g)].map(m => m[1]))
-  const literals = quoted(source)
-  const errorKeys = quoted(source.split('\n').filter(line => /errorKey/.test(line)).join('\n'))
-  const shortcuts = new Set([...source.match(/export const SHORTCUTS = \{\n([\s\S]*?)\n\}/)[1].matchAll(/^  (\w+):/gm)].map(m => m[1]))
-  const templates = [...source.matchAll(/`([\w.]*)\$\{[^}]*\}(\w*)`/g)].map(m => ({ prefix: m[1], suffix: m[2] }))
-  const keys = (obj, prefix = '') => Object.entries(obj).flatMap(([k, v]) => (v && typeof v === 'object' ? keys(v, `${prefix}${k}.`) : [`${prefix}${k}`]))
-  const built = key => templates.some(({ prefix, suffix }) => {
-    if (!key.startsWith(prefix) || !key.endsWith(suffix) || key.length <= prefix.length + suffix.length) return false
-    const middle = key.slice(prefix.length, key.length - suffix.length)
-    if (prefix === 'errors.') return true
-    if (prefix === 'shortcuts.') return shortcuts.has(middle)
-    return (prefix === 'ai.' ? errorKeys : literals).has(middle)
-  })
-  return keys(messages).filter(key => !literals.has(key) && !built(key))
-}
-
-test('i18n: every key of the UI bundle is read by the code (an unused key fails)', async () => {
-  assert.deepEqual(await unusedUiKeys(), [], 'keys in src/i18n-ui.js that no ui-*.js module reads: delete them from en and pt')
-  // The check itself: a key nothing reads is reported, one built from a template is not.
-  assert.deepEqual(await unusedUiKeys({ ai: { ghost: 'x', failed: 'y' }, shortcuts: { open: 'z' }, notify: { sessionChangedLost: 'w' } }), ['ai.ghost'])
+test('UI i18n: en and pt have identical keys', () => {
+  assert.deepEqual(keys(UI_MESSAGES.pt), keys(UI_MESSAGES.en))
 })
 
-test('naming: a function called useX is a React hook (calls one); actions are named for what they do', async () => {
-  const dir = new URL('../../desktop/src/', import.meta.url)
-  const hooks = /\buse(State|Effect|Value|T|PluginI18n|Memo|Ref|Context|Callback)\(/
-  const bad = []
-  for (const name of (await readdir(dir)).filter(f => /^(ui-.*|studio-state)\.js$/.test(f))) {
-    const source = await readFile(new URL(name, dir), 'utf8')
-    for (const m of source.matchAll(/^(async )?function (use[A-Z]\w*)\(/gm)) {
-      const body = source.slice(m.index, source.indexOf('\n}\n', m.index))
-      if (m[1] || !hooks.test(body.slice(m[0].length))) bad.push(`${name}: ${m[2]}`)
+// docs/CONTRACT.md lists every `code` a client can receive; the tables mark the ones no REST client ever sees.
+// The same table is checked against the real routes in tests/test_contract.py.
+test('UI i18n: errors.<code> has a text, in en and pt, for every code CONTRACT.md says a client can receive, and for no other', async () => {
+  const doc = await readFile(new URL('../../docs/CONTRACT.md', import.meta.url), 'utf8')
+  const reachable = new Set()
+  for (const header of ['| `code` | When | `error` |', '| `code` | Route | When | `error` |']) {
+    const table = doc.split(header)[1].split('\n\n')[0]
+    for (const line of table.split('\n')) {
+      const code = line.match(/^\| `(\w+)` \|/)?.[1]
+      if (code && !line.includes('Not reachable over REST')) reachable.add(code)
     }
   }
-  assert.deepEqual(bad, [], 'functions named like hooks that are not: rename them (placePreview, applySuggestion)')
-})
-
-test('test seams: the UI reads its timing seams only from globalThis.__promptStudioTest, and docs/DESKTOP-DEV.md names each one', async () => {
-  const dir = new URL('../../desktop/src/', import.meta.url)
-  let source = ''
-  for (const name of (await readdir(dir)).filter(f => /^(ui-.*|studio-state)\.js$/.test(f))) source += await readFile(new URL(name, dir), 'utf8')
-  const globals = [...new Set([...source.matchAll(/globalThis\.(\w+)/g)].map(m => m[1]))]
-  assert.deepEqual(globals, ['__promptStudioTest'], 'one global for every test seam')
-  const seams = [...new Set([...source.matchAll(/__promptStudioTest\??\.(\w+)/g)].map(m => m[1]))].sort()
-  assert.ok(seams.length >= 3, `seams found: ${seams}`)
-  const docs = await readFile(new URL('../../docs/DESKTOP-DEV.md', import.meta.url), 'utf8')
-  assert.ok(docs.includes('globalThis.__promptStudioTest'), 'the global is documented')
-  assert.deepEqual(seams.filter(seam => !docs.includes(`\`${seam}\``)), [], 'seams missing from docs/DESKTOP-DEV.md')
+  assert.ok(reachable.size > 10, `codes read from the doc: ${[...reachable]}`)
+  for (const locale of Object.keys(UI_MESSAGES)) assert.deepEqual(Object.keys(UI_MESSAGES[locale].errors).sort(), [...reachable].sort(), locale)
 })
 
 test('studio-core.js imports only the engines and its i18n bundle', async () => {

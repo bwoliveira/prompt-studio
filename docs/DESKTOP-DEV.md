@@ -49,7 +49,7 @@ The plugin has no test mode. The three timing values the UI tests shorten are re
 `globalThis.__promptStudioTest`, and fall back to the real constant when it is absent (it never exists in Hermes Desktop).
 Tests create it as `{}` before loading `plugin.js` and set a field for the length of one test (`tests/desktop/studio-flow.test.mjs`
 also keeps its SDK stub flags on it). No other global is read by `desktop/src/*`; a new seam is a new field here, with a
-row in this table (`tests/desktop/studio-core.test.mjs` fails otherwise).
+row in this table.
 
 | Field | Replaces | Default |
 |---|---|---|
@@ -61,11 +61,12 @@ row in this table (`tests/desktop/studio-core.test.mjs` fails otherwise).
 
 The UI is English-first through the Desktop plugin i18n API: `ctx.i18n.register(bundles)` in `register()`,
 `usePluginI18n(id)` in React, `ctx.i18n.t` outside React. Rule: the `en` and `pt` bundles must have exactly the same
-keys and every key must be read by the UI code (the tests check both: a key no `ui-*.js` module reads fails
-`tests/desktop/studio-core.test.mjs`; keys built from a template such as `` `shortcuts.${key}` `` count when the value is in the code).
-Add a key to both in the same change and delete it from both when its last use goes.
-`errors.<code>` is the backend's code table: `tests/test_contract.py` requires one text per code a client can receive
-(`docs/CONTRACT.md`) and none for a code the REST routes cannot return. Generated prompts are not translated: section
+keys, and every key the UI asks for exists in both (the tests check both: `studio-core.test.mjs` compares the two
+bundles; the last test of `studio-flow.test.mjs` checks each key the UI asked `ctx.i18n.t` for while the flow tests ran).
+Add a key to both in the same change and delete it from both when its last use goes (no test finds a key nothing reads).
+`errors.<code>` is the backend's code table: `studio-core.test.mjs` requires one text per code a client can receive
+(`docs/CONTRACT.md`) and none for a code the REST routes cannot return; `tests/test_contract.py` checks that table against
+what the routes answer. Generated prompts are not translated: section
 headers and rule lines stay English, and the user's text is copied as written.
 
 ## Draft recognition languages

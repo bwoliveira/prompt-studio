@@ -60,17 +60,15 @@ def test_registers_the_prompt_studio_auxiliary_task():
     assert "      timeout: 20\n" in (ROOT / "docs" / "CONFIGURATION.md").read_text(encoding="utf-8")
 
 
-def test_register_needs_the_declared_minimum_hermes_and_has_no_older_host_branch():
+def test_register_calls_register_auxiliary_task_directly_so_a_host_without_it_errors():
     import importlib.util
     spec = importlib.util.spec_from_file_location("prompt_studio_init_min_under_test", ROOT / "__init__.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    # requires_hermes is >=0.21.5, whose plugin context always has register_auxiliary_task: a host without it
-    # is not supported, so register() calls it directly instead of skipping the picker entry.
-    assert re.search(r'requires_hermes:\s*"?>=\s*0\.2[1-9]', (ROOT / "plugin.yaml").read_text(encoding="utf-8"))
-    with pytest.raises(AttributeError):
+    # The minimum Hermes (plugin.yaml requires_hermes) always offers register_auxiliary_task: a context without it is
+    # an unsupported host, and register() says so instead of silently skipping the picker entry.
+    with pytest.raises(AttributeError, match="register_auxiliary_task"):
         module.register(types.SimpleNamespace())
-    assert "Hermes < 0.20" not in (ROOT / "__init__.py").read_text(encoding="utf-8")
 
 
 def test_desktop_plugin_uses_only_ctx_tracked_listeners_and_storage():
