@@ -634,6 +634,21 @@ const TABLE = [
   ['Escreva um script Python\nInclua documentação', 'implementation', 'pt script, newline, instruction'],
   ['Write a Python script generator', 'implementation', 'near miss: a compound noun on the same line'],
   ['Write a marketing email', 'text', 'near miss: a text modifier on the same line'],
+  // guidance asked without a determiner (Codex P2)
+  ['I need instructions to configure nginx', 'answer', 'i need instructions to'],
+  ['Provide instructions to configure nginx', 'answer', 'provide instructions to'],
+  ['Preciso de instruções para configurar o nginx', 'answer', 'pt preciso de instrucoes para'],
+  ['I need steps to configure nginx', 'answer', 'i need steps to'],
+  ['I need help to configure nginx', 'answer', 'i need help to'],
+  ['I need a script to configure nginx', 'implementation', 'near miss: a script is code'],
+  ['I need instructions. Configure nginx.', 'workflow', 'near miss: the order comes after'],
+  ['Write documentation to configure nginx', 'text', 'near miss: documentation is written'],
+  // a polite or sequencing opener between the prior request and the order (Codex P2)
+  ['I need a script. Please write it in Python with documentation.', 'implementation', 'please write it'],
+  ['I need a script. Could you write it in Python with documentation?', 'implementation', 'could you write it'],
+  ['Preciso de um script. Por favor, escreva-o em Python com documentação.', 'implementation', 'pt por favor, escreva-o'],
+  ['I need an email. Please write it in English with a summary', 'text', 'near miss: the thing asked is text'],
+  ['I need a script. Please write a blog post about it', 'text', 'near miss: the order names its own artifact'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
