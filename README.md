@@ -90,7 +90,11 @@ Desktop would overwrite a pushed file with the local install's older copy, or de
 the script refuses such a folder and copies nothing. Either remove the local install on the app machine
 (`hermes plugins remove prompt-studio`; Desktop then drops its managed copy) and push again, or add
 `--replace-managed`, which removes the marker so the folder becomes a standalone plugin that Desktop never
-overwrites. Other files in the folder are left alone.
+overwrites. If the local install's own `desktop/plugin.js` is byte-identical to the file being pushed, Desktop
+would adopt the folder as that install's managed copy again (and delete it with the install), so the script refuses
+that case too, even with `--replace-managed`: remove the local install first, then push. The script looks in
+`<Hermes home>/plugins` and `<Hermes home>/profiles/*/plugins`, the Hermes home being the parent of `--dir`. Other
+files in the folder are left alone.
 
 The `desktop-plugins` folder is `<Hermes home>/desktop-plugins`, where the Hermes home on the app machine is
 `$HERMES_HOME` when set, else `~/.hermes` on Linux and macOS and `%LOCALAPPDATA%\hermes` on Windows (an existing

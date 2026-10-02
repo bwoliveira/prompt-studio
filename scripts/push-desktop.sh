@@ -42,6 +42,8 @@ runs Hermes Desktop, into DIR/prompt-studio/plugin.js.
                  when DIR/prompt-studio holds .hermes-package.json (Desktop manages that folder for a plugin
                  installed locally on HOST, and overwrites or deletes the pushed file on its next rescan), the push
                  is refused by default; this flag removes the marker so the folder becomes a standalone plugin
+                 (still refused when a local prompt-studio package under the Hermes home, the parent of DIR, holds a
+                 byte-identical desktop/plugin.js: Desktop would adopt the folder again; remove that install first)
   --dry-run      print what would happen; open no connection
   -h, --help     show this help
 USAGE
@@ -91,14 +93,19 @@ fi
 EXPECTED="$(cksum < "$SOURCE")"
 # Stage beside the target, then mv: Desktop never reads a half-written plugin.js. Remote exit codes: 3 = the folder
 # is managed for a local package (marker present) and the user did not ask to replace that; 4 = plugin.js is a
-# directory; 5 = the staged or installed file does not match the checksum.
+# directory; 5 = the staged or installed file does not match the checksum; 6 = a prompt-studio package installed
+# locally on the app machine (its Hermes home, or a profile's) holds a byte-identical desktop/plugin.js.
 REMOTE_SCRIPT="set -e; d=$REMOTE_DIR; mkdir -p \"\$d\"; m=\"\$d/$MARKER\"; sum=$(shq "$EXPECTED"); if [ -d \"\$d/plugin.js\" ]; then exit 4; fi"
 if [[ "$REPLACE_MANAGED" == 1 ]]; then
   REMOTE_SCRIPT+='; rm_marker=1'
 else
   REMOTE_SCRIPT+='; rm_marker=0; if [ -e "$m" ] || [ -L "$m" ]; then exit 3; fi'
 fi
-REMOTE_SCRIPT+="; t=\"\$d/.plugin.js.\$\$\"; trap 'rm -f \"\$t\"' EXIT; cat > \"\$t\"; [ \"\$(cksum < \"\$t\")\" = \"\$sum\" ] || exit 5; if [ \"\$rm_marker\" = 1 ]; then rm -f \"\$m\"; fi; mv -f \"\$t\" \"\$d/plugin.js\"; [ -f \"\$d/plugin.js\" ] && [ \"\$(cksum < \"\$d/plugin.js\")\" = \"\$sum\" ] || exit 5"
+REMOTE_SCRIPT+='; t="$d/.plugin.js.$$"; trap '"'"'rm -f "$t"'"'"' EXIT; cat > "$t"; [ "$(cksum < "$t")" = "$sum" ] || exit 5'
+# A prompt-studio package installed locally on the app machine (its Hermes home, or a profile's) with the very bytes
+# being pushed: Desktop's reconcile would adopt the folder (stamp the marker back) and delete it with the package.
+REMOTE_SCRIPT+='; h=$(dirname "$(dirname "$d")"); for p in "$h"/plugins/prompt-studio/desktop/plugin.js "$h"/profiles/*/plugins/prompt-studio/desktop/plugin.js; do if [ -f "$p" ] && cmp -s "$t" "$p"; then exit 6; fi; done'
+REMOTE_SCRIPT+='; if [ "$rm_marker" = 1 ]; then rm -f "$m"; fi; mv -f "$t" "$d/plugin.js"; [ -f "$d/plugin.js" ] && [ "$(cksum < "$d/plugin.js")" = "$sum" ] || exit 5'
 REMOTE_COMMAND="sh -c $(shq "$REMOTE_SCRIPT")"
 
 if [[ "$DRY_RUN" == 1 ]]; then
@@ -114,6 +121,8 @@ if [[ "$rc" == 3 ]]; then
   die 1 "$HOST:$DIR/prompt-studio holds $MARKER: Hermes Desktop manages that folder for a plugin installed locally on $HOST and, on its next rescan, would overwrite the file just pushed with that older copy or delete it. Nothing was copied. Either remove the local install on $HOST (hermes plugins remove prompt-studio; Desktop then drops its managed copy on the next rescan) and rerun, or rerun with --replace-managed to remove the marker and make the folder a standalone plugin."
 elif [[ "$rc" == 4 ]]; then
   die 1 "$HOST:$TARGET is a directory, not a file; nothing was copied (remove or rename that directory, then rerun)"
+elif [[ "$rc" == 6 ]]; then
+  die 1 "$HOST has a locally installed prompt-studio package whose desktop/plugin.js is identical to $SOURCE. Hermes Desktop would adopt $DIR/prompt-studio as that package's managed copy on its next rescan and delete it when the package is removed, so nothing was copied (the local package's own copy already serves Desktop). To push instead, remove the local install first (hermes plugins remove prompt-studio), then rerun."
 elif [[ "$rc" == 5 ]]; then
   die 1 "the plugin.js received by $HOST does not match $SOURCE (checksum $EXPECTED); do not trust $HOST:$TARGET, rerun the script"
 elif [[ "$rc" != 0 ]]; then

@@ -287,6 +287,37 @@ class PushDesktopTests(unittest.TestCase):
         self.assertTrue((target / MARKER).exists(), "the marker stays unless the user asked to replace it")
         self.assertEqual([p.name for p in target.iterdir() if p.name.startswith(".plugin.js")], [], "no staging file left")
 
+    def test_a_local_package_with_the_identical_file_is_refused_not_adopted_later(self) -> None:
+        """Desktop adopts a marker-less folder whose plugin.js equals a local package's desktop half (it stamps the
+        marker back), so removing that package would later delete the pushed file. Review round 1, P2."""
+        for flag in ((), ("--replace-managed",)):
+            with self.subTest(flags=flag):
+                shutil.rmtree(self.fakehome)
+                self.fakehome.mkdir()
+                app, target, package = self.managed_target()
+                (package / "plugin.js").write_bytes(self.source.read_bytes())
+                if not flag:
+                    (target / MARKER).unlink()  # a standalone folder: only the identical local package is the trap
+                before = (target / "plugin.js").read_bytes()
+                result = self.run_script("me@laptop", "--dir", str(app), *flag, mode="run")
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertNotIn("[OK]", result.stdout)
+                for needle in ("identical", "hermes plugins remove"):
+                    self.assertIn(needle, result.stderr)
+                self.assertEqual((target / "plugin.js").read_bytes(), before, "nothing was copied")
+                self.assertEqual((target / MARKER).exists(), bool(flag), "the marker is untouched")
+                self.assertEqual([p.name for p in target.iterdir() if p.name.startswith(".plugin.js")], [])
+
+    def test_an_identical_package_in_a_profile_home_is_refused_too(self) -> None:
+        app, target, _ = self.managed_target()
+        profile_pkg = self.fakehome / "profiles" / "work" / "plugins" / "prompt-studio" / "desktop"
+        profile_pkg.mkdir(parents=True)
+        (profile_pkg / "plugin.js").write_bytes(self.source.read_bytes())
+        (target / MARKER).unlink()
+        result = self.run_script("me@laptop", "--dir", str(app), mode="run")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual((target / "plugin.js").read_text(encoding="utf-8"), "OLD_VERSION\n")
+
     def test_replace_managed_makes_the_folder_a_standalone_plugin(self) -> None:
         app, target, _ = self.managed_target()
         result = self.run_script("me@laptop", "--dir", str(app), "--replace-managed", mode="run")
