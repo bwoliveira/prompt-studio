@@ -689,19 +689,25 @@ test('bin/pr does not merge when the body of an existing pull request cannot be 
 
 // ---- bin/pr waits for the PR checks before merging ----
 
-const CHECKS_FAST = { CHECKS_POLL_SECONDS: '1', CHECKS_TIMEOUT_SECONDS: '4', CHECKS_REGISTER_SECONDS: '2' };
+// bin/pr counts its deadlines with Bash SECONDS, whole seconds, so a deadline of N s really expires after N-1 to N s.
+// Tests where the wait must succeed use CHECKS_PATIENT: a deadline far beyond the longest simulated sequence (a few
+// polls, 1 s apart), so a slow or loaded machine cannot expire it. Tests where the wait must give up use
+// CHECKS_EXPIRE: they only assert that it gives up (a slower machine gives up no later), except for the check that it
+// read more than once, which 3 s leaves room for even if the first read stalls for a second.
+const CHECKS_PATIENT = { CHECKS_POLL_SECONDS: '1', CHECKS_TIMEOUT_SECONDS: '120', CHECKS_REGISTER_SECONDS: '120' };
+const CHECKS_EXPIRE = { CHECKS_POLL_SECONDS: '1', CHECKS_TIMEOUT_SECONDS: '3', CHECKS_REGISTER_SECONDS: '3' };
 
 test('bin/pr checks the pull request after the push and merges only when every check passed', () => {
   const repo = prRepo();
   const head = git(repo.dir, 'rev-parse', 'HEAD');
-  const r = runPr(repo, { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'p', ...CHECKS_FAST });
+  const r = runPr(repo, { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'p', ...CHECKS_PATIENT });
   assert.equal(r.status, 0, r.stderr + r.stdout);
   assert.match(r.log, new RegExp(`^api repos/\\{owner\\}/\\{repo\\}/commits/${head}/check-runs`, 'm'), 'the check runs of the reviewed head commit are read:\n' + r.log);
   assert.ok(r.log.indexOf('check-runs') < r.log.indexOf('pr merge'), 'the checks are read before the merge');
 });
 
 test('bin/pr does not merge while a check fails, and says so', () => {
-  const r = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'f', ...CHECKS_FAST });
+  const r = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'f', ...CHECKS_PATIENT });
   assert.notEqual(r.status, 0, r.stdout);
   assert.match(r.stderr, /checks failed/i, r.stderr);
   assert.doesNotMatch(r.log, /^pr merge/m, 'no merge');
@@ -709,31 +715,31 @@ test('bin/pr does not merge while a check fails, and says so', () => {
 });
 
 test('bin/pr waits while checks are pending and merges once they pass', () => {
-  const r = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'w w p', ...CHECKS_FAST });
+  const r = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'w w p', ...CHECKS_PATIENT });
   assert.equal(r.status, 0, r.stderr + r.stdout);
   assert.equal(r.log.match(/check-runs/g).length, 3, r.log);
   assert.match(r.log, /^pr merge 7 /m);
 });
 
 test('bin/pr does not merge while checks are still pending when the timeout runs out', () => {
-  const r = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'w', ...CHECKS_FAST });
+  const r = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'w', ...CHECKS_EXPIRE });
   assert.notEqual(r.status, 0, r.stdout);
   assert.match(r.stderr, /still pending/i, r.stderr);
   assert.doesNotMatch(r.log, /^pr merge/m, 'no merge');
 });
 
 test('bin/pr waits for the checks to be registered right after the push, and blocks when none ever appear', () => {
-  const late = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'n n p', ...CHECKS_FAST });
+  const late = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'n n p', ...CHECKS_PATIENT });
   assert.equal(late.status, 0, late.stderr + late.stdout);
   assert.match(late.log, /^pr merge 7 /m);
-  const never = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'n', ...CHECKS_FAST });
+  const never = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'n', ...CHECKS_EXPIRE });
   assert.notEqual(never.status, 0, never.stdout);
   assert.match(never.stderr, /no checks/i, never.stderr);
   assert.doesNotMatch(never.log, /^pr merge/m, 'no merge');
 });
 
 test('bin/pr: a check that fails after being pending blocks the merge too', () => {
-  const r = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'w f', ...CHECKS_FAST });
+  const r = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'w f', ...CHECKS_PATIENT });
   assert.notEqual(r.status, 0, r.stdout);
   assert.doesNotMatch(r.log, /^pr merge/m);
 });
@@ -743,7 +749,7 @@ test('bin/pr: a check that fails after being pending blocks the merge too', () =
 const JOBS_OK = 'node=success,python=success,gitleaks=success';
 
 test('bin/pr merges when all three CI jobs succeeded on the reviewed commit', () => {
-  const r = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: JOBS_OK, ...CHECKS_FAST });
+  const r = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: JOBS_OK, ...CHECKS_PATIENT });
   assert.equal(r.status, 0, r.stderr + r.stdout);
   assert.match(r.log, /^pr merge 7 /m);
 });
@@ -751,7 +757,7 @@ test('bin/pr merges when all three CI jobs succeeded on the reviewed commit', ()
 for (const state of ['cancelled', 'skipped', 'neutral', 'timed_out', 'failure']) {
   test(`bin/pr refuses to merge when a CI job is ${state}, and names it`, () => {
     for (const checks of [`node=${state},python=success,gitleaks=success`, `node=success,python=success,gitleaks=${state}`, `node=${state}`]) {
-      const r = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: checks, ...CHECKS_FAST });
+      const r = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: checks, ...CHECKS_PATIENT });
       assert.notEqual(r.status, 0, `${checks}: ${r.stdout}`);
       assert.match(r.stderr, /checks failed/i, r.stderr);
       assert.match(r.stderr, new RegExp(state), r.stderr);
@@ -761,7 +767,7 @@ for (const state of ['cancelled', 'skipped', 'neutral', 'timed_out', 'failure'])
 }
 
 test('bin/pr does not merge when only some of the CI jobs registered: it waits, then times out naming the missing ones', () => {
-  const r = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'node=success', ...CHECKS_FAST });
+  const r = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'node=success', ...CHECKS_EXPIRE });
   assert.notEqual(r.status, 0, r.stdout);
   assert.ok(r.log.match(/check-runs/g).length > 1, 'it kept waiting for the other jobs:\n' + r.log);
   assert.match(r.stderr, /Python tests/, r.stderr);
@@ -771,13 +777,13 @@ test('bin/pr does not merge when only some of the CI jobs registered: it waits, 
 });
 
 test('bin/pr merges once the jobs that were missing register and succeed', () => {
-  const r = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: `node=success node=success,python=running ${JOBS_OK}`, ...CHECKS_FAST });
+  const r = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: `node=success node=success,python=running ${JOBS_OK}`, ...CHECKS_PATIENT });
   assert.equal(r.status, 0, r.stderr + r.stdout);
   assert.match(r.log, /^pr merge 7 /m);
 });
 
 test('bin/pr does not merge while a job is still running past the deadline, even when the others succeeded', () => {
-  const r = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'node=success,python=running,gitleaks=success', ...CHECKS_FAST });
+  const r = runPr(prRepo(), { FAKE_OPEN_PR: '7', FAKE_PR_BODY: 'x', FAKE_CHECKS: 'node=success,python=running,gitleaks=success', ...CHECKS_EXPIRE });
   assert.notEqual(r.status, 0, r.stdout);
   assert.match(r.stderr, /still pending/i, r.stderr);
   assert.match(r.stderr, /Python tests/, r.stderr);
