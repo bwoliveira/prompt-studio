@@ -611,6 +611,21 @@ test('withReviewSection replaces only the delimited section and keeps the human 
   }
 });
 
+test('withReviewSection: repeated updates of a body with a stray start marker keep the text after it (Codex P2)', () => {
+  const human = `Closes #35\n\n${REVIEW_START}\nManual notes to keep.\n`;
+  let body = human;
+  for (let round = 1; round <= 3; round++) {
+    body = withReviewSection(body, `SUMMARY ${round}\n`);
+    assert.ok(body.startsWith(human), `round ${round}: ${JSON.stringify(body)}`);
+    assert.ok(body.includes(`SUMMARY ${round}`) && !body.includes(`SUMMARY ${round - 1}`), JSON.stringify(body));
+    assert.equal(body.split(REVIEW_END).length, 2, 'one review section, replaced in place');
+  }
+  // A stray end before a complete section, and a complete section followed by human text, keep that text too.
+  const mixed = `${REVIEW_END}\nKeep A.\n\n${REVIEW_START}\nOLD\n${REVIEW_END}\nKeep B.\n`;
+  const out = withReviewSection(withReviewSection(mixed, 'NEW\n'), 'NEWER\n');
+  assert.ok(out.includes('Keep A.') && out.includes('Keep B.') && out.includes('NEWER') && !out.includes('OLD'), JSON.stringify(out));
+});
+
 test('bin/pr updates the review section of an EXISTING pull request and keeps the human text', () => {
   const human = 'Closes #35\n\nWhy: portable scripts.';
   const stale = `${human}\n\n${REVIEW_START}\n## Local Codex review\nSTALE VERDICT abc1234\n${REVIEW_END}\n`;

@@ -60,11 +60,18 @@ export const REVIEW_START = '<!-- local-review:start -->';
 export const REVIEW_END = '<!-- local-review:end -->';
 
 // Puts the review summary between the markers of a pull request body: replaces the section when the markers are
-// there, appends it otherwise. Text written by hand outside the markers is never touched.
+// there, appends it otherwise. Text written by hand outside the markers is never touched. A section is a start
+// marker and the next end marker with no other start between them; the last such section is the one bin/pr wrote,
+// so a stray start earlier in the body (and the text after it) survives every later update.
 export function withReviewSection(body, summary) {
   const section = `${REVIEW_START}\n${summary.replace(/\n+$/, '')}\n${REVIEW_END}\n`;
-  const start = body.indexOf(REVIEW_START);
-  const end = start < 0 ? -1 : body.indexOf(REVIEW_END, start + REVIEW_START.length);
+  let start = -1;
+  let end = -1;
+  for (let s = body.indexOf(REVIEW_START); s >= 0; s = body.indexOf(REVIEW_START, s + REVIEW_START.length)) {
+    const e = body.indexOf(REVIEW_END, s + REVIEW_START.length);
+    const next = body.indexOf(REVIEW_START, s + REVIEW_START.length);
+    if (e >= 0 && (next < 0 || e < next)) { start = s; end = e; }
+  }
   if (start >= 0 && end >= 0) return body.slice(0, start) + section + body.slice(end + REVIEW_END.length).replace(/^\n/, '');
   const text = body.replace(/\n*$/, '');
   return text ? `${text}\n\n${section}` : section;

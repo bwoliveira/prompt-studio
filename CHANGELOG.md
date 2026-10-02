@@ -126,7 +126,8 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   An interrupted review (Ctrl+C, hangup) also stops the detached Codex process group and never approves, and the base
   branch is fetched into `origin/<base>` with an explicit refspec, so `BASE_BRANCH` works in a single-branch clone. The default branch is asked of origin, so a default changed
   on GitHub (main to trunk) is followed even when the clone's cached `origin/HEAD` is stale; when origin cannot be reached or does not answer in
-  time, the cached `origin/HEAD` is used.
+  time, the cached `origin/HEAD` is used. Updating the review section of a PR description never deletes handwritten
+  text, even after a stray review marker.
 
 ## 1.8.0
 
