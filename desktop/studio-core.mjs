@@ -147,6 +147,10 @@ const LOOKUP_MODIFIER = /\b(?:existing|available|good|better|best|recommended|po
 // API named for a purpose is a thing to be found, not written.
 const REFERENCE_NOUN_END = /\b(?:modul[oe]s?|apis?|librar(?:y|ies)|packages?|frameworks?|sdks?|bibliotecas?|pacotes?)\s*$/
 const FOR_PURPOSE = /^\s+(?:for|para)\b/
+// "Can you show me the function in utils.py?", "a Python module from the standard library": an artifact identified by
+// the file, repository or library it lives in is one that exists; a language ("a function in Python") is not a source.
+// Languages: Portuguese (unaccented) + English.
+const LOOKUP_SOURCE = /^\s+(?:from|in|inside|within|at|on|de|do|da|dos|das|em|no|na|nos|nas|dentro)\s+(?:(?:the|our|my|this|that|your|a|an|o|a|os|as|nosso|nossa|meu|minha|este|esta|esse|essa|um|uma)\s+)?(?:[\w-]+(?:[./][\w-]+)+|(?:standard|stdlib|std|core|built-?in|padrao)\s+librar\w*|biblioteca\s+padrao|(?:files?|repos?|repositor(?:y|ies)|codebase|projects?|librar(?:y|ies)|stdlib|packages?|modules?|classes|class|namespace|directory|folder|dir|src|arquivos?|repositorio|projetos?|bibliotecas?|pasta|diretorio|codigo|pacotes?)\b)/
 // "Could you tell me an API that already exists for weather data?": the same qualifiers, said after the noun.
 const LOOKUP_AFTER = /^\s+(?:that|which|que)\s+(?:(?:already|ja)\s+)?(?:exists?|existe|existem|(?:is|are|esta|estao)\s+(?:already\s+|ja\s+)?(?:the\s+)?(?:available|existing|recommended|popular|best|good|better|disponivel|disponiveis|recomendad[ao]s?|existentes?)(?=\s+(?:for|para|on|from|in|at|via|through|no|na|em|de|pelo|pela)\b|\s*[.,;:!?]|\s*$))\b/
 // "Can you show me a script? Why does it fail?", "... and tell me how it works": a clause or sentence after the artifact
@@ -425,7 +429,7 @@ function createDetector(profile = {}) {
       if (EXPLAIN_TAIL.test(tail) || QUESTION_TAIL.test(tail)) signal = 'answer'
       else if (CODE_ARTIFACT_END.test(head) && pickArtifact(rest.split(/[.!?\n]/, 1)[0]) === 'code') {
         // Asking about an existing artifact, or for a recommendation, is a question; asking for one to be made is a task.
-        if (LOOKUP_MODIFIER.test(head) || LOOKUP_AFTER.test(rest.slice(head.length)) || (REFERENCE_NOUN_END.test(head) && FOR_PURPOSE.test(rest.slice(head.length)))) signal = 'answer'
+        if (LOOKUP_MODIFIER.test(head) || LOOKUP_AFTER.test(rest.slice(head.length)) || LOOKUP_SOURCE.test(rest.slice(head.length)) || (REFERENCE_NOUN_END.test(head) && FOR_PURPOSE.test(rest.slice(head.length)))) signal = 'answer'
         else { signal = 'implementation'; category = 'code' }
       }
     }
