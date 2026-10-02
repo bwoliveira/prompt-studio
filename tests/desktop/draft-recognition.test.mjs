@@ -649,6 +649,21 @@ const TABLE = [
   ['Preciso de um script. Por favor, escreva-o em Python com documentação.', 'implementation', 'pt por favor, escreva-o'],
   ['I need an email. Please write it in English with a summary', 'text', 'near miss: the thing asked is text'],
   ['I need a script. Please write a blog post about it', 'text', 'near miss: the order names its own artifact'],
+  // an exclusion phrase ends the artifact (Codex P2)
+  ['Write a Python script without documentation', 'implementation', 'script without documentation'],
+  ['Escreva um script sem documentação', 'implementation', 'pt script sem documentacao'],
+  ['Write an email without a script', 'text', 'near miss: the email is first'],
+  // an instruction that shapes the answer after a question is not a task (Codex P2)
+  ['How do I build a React app? Add examples.', 'answer', 'question, add examples'],
+  ['Como configuro o nginx? Inclua exemplos.', 'answer', 'pt question, inclua exemplos'],
+  ['How do I configure nginx? Include sources and keep it short.', 'answer', 'question, include sources'],
+  ['How do I build a React app? Build it for me.', 'implementation', 'near miss: a real order after the question'],
+  ['How do I configure nginx? Add a health check.', 'implementation', 'near miss: a real addition'],
+  ['How do I configure nginx? Add examples. Then configure it.', 'workflow', 'near miss: an order after the note'],
+  // a memo is text, whatever code nouns its topic names (Codex P2)
+  ['Write a strategy memo about optimizing SQL queries', 'text', 'memo about sql queries'],
+  ['Write a memo about the API', 'text', 'memo about the api'],
+  ['Escreva um memorando sobre otimizar consultas SQL', 'text', 'pt memorando sobre consultas sql'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
@@ -689,6 +704,8 @@ test('draft recognition: an instruction in the requirements field is not a modif
     [{ goal: 'Escreva um script Python', requirements: 'Inclua documentação' }, 'implementation'],
     [{ goal: 'Write a Python script', requirements: 'Write a blog post about it' }, 'implementation'],
     [{ goal: 'Write a blog post', requirements: 'Include a script' }, 'text'],
+    [{ goal: 'What is Docker?', requirements: 'Make the answer concise' }, 'answer'],
+    [{ goal: 'What is Docker?', requirements: 'Build a demo app' }, 'implementation'],
   ]
   for (const [brief, expected] of cases) {
     for (const [id, engine] of Object.entries(ENGINES)) assert.equal(engine.analyze(brief).deliverable, expected, `${id}: ${JSON.stringify(brief)}`)
@@ -767,7 +784,7 @@ test('parity: Opus and Sonnet carry the identical detection block', async () => 
   const [opus, sonnet] = await Promise.all([src('engine-opus.js'), src('engine-sonnet.js')])
   const a = detection(opus)
   const b = detection(sonnet)
-  for (const needle of ['CATEGORY_RULES', 'DELIVERABLE_RULES', 'MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'UNMARKED_YESNO', 'YESNO_FORM', 'EXPLAIN_FORM', 'QUESTION_START', 'NOUN_SIGNAL', 'SENTENCE_START', 'VERB_OBJECT', 'REQUESTED_NOUN', 'COPULA', 'VERB_COPULA', 'PREDICATE', 'INFINITIVE_MARK', 'NEGATED', 'COORDINATED', 'PREDICATE_NEGATION', 'CLAUSE_NEGATION', 'LIST_TAIL', 'QUESTION_HEAD', 'ROLE_HEAD', 'DECLARATIVE', 'TOPIC_TAIL', 'TOPIC_AGENT', 'TOPIC_HEAD', 'ADDRESSED', 'ORDER_LEAD', 'ORDER_JOIN', 'INTRO_CLAUSE', 'PT_INFINITIVE', 'AFTER_A', 'STATED_GOAL', 'MODIFIER_USE', 'COMPOUND_AFTER', 'NARRATIVE', 'CONTEXT_WINDOW', 'PRONOUN_OBJECT', 'PRIOR_REQUEST', 'REQUESTED_ARTIFACT', 'MODIFIER_GAP', 'INTERFACE', 'function contextBefore', 'function prohibited', 'function isQuestion', 'function questionAt', 'function coordinatedOrder', 'function orderAfterSentence', 'function questionStart', 'function pickArtifact', 'function firstSignal', 'function detect', 'function analyzeNormalized']) {
+  for (const needle of ['CATEGORY_RULES', 'DELIVERABLE_RULES', 'MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'UNMARKED_YESNO', 'YESNO_FORM', 'EXPLAIN_FORM', 'QUESTION_START', 'NOUN_SIGNAL', 'SENTENCE_START', 'VERB_OBJECT', 'REQUESTED_NOUN', 'COPULA', 'VERB_COPULA', 'PREDICATE', 'INFINITIVE_MARK', 'NEGATED', 'COORDINATED', 'PREDICATE_NEGATION', 'CLAUSE_NEGATION', 'LIST_TAIL', 'QUESTION_HEAD', 'ROLE_HEAD', 'DECLARATIVE', 'TOPIC_TAIL', 'TOPIC_AGENT', 'TOPIC_HEAD', 'ADDRESSED', 'RESPONSE_NOTE', 'ORDER_LEAD', 'ORDER_JOIN', 'INTRO_CLAUSE', 'PT_INFINITIVE', 'AFTER_A', 'STATED_GOAL', 'MODIFIER_USE', 'COMPOUND_AFTER', 'NARRATIVE', 'CONTEXT_WINDOW', 'PRONOUN_OBJECT', 'PRIOR_REQUEST', 'REQUESTED_ARTIFACT', 'MODIFIER_GAP', 'INTERFACE', 'function contextBefore', 'function prohibited', 'function isQuestion', 'function questionAt', 'function coordinatedOrder', 'function orderAfterSentence', 'function questionStart', 'function pickArtifact', 'function firstSignal', 'function detect', 'function analyzeNormalized']) {
     assert.ok(a.includes(needle), `opus block has ${needle}`)
   }
   assert.equal(a, b, 'Opus and Sonnet detection blocks drifted apart: change both engines identically')
@@ -775,7 +792,7 @@ test('parity: Opus and Sonnet carry the identical detection block', async () => 
 
 test('parity: the artifact constants are the same text on all three engines', async () => {
   const sources = await Promise.all(['engine-opus.js', 'engine-sonnet.js', 'engine-astra.js'].map(src))
-  for (const name of ['MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'UNMARKED_YESNO', 'YESNO_FORM', 'EXPLAIN_FORM', 'NOUN_SIGNAL', 'SENTENCE_START', 'VERB_OBJECT', 'REQUESTED_NOUN', 'COPULA', 'VERB_COPULA', 'PREDICATE', 'INFINITIVE_MARK', 'NEGATED', 'COORDINATED', 'PREDICATE_NEGATION', 'CLAUSE_NEGATION', 'LIST_TAIL', 'QUESTION_HEAD', 'ROLE_HEAD', 'DECLARATIVE', 'TOPIC_TAIL', 'TOPIC_AGENT', 'TOPIC_HEAD', 'ADDRESSED', 'ORDER_LEAD', 'ORDER_JOIN', 'INTRO_CLAUSE', 'PT_INFINITIVE', 'AFTER_A', 'STATED_GOAL', 'MODIFIER_USE', 'COMPOUND_AFTER', 'NARRATIVE', 'CONTEXT_WINDOW', 'PRONOUN_OBJECT', 'PRIOR_REQUEST', 'REQUESTED_ARTIFACT', 'MODIFIER_GAP', 'REVIEW_OBJECT', 'PLAN_OBJECT', 'DATA_OBJECT', 'WORKFLOW_OBJECT']) {
+  for (const name of ['MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'UNMARKED_YESNO', 'YESNO_FORM', 'EXPLAIN_FORM', 'NOUN_SIGNAL', 'SENTENCE_START', 'VERB_OBJECT', 'REQUESTED_NOUN', 'COPULA', 'VERB_COPULA', 'PREDICATE', 'INFINITIVE_MARK', 'NEGATED', 'COORDINATED', 'PREDICATE_NEGATION', 'CLAUSE_NEGATION', 'LIST_TAIL', 'QUESTION_HEAD', 'ROLE_HEAD', 'DECLARATIVE', 'TOPIC_TAIL', 'TOPIC_AGENT', 'TOPIC_HEAD', 'ADDRESSED', 'RESPONSE_NOTE', 'ORDER_LEAD', 'ORDER_JOIN', 'INTRO_CLAUSE', 'PT_INFINITIVE', 'AFTER_A', 'STATED_GOAL', 'MODIFIER_USE', 'COMPOUND_AFTER', 'NARRATIVE', 'CONTEXT_WINDOW', 'PRONOUN_OBJECT', 'PRIOR_REQUEST', 'REQUESTED_ARTIFACT', 'MODIFIER_GAP', 'REVIEW_OBJECT', 'PLAN_OBJECT', 'DATA_OBJECT', 'WORKFLOW_OBJECT']) {
     const lines = sources.map(source => source.split('\n').find(line => line.startsWith(`const ${name} =`)))
     assert.ok(lines.every(Boolean), `${name} exists in every engine`)
     assert.equal(new Set(lines).size, 1, `${name} differs between engines:\n${lines.join('\n')}`)

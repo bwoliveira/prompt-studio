@@ -101,7 +101,9 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   bug." is the fix, and "Create a spreadsheet containing the sales data." is data. "Can you give me a plan to configure
   nginx?" is the plan, a requirement such as "Include documentation" no longer turns a requested script into text, and
   "I need a blog post explaining how to configure nginx." stays text. "I need instructions to configure nginx" is a
-  question and "I need a script. Please write it in Python with documentation." is code.
+  question and "I need a script. Please write it in Python with documentation." is code, as is "Write a Python script
+  without documentation"; "How do I build a React app? Add examples." stays a question and "Write a strategy memo about
+  optimizing SQL queries" stays text.
 - Fix: *Gere um e-mail*, *Monte uma mensagem* and the like stay text, reports and summaries are text even when they
   mention tests ("Write a summary of the test results", "Escreva um relatório dos testes"), and a question such as
   "Como instalar o Docker?" or "Como resumir um livro?" stays an answer on Opus, Sonnet and Astra.
