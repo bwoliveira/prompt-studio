@@ -235,6 +235,20 @@ test('studioPrompt is exactly ENGINE.build(brief), both targets', () => {
   }
 })
 
+test('studioAnswers: an answer whose step no longer applies to the final brief is not sent to the AI writer (Codex P2)', () => {
+  const goal = 'Create a React app to manage product launches'
+  for (const target of ['opus', 'sonnet']) {
+    const design = { category: 'designAvoid', answer: 'purple gradients' }
+    const built = studioAnswers(target, goal, [{ category: 'deliverable', answer: 'Working implementation' }, design])
+    assert.ok(built.some(a => a.id === 'designAvoid' && a.answer === 'purple gradients'), `${target}: kept while the app is built`)
+    // The deliverable was edited to a plan after the design step had been answered: the engine drops the
+    // design rules from the baseline, so the AI writer must not get them either.
+    const planned = studioAnswers(target, goal, [{ category: 'deliverable', answer: 'Plan / roadmap' }, design])
+    assert.ok(!planned.some(a => a.id === 'designAvoid'), `${target}: ${JSON.stringify(planned)}`)
+    assert.ok(!studioPrompt(target, goal, [{ category: 'deliverable', answer: 'Plan / roadmap' }, design]).prompt.includes('purple gradients'))
+  }
+})
+
 test('studioAnswers: answered steps only, locale question text, isDefault', () => {
   const ladder = [
     { category: 'deliverable', answer: 'Seguir o briefing' },

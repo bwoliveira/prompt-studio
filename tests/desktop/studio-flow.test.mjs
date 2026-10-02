@@ -605,6 +605,28 @@ test('the conflict note is in the Studio language and stays when switching previ
   }
 })
 
+test('a preview warning follows a Studio language switch (Codex P3)', { skip }, async () => {
+  await openStudio('Create a plan for the product launch', 'off', { deliverable: true })
+  const plan = [...document.querySelectorAll('[data-studio-option]')].map(el => el.getAttribute('data-studio-option')).find(label => /^Plan\b/.test(label))
+  await click(`[data-studio-option="${plan}"]`)
+  await pasteStep('')
+  await click('[data-studio-generate]')
+  await waitFor(() => $('[data-studio-preview-warning]'))
+  const warning = () => $('[data-studio-preview-warning]')?.textContent || ''
+  assert.match(warning(), /contradicts what the draft asks for/)
+  try {
+    ui.i18n.locale = 'pt'
+    await ui.act(async () => { ui.$locale.set('pt') })
+    assert.match($('[data-studio-preview-title]').textContent, /sem IA/, 'the preview itself switched to Portuguese')
+    assert.match(warning(), /contradiz o que o rascunho pede/, 'the warning is re-rendered in the new language')
+    assert.match(warning(), /Plano \/ roteiro/, 'with the option label translated too')
+    await click('[data-studio-cancel]')
+  } finally {
+    ui.i18n.locale = 'en'
+    await ui.act(async () => { ui.$locale.set('en') })
+  }
+})
+
 test('an empty AI suggestion on a step with a default offers "Use the recommended"; with no default only the step’s own Skip remains', { skip }, async () => {
   backend.suggest = () => ({ ok: true, value: '', reason: 'nada a acrescentar' })
   await openStudio()

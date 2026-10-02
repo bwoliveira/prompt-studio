@@ -565,9 +565,11 @@ function DoneRow() {
 function PreviewPanel({ state }) {
   const t = useT()
   const placing = useValue($placing)
-  const { ai, engine, showing, note, noteDetail, warnings = [] } = state.preview
+  const { ai, engine, showing, note, noteDetail } = state.preview
   const prompt = state.preview[showing]
   const failed = !ai && Boolean(note)
+  // Resolved at render time from the active locale, so a language switch (F3) translates them too.
+  const warnings = state.preview.warnings ? studioWarnings(state.preview.warnings.target, state.intent, state.preview.warnings.ladder, localeOf(t)) : []
   return jsxs('div', {
     'data-studio-preview': true,
     style: { display: 'grid', marginTop: '14px', rowGap: '8px' },

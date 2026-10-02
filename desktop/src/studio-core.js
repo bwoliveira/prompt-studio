@@ -240,12 +240,17 @@ export function studioWarnings(target, intent, ladder, locale = 'en') {
 
 // Question/answer pairs the AI writer gets: only steps really answered (skipped/empty/"none" left
 // out; the engine baseline carries the defaults). The design default is sent as its real text.
+// A step whose gate no longer holds for the final brief (e.g. the design answer after the deliverable was
+// edited to a plan) is left out: the engine drops it from the baseline, and the AI writer must not get it.
 export function studioAnswers(target, intent, ladder, locale = 'en') {
   const byId = new Map((ladder || []).map(rung => [rung.category, rung]))
   const engine = engineOf(target)
+  const brief = briefFromLadder(target, intent, ladder)
+  const analysis = engine.analyze(brief)
   const out = []
   for (const step of STEPS) {
     if (!stepApplies(step, target)) continue
+    if (step.when && !step.when(analysis, brief)) continue
     const rung = byId.get(step.id)
     if (!rung) continue
     const answer = String(rung.answer || '').trim()

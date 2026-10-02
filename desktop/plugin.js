@@ -1665,12 +1665,17 @@ function studioWarnings(target, intent, ladder, locale = 'en') {
 
 // Question/answer pairs the AI writer gets: only steps really answered (skipped/empty/"none" left
 // out; the engine baseline carries the defaults). The design default is sent as its real text.
+// A step whose gate no longer holds for the final brief (e.g. the design answer after the deliverable was
+// edited to a plan) is left out: the engine drops it from the baseline, and the AI writer must not get it.
 function studioAnswers(target, intent, ladder, locale = 'en') {
   const byId = new Map((ladder || []).map(rung => [rung.category, rung]))
   const engine = engineOf(target)
+  const brief = briefFromLadder(target, intent, ladder)
+  const analysis = engine.analyze(brief)
   const out = []
   for (const step of STEPS) {
     if (!stepApplies(step, target)) continue
+    if (step.when && !step.when(analysis, brief)) continue
     const rung = byId.get(step.id)
     if (!rung) continue
     const answer = String(rung.answer || '').trim()
@@ -2248,7 +2253,7 @@ export function reduceStudio(state, action) {
       // Preview before anything reaches the composer. `ai` is empty when the AI was off or failed;
       // `engine` is the prompt built without AI from the same answers.
       return state.status === 'briefing'
-        ? { ...state, preview: { ai: action.ai || '', engine: action.engine || '', showing: action.ai ? 'ai' : 'engine', note: action.note || '', noteDetail: action.noteDetail || '', warnings: action.warnings || [] }, status: 'preview' }
+        ? { ...state, preview: { ai: action.ai || '', engine: action.engine || '', showing: action.ai ? 'ai' : 'engine', note: action.note || '', noteDetail: action.noteDetail || '', warnings: action.warnings || null }, status: 'preview' }
         : state
     case 'SHOW_VERSION':
       return state.status === 'preview' && state.preview?.[action.version]
@@ -2925,9 +2930,10 @@ async function generatePrompt() {
   }
   clearSuggestion()
   let prompt = engineResult.prompt
-  // Conflicts between an answer and the draft (e.g. a deliverable picked against the draft's verb) are shown in
-  // the Studio's language, for both preview versions: the AI prompt is written from the same choices.
-  const warnings = studioWarnings(target, requestState.intent, ladder, locale)
+  // Conflicts between an answer and the draft (e.g. a deliverable picked against the draft's verb) are shown by
+  // the preview in the Studio's current language, for both versions: it keeps the target and the ladder and
+  // renders studioWarnings() from the active locale, so a language switch translates them too.
+  const warnings = { target, ladder }
   let note = ''
   let noteDetail = ''
   if ($aiMode.get() !== 'off' && pluginContext) {
@@ -3661,9 +3667,11 @@ function DoneRow() {
 function PreviewPanel({ state }) {
   const t = useT()
   const placing = useValue($placing)
-  const { ai, engine, showing, note, noteDetail, warnings = [] } = state.preview
+  const { ai, engine, showing, note, noteDetail } = state.preview
   const prompt = state.preview[showing]
   const failed = !ai && Boolean(note)
+  // Resolved at render time from the active locale, so a language switch (F3) translates them too.
+  const warnings = state.preview.warnings ? studioWarnings(state.preview.warnings.target, state.intent, state.preview.warnings.ladder, localeOf(t)) : []
   return jsxs('div', {
     'data-studio-preview': true,
     style: { display: 'grid', marginTop: '14px', rowGap: '8px' },
