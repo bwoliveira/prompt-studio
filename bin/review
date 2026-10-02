@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Local Codex review before the push: reviews the current branch against main and exits with an error on P0, P1 or P2.
-# Usage: bin/review [--force] [--base <ref>]   (bin/pr calls this script; details in bin/lib/local-review.mjs)
+# Local Codex review before the push: reviews the current branch against the repository's base branch and exits with an error on P0, P1 or P2.
+# Usage: bin/review [--force] [--base <ref>] [--no-fetch] [--summary-file <path>]   (bin/pr calls this script; details in bin/lib/local-review.mjs)
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 command -v codex >/dev/null || { echo "Codex CLI not found (npm i -g @openai/codex; then codex login)." >&2; exit 2; }
