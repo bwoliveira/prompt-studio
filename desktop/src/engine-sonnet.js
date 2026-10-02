@@ -250,8 +250,9 @@ const TEXT_ARTIFACT = /((?<!\b(?:and|then|also|e|depois|por|via|by)\s)\be-?mails
 const GENERATE_VERB = /^(gere|gerar|monte|montar)\b/
 // Languages: Portuguese (unaccented) + English.
 // A question: the draft opens with a question word and its first sentence is a question (or one phrase without
-// punctuation, a plain period included). The verbs inside it ("Como instalar o Docker?") are what is asked about, not an order.
-const QUESTION_FORM = /^(?:como|o que|qual|quais|por que|porque|quando|onde|quem|quanto|how|what|why|which|who|when|where)\b(?:[^.!?\n]*\?|[^.!?,\n]*\.?\s*$)/
+// punctuation, a plain period included; a period inside a name or version, "Node.js", "3.12", is not an end). The verbs
+// inside it ("Como instalar o Docker?") are what is asked about, not an order.
+const QUESTION_FORM = /^(?:como|o que|qual|quais|por que|porque|quando|onde|quem|quanto|how|what|why|which|who|when|where)\b(?:(?:[^.!?\n]|\.(?=\S))*\?|(?:[^.!?,\n]|\.(?=\S))*\.?\s*$)/
 // Languages: Portuguese (unaccented) + English.
 // "Analise a planilha" stays a data task: the analysis verb with a data file as its subject.
 const DATA_NOUN = /\b(planilhas?|csv|datasets?|spreadsheets?)\b/
@@ -275,15 +276,15 @@ const INTERFACE = /\b(dashboards?|sites?|website|landing|pages?|pagina|telas?|sc
 // Languages: Portuguese (unaccented) + English.
 // A signal that is a noun, not an order ("Our plan is ready. Build ..."): it decides only when no verb does.
 const NOUN_SIGNAL = /^(plano|planos|plan|roadmap|cronograma|estrategia|strategy|workflows?|pipelines?|planilhas?|csv|datasets?|spreadsheets?|revisao|reviews|pesquisa)$/
-// Languages: English. A noun-signal word that is also an imperative when it opens a sentence ("Plan the steps ...").
-const IMPERATIVE_NOUN = /^(plan|review|schedule)$/
 // The match opens the draft or a sentence (only punctuation or a line break and spaces before it), or follows a
-// one-word opener and its comma ("First, plan ...").
-const SENTENCE_START = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?$/
+// one-word opener and its comma ("First, plan ...") or a polite prefix ("Please plan ...", "Por favor, planeje").
+// A noun-signal word there names the request ("Plan the steps ...", "Plano de acao para ..."), not context.
+const SENTENCE_START = /(?:^|[.!?;:\n])\s*(?:\w+,\s*)?(?:(?:please|pls|por favor|favor)\s*,?\s+)?$/
 // Languages: Portuguese (unaccented) + English.
-// Between two artifact words, only bare modifiers ("API announcement email"): a preposition or clause word means the
-// first word is the artifact asked for ("script that sends an e-mail", "app de blog").
-const MODIFIER_GAP = /^\s+(?:(?!(?:that|which|who|to|for|of|on|about|with|and|or|in|by|que|para|de|do|da|dos|das|sobre|com|e|ou|em|no|na|por)\b)\w+\s+){0,2}$/
+// Between two artifact words, only bare modifiers ("API announcement email"): a preposition, clause word or
+// participle ("email announcing the app", "script that sends an e-mail", "app de blog") means the first word is the
+// artifact asked for. Nouns in -ing that name a field (marketing, landing, onboarding, billing) stay modifiers.
+const MODIFIER_GAP = /^\s+(?:(?!(?:that|which|who|to|for|of|on|about|with|and|or|in|by|que|para|de|do|da|dos|das|sobre|com|e|ou|em|no|na|por)\b)(?!(?!(?:marketing|landing|onboarding|billing)\b)\w+(?:ing|ndo)\b)\w+\s+){0,2}$/
 // The earliest explicit verb decides; a noun signal counts only when no verb fired. Every match of a rule is
 // read, so a context noun ("The CSV is attached. Extract ...") does not hide a later verb of the same rule.
 function firstSignal(text) {
@@ -297,7 +298,7 @@ function firstSignal(text) {
     while ((m = all.exec(text))) {
       if (m[0] === '') { all.lastIndex++; continue }
       const word = m[0].trim()
-      const isNoun = NOUN_SIGNAL.test(word) && !(IMPERATIVE_NOUN.test(word) && SENTENCE_START.test(text.slice(0, m.index)))
+      const isNoun = NOUN_SIGNAL.test(word) && !SENTENCE_START.test(text.slice(0, m.index))
       if (isNoun) { if (m.index < nounAt) { noun = id; nounAt = m.index }; continue }
       if (m.index < at) { signal = id; at = m.index }
       break

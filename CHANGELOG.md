@@ -51,9 +51,10 @@ Versions come from the commit subjects; releases from 1.6.0 on are also git tags
   Context before the verb does not name its object ("For our app, write a blog post" is text), and a question
   closed by a period ("How to create an app.") stays an answer. A code word that only modifies the text asked for
   ("Write an API announcement email") is not the artifact; a noun before the order ("Our plan is ready. Build a
-  dashboard") is context, while "Plan the steps ..." opening a sentence is the order; a context noun no longer
+  dashboard") is context, while "Plan the steps ..." or "Please plan ..." opening a sentence is the order; a context noun no longer
   hides a later verb of the same kind ("The CSV is attached. Extract the totals" is data); an order after an
-  opening question ("How does it work? Fix the login bug.") is the task.
+  opening question ("How does it work? Fix the login bug.") is the task. "Write an email announcing the app" is
+  text (a participle opens a clause, not a modifier), and "Como instalar o Node.js?" or "nginx 1.26?" stays a question.
 - Fix: *Gere um e-mail*, *Monte uma mensagem* and the like stay text, reports and summaries are text even when they
   mention tests ("Write a summary of the test results", "Escreva um relatório dos testes"), and a question such as
   "Como instalar o Docker?" or "Como resumir um livro?" stays an answer on Opus, Sonnet and Astra.

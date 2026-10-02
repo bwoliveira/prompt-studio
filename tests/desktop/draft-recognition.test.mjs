@@ -150,6 +150,26 @@ const TABLE = [
   ['A planilha está anexa. Extraia os totais e escreva um relatório.', 'data', 'pt'],
   ['The roadmap is done. Plan the next quarter.', 'plan', 'roadmap noun, then imperative plan'],
   ['The spreadsheet is attached. Write an email to the client', 'text', 'near miss: no data verb follows'],
+  // a polite prefix keeps the imperative (Codex P1)
+  ['Please plan the steps to configure nginx; do not run any commands.', 'plan', 'please + plan'],
+  ['Por favor, planeje os passos para configurar o nginx', 'plan', 'pt: por favor + planeje'],
+  ['Por favor, plano de ação para configurar o nginx', 'plan', 'pt: a noun opening the request names it'],
+  ['Plano de ação para configurar o nginx', 'plan', 'pt: noun first, infinitive after'],
+  ['Planilha com os totais; extraia do CSV', 'data', 'pt: noun first'],
+  ['Please review the API and then configure the proxy', 'review', 'please + review'],
+  ['Please build a React dashboard for our plan', 'implementation', 'near miss: plan after the verb'],
+  // a participle between the artifacts is a clause, not a modifier (Codex P2)
+  ['Write an email announcing the app', 'text', 'announcing is a clause'],
+  ['Write an article explaining our API', 'text', 'explaining is a clause'],
+  ['Escreva um e-mail anunciando o app', 'text', 'pt anunciando'],
+  ['Write a marketing email script', 'implementation', 'near miss: marketing is a field, script is the artifact'],
+  ['Write a landing page copy script', 'implementation', 'near miss: landing is a field'],
+  // a period inside a name or version does not close the question (Codex P2)
+  ['Como instalar o Node.js?', 'answer', 'node.js'],
+  ['Como instalar o Python 3.12?', 'answer', 'version'],
+  ['How do I configure nginx 1.26?', 'answer', 'version'],
+  ['How do I configure nginx 1.26', 'answer', 'version, no mark'],
+  ['Como instalar o Node.js. Depois configure o nginx.', 'workflow', 'near miss: a real sentence end, then an order'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
@@ -217,7 +237,7 @@ test('parity: Opus and Sonnet carry the identical detection block', async () => 
   const [opus, sonnet] = await Promise.all([src('engine-opus.js'), src('engine-sonnet.js')])
   const a = detection(opus)
   const b = detection(sonnet)
-  for (const needle of ['CATEGORY_RULES', 'DELIVERABLE_RULES', 'MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'QUESTION_START', 'NOUN_SIGNAL', 'IMPERATIVE_NOUN', 'SENTENCE_START', 'MODIFIER_GAP', 'INTERFACE', 'function firstSignal', 'function detect', 'function analyzeNormalized']) {
+  for (const needle of ['CATEGORY_RULES', 'DELIVERABLE_RULES', 'MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'QUESTION_START', 'NOUN_SIGNAL', 'SENTENCE_START', 'MODIFIER_GAP', 'INTERFACE', 'function firstSignal', 'function detect', 'function analyzeNormalized']) {
     assert.ok(a.includes(needle), `opus block has ${needle}`)
   }
   assert.equal(a, b, 'Opus and Sonnet detection blocks drifted apart: change both engines identically')
@@ -225,7 +245,7 @@ test('parity: Opus and Sonnet carry the identical detection block', async () => 
 
 test('parity: the artifact constants are the same text on all three engines', async () => {
   const sources = await Promise.all(['engine-opus.js', 'engine-sonnet.js', 'engine-astra.js'].map(src))
-  for (const name of ['MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'NOUN_SIGNAL', 'IMPERATIVE_NOUN', 'SENTENCE_START', 'MODIFIER_GAP', 'REVIEW_OBJECT', 'PLAN_OBJECT', 'DATA_OBJECT', 'WORKFLOW_OBJECT']) {
+  for (const name of ['MAKE_VERB', 'CODE_ARTIFACT', 'TEXT_ARTIFACT', 'GENERATE_VERB', 'QUESTION_FORM', 'NOUN_SIGNAL', 'SENTENCE_START', 'MODIFIER_GAP', 'REVIEW_OBJECT', 'PLAN_OBJECT', 'DATA_OBJECT', 'WORKFLOW_OBJECT']) {
     const lines = sources.map(source => source.split('\n').find(line => line.startsWith(`const ${name} =`)))
     assert.ok(lines.every(Boolean), `${name} exists in every engine`)
     assert.equal(new Set(lines).size, 1, `${name} differs between engines:\n${lines.join('\n')}`)
