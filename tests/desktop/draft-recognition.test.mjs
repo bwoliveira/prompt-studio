@@ -1022,6 +1022,11 @@ const TABLE = [
   ['Me mostre um script, por favor', 'answer', '#74 W5 R4 pt trailing por favor'],
   ['Me mostre um script novo e corrija o bug do login', 'implementation', '#74 W5 R4 near miss: pt adjective, then an order'],
   ['Can you show me a code review please', 'review', '#74 W5 R4 near miss: a code review is a review'],
+  // Regression found by the corpus diff after round 4: the Portuguese trailing-word allowance must not read "code review" as code
+  ['Me mostre um code review', 'review', '#74 W5 R4b pt um code review is a review'],
+  ['Me mostre um code audit', 'review', '#74 W5 R4b pt um code audit is a review'],
+  ['Me mostre a code review of the API', 'review', '#74 W5 R4b a code review of the API'],
+  ['Me mostre um script python', 'answer', '#74 W5 R4b pt a script python is a request for code'],
 ]
 
 for (const [draft, expected, why] of TABLE) {

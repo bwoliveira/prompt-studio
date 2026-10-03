@@ -333,8 +333,10 @@ function createDetector(profile = {}) {
   function asksCode(phrase, pt) {
     const head = phrase.slice(0, 300).split(SHOW_HEAD, 1)[0]
     if (CODE_HEAD.test(head)) return true
-    const one = head.replace(/\s+[\w-]+\s*$/, '')
-    return pt && (CODE_HEAD.test(one) || CODE_HEAD.test(one.replace(/\s+[\w-]+\s*$/, '')))
+    // Not behind the English modifier "code" ("um code review") nor a determiner or a review/plan/data noun.
+    const cut = text => text.replace(/\s+[\w-]+\s*$/, '')
+    return pt && [cut(head), cut(cut(head))].some(stem => CODE_HEAD.test(stem) && !/\bcode\s*$/.test(stem)
+      && !/^\s*(?:an?|the|um|uma|uns|umas|o|os|as)\s/.test(head.slice(stem.length)) && !head.slice(stem.length).split(/\s+/).some(word => NOUN_SIGNAL.test(word)))
   }
   function coordinatedOrder(text, purpose = false) {
     ORDER_JOIN.lastIndex = 0
