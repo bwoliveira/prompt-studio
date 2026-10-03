@@ -913,6 +913,12 @@ const TABLE = [
   ['Me mostre um script que extrai dados e por favor adicione testes unitários', 'implementation', '#74 R2 pt e por favor'],
   ['Você pode me mostrar um script que extrai dados e também adicione testes', 'implementation', '#74 R2 pt e tambem'],
   ['Show me a script that extracts data and also prints a report', 'answer', '#74 R2 near miss: also inside the purpose, no build verb'],
+  // Codex round 3: a coordinated order wrapped in help me, I need you to or its Portuguese forms
+  ['Can you show me a script that extracts data and help me add unit tests?', 'implementation', '#74 R3 and help me add'],
+  ['Show me a script that extracts data and I need you to add unit tests', 'implementation', '#74 R3 and i need you to add'],
+  ['Me mostre um script que extrai dados e me ajude a adicionar testes unitários', 'implementation', '#74 R3 pt e me ajude a adicionar'],
+  ['Me mostre um script que extrai dados e preciso que você adicione testes unitários', 'implementation', '#74 R3 pt e preciso que voce'],
+  ['Can you show me a script that extracts data and help me understand how it works?', 'answer', '#74 R3 near miss: help me understand'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
