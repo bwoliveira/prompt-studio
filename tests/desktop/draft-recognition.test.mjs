@@ -919,6 +919,13 @@ const TABLE = [
   ['Me mostre um script que extrai dados e me ajude a adicionar testes unitários', 'implementation', '#74 R3 pt e me ajude a adicionar'],
   ['Me mostre um script que extrai dados e preciso que você adicione testes unitários', 'implementation', '#74 R3 pt e preciso que voce'],
   ['Can you show me a script that extracts data and help me understand how it works?', 'answer', '#74 R3 near miss: help me understand'],
+  // Codex round 4: an addressed order after a which clause; "then" inside a modal purpose clause describes the script
+  ['Can you show me a function which parses dates and help me add unit tests?', 'implementation', '#74 R4 which clause, then help me add'],
+  ['Show me a script which extracts data and please add unit tests', 'implementation', '#74 R4 which clause, then please add'],
+  ['Can you show me a script that can install and then configure nginx?', 'answer', '#74 R4 a modal purpose with then'],
+  ['Show me a script that should build and then deploy the app', 'answer', '#74 R4 should build and then deploy'],
+  ['Me mostre um script que possa instalar e depois configurar o nginx', 'answer', '#74 R4 pt possa instalar e depois configurar'],
+  ['Show me a script that extracts data and then write unit tests for it', 'implementation', '#74 R4 near miss: a finite verb, then an order'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
