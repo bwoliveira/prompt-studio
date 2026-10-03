@@ -926,6 +926,13 @@ const TABLE = [
   ['Show me a script that should build and then deploy the app', 'answer', '#74 R4 should build and then deploy'],
   ['Me mostre um script que possa instalar e depois configurar o nginx', 'answer', '#74 R4 pt possa instalar e depois configurar'],
   ['Show me a script that extracts data and then write unit tests for it', 'implementation', '#74 R4 near miss: a finite verb, then an order'],
+  // Codex round 5: after a finite verb ("that extracts data") a bare build verb is an order; also does not leave a modal purpose
+  ['Can you show me a script that extracts data and fix the login bug?', 'implementation', '#74 R5 finite verb, and fix'],
+  ['Show me a function that parses dates and write unit tests for it', 'implementation', '#74 R5 finite verb, and write'],
+  ['Me mostre um script que extrai dados e corrija o bug do login', 'implementation', '#74 R5 pt finite verb, e corrija'],
+  ['Show me a script that can install and also configure nginx', 'answer', '#74 R5 also inside a modal purpose'],
+  ['Me mostre um script que possa instalar e também configurar o nginx', 'answer', '#74 R5 pt tambem inside a modal purpose'],
+  ['Give me a function to read and also write files', 'answer', '#74 R5 also inside an infinitive purpose'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
