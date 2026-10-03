@@ -951,6 +951,22 @@ const TABLE = [
   ['Me mostre um script para instalar e configurar o nginx', 'answer', '#74 W5 F1 near miss: pt para instalar is a purpose'],
   ['Can you show me which library parses ISO dates and fix the login bug?', 'answer', '#74 W5 F1 near miss: a which question stays a topic'],
   ['Show me how it works and which library parses dates and fix the bug', 'answer', '#74 W5 F1 near miss: how and which are topics'],
+  // Hermes review F2: an order addressed to the assistant after a comma (no "and") is an order; a comma that only
+  // continues the description is not
+  ['Can you show me a script that extracts data, please write unit tests for it', 'implementation', '#74 W5 F2 comma, please write'],
+  ['Me mostre um script que extrai dados, por favor escreva testes unitários para ele', 'implementation', '#74 W5 F2 pt comma, por favor escreva'],
+  ['Show me a script that extracts data, can you add unit tests?', 'implementation', '#74 W5 F2 comma, can you add'],
+  ['Show me a script that extracts data, I need you to write unit tests for it', 'implementation', '#74 W5 F2 comma, I need you to write'],
+  ['Show me a script that extracts data, help me add unit tests', 'implementation', '#74 W5 F2 comma, help me add'],
+  ['Me mostre um script que extrai dados, você pode escrever testes unitários?', 'implementation', '#74 W5 F2 pt comma, voce pode escrever'],
+  ['Me mostre um script que extrai dados, me ajude a adicionar testes unitários', 'implementation', '#74 W5 F2 pt comma, me ajude a adicionar'],
+  ['Show me a script that extracts data, please', 'answer', '#74 W5 F2 near miss: please alone orders nothing'],
+  ['Show me a script that extracts data, please keep it short', 'answer', '#74 W5 F2 near miss: please, no build verb'],
+  ['Can you show me a script that extracts data, please explain how it works', 'answer', '#74 W5 F2 near miss: an explanation is asked for'],
+  ['Show me a script that extracts data, can you tell me how it works?', 'answer', '#74 W5 F2 near miss: can you tell me how'],
+  ['Show me a script that extracts data, help me understand it', 'answer', '#74 W5 F2 near miss: help me understand'],
+  ['Show me a script that extracts data, which parses dates and writes files', 'answer', '#74 W5 F2 near miss: a comma that continues the description'],
+  ['Show me a script that extracts data, write unit tests for it', 'answer', '#74 W5 F2 near miss: a bare verb after a comma stays part of the description'],
 ]
 
 for (const [draft, expected, why] of TABLE) {

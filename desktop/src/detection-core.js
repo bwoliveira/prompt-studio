@@ -178,7 +178,8 @@ const ADDRESSED = /^(?:(?:can|could|would|will|should|may|might|do|does|did)\s+y
 // "How do I build a React app? Add examples.": after a question, an instruction about the answer is not a task.
 const RESPONSE_NOTE = /^(?:add|include|give|provide|use|keep|make|show|cite|list|format|mention|cover|avoid|skip|omit|limit|be|adicione|inclua|de|forneca|mantenha|faca|mostre|cite|liste|formate|mencione|cubra|evite|pule|omita|limite|seja)\s+(?:(?:the|a|an|some|more|any|your|o|os|as|um|uma|mais|alguns|algumas|sua|seu)\s+)?(?:\w+\s+){0,2}?(?:examples?|exemplos?|sources?|fontes?|references?|referencias?|links?|citations?|citacoes|bullet\s*points?|bullets|topicos|tables?|tabelas?|code\s+samples?|snippets?|trechos|answer|resposta|response|explanation|explicacao|details?|detalhes|context|contexto|summary|resumo|steps?|passos|numbers?|numeros|comparison|comparacao|short|brief|concise|breve|curto|conciso|simple|simples|jargon|jargao|markdown|headings?|titulos?|emojis?|words?|palavras|sentences?|frases|paragraphs?|paragrafos|portuguese|english|ingles|portugues)\b/
 const ORDER_LEAD = new RegExp(`^\\s*(?:(?:please|por favor|then|depois|also|tambem|now|agora|\\w+ly|\\w+mente|${ADDRESS_WRAP})\\s+){0,2}$`)
-const ORDER_JOIN = /\b(?:and|then|e|depois|entao)\s+(?:then\s+|depois\s+)?/g
+// A comma joins an order only when the clause after it addresses the assistant ("..., please write tests", "..., can you add").
+const ORDER_JOIN = new RegExp(`\\b(?:and|then|e|depois|entao)\\s+(?:then\\s+|depois\\s+)?|,\\s*(?=${ORDER_ADDRESS.source.slice(1)})`, 'g')
 const INTRO_CLAUSE = /^([^.!?,:;\n]{1,60}),\s+/
 // "The configure script is broken", "I tried to configure nginx yesterday": the verb names a thing or tells the past.
 // "Ajude-me a revisar codigo": before a Portuguese infinitive, "a" is the preposition, not an article.
@@ -268,6 +269,8 @@ function createDetector(profile = {}) {
   function coordinatedOrder(text, purpose = false) {
     ORDER_JOIN.lastIndex = 0
     for (let n = 0, m; n < 8 && (m = ORDER_JOIN.exec(text)); n++) {
+      // A comma is a join in a show request only; elsewhere it continues the sentence.
+      if (!purpose && m[0][0] === ',') continue
       const before = text.slice(Math.max(0, m.index - CONTEXT_WINDOW), m.index)
       const rest = text.slice(m.index + m[0].length, m.index + m[0].length + CONTEXT_WINDOW)
       // "how to configure nginx and deploy the app": the coordinator extends the topic, not the request; "and then" orders.
