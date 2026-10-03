@@ -992,6 +992,15 @@ const TABLE = [
   ['Me mostre um script que ajuda a equipe e corrija o bug do login', 'implementation', '#74 W5 R1 pt ajuda a equipe has no infinitive'],
   ['Show me a script that helps the team build and deploy apps', 'answer', '#74 W5 R1 near miss: helps the team build'],
   ['Me mostre um script que ajuda a equipe a ler e escrever arquivos', 'answer', '#74 W5 R1 near miss: pt ajuda a equipe a ler'],
+  // Codex round 2 (local): punctuation or an adverb in front of the addressed order does not hide it
+  ['Can you show me a script that extracts data and please, fix the login bug?', 'implementation', '#74 W5 R2 and please, fix'],
+  ['Me mostre um script que extrai dados e por favor, corrija o bug do login', 'implementation', '#74 W5 R2 pt e por favor, corrija'],
+  ['Show me a script that can read files and also can you fix the login bug?', 'implementation', '#74 W5 R2 modal purpose, and also can you fix'],
+  ['Show me a script that can read files and also please fix the login bug', 'implementation', '#74 W5 R2 modal purpose, and also please fix'],
+  ['Me mostre um script que possa ler arquivos e também por favor corrija o bug do login', 'implementation', '#74 W5 R2 pt modal purpose, e tambem por favor corrija'],
+  ['Show me a script that extracts data, also please write unit tests for it', 'implementation', '#74 W5 R2 comma, also please write'],
+  ['Show me a script that can read files and also write tests', 'answer', '#74 W5 R2 near miss: also inside a modal purpose, no address'],
+  ['Show me a script that can read files and also help me understand it', 'answer', '#74 W5 R2 near miss: also help me understand'],
 ]
 
 for (const [draft, expected, why] of TABLE) {

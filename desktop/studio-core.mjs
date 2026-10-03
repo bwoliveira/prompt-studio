@@ -166,7 +166,8 @@ const TOPIC_AGENT = /\b(?:we|you|i|they|nos|voce|voces|eles|elas|a gente|first|p
 // How an order is wrapped when it is addressed to the assistant ("can you", "help me", "I need you to", "voce pode", "me ajude a").
 const ADDRESS_WRAP = '(?:(?:can|could|would|will)\\s+you|(?:voce|voces)\\s+(?:pode|poderia)|(?:i|we)\\s+(?:need|want)\\s+you\\s+to|(?:preciso|quero)\\s+que\\s+voce|help\\s+(?:me|us)(?:\\s+to)?|(?:me|nos)\\s+ajude\\s+a|ajude(?:-|\\s)(?:me|nos)\\s+a)'
 // ... unless the coordinated clause opens by addressing the assistant ("and please add", "and can you add").
-const ORDER_ADDRESS = new RegExp(`^(?:(?:please|por favor)\\b|${ADDRESS_WRAP}\\b)`)
+// An adverb in front ("and also can you add", "e tambem por favor adicione") does not hide it.
+const ORDER_ADDRESS = new RegExp(`^(?:(?:also|then|now|just|tambem|depois|agora|so|\\w+ly|\\w+mente)\\s*,?\\s+){0,2}(?:(?:please|por favor)\\b|${ADDRESS_WRAP}\\b)`)
 // "a script that can install and then configure nginx": after a modal the coordinated verb is part of what the script can do.
 const PURPOSE_MODAL = /\b(?:that|which|who|whose|que)\s+(?:(?:also|always|never|just|still|ja|tambem|nunca|sempre)\s+)?(?:can|could|should|will|would|must|may|might|possa|possam|deva|devam|pode|podem)\b[^.!?;:,]*$/
 // "a script that helps users read and write files", "que ajuda a ler e escrever": what the script helps or lets someone do
@@ -190,7 +191,7 @@ const TOPIC_HEAD = /^\s*(?:how|what|why|when|where|which|whether|como|o que|por 
 const ADDRESSED = /^(?:(?:can|could|would|will|should|may|might|do|does|did)\s+you\b|(?:voce|voces)\b|(?:pode|podem|poderia|poderiam|consegue|conseguem|da|daria)\s+(?:para\s+)?(?:voce|voces|me|nos)?\b)/
 // "How do I build a React app? Add examples.": after a question, an instruction about the answer is not a task.
 const RESPONSE_NOTE = /^(?:add|include|give|provide|use|keep|make|show|cite|list|format|mention|cover|avoid|skip|omit|limit|be|adicione|inclua|de|forneca|mantenha|faca|mostre|cite|liste|formate|mencione|cubra|evite|pule|omita|limite|seja)\s+(?:(?:the|a|an|some|more|any|your|o|os|as|um|uma|mais|alguns|algumas|sua|seu)\s+)?(?:\w+\s+){0,2}?(?:examples?|exemplos?|sources?|fontes?|references?|referencias?|links?|citations?|citacoes|bullet\s*points?|bullets|topicos|tables?|tabelas?|code\s+samples?|snippets?|trechos|answer|resposta|response|explanation|explicacao|details?|detalhes|context|contexto|summary|resumo|steps?|passos|numbers?|numeros|comparison|comparacao|short|brief|concise|breve|curto|conciso|simple|simples|jargon|jargao|markdown|headings?|titulos?|emojis?|words?|palavras|sentences?|frases|paragraphs?|paragrafos|portuguese|english|ingles|portugues)\b/
-const ORDER_LEAD = new RegExp(`^\\s*(?:(?:please|por favor|then|depois|also|tambem|now|agora|\\w+ly|\\w+mente|${ADDRESS_WRAP})\\s+){0,2}$`)
+const ORDER_LEAD = new RegExp(`^\\s*(?:(?:please|por favor|then|depois|also|tambem|now|agora|\\w+ly|\\w+mente|${ADDRESS_WRAP})\\s*,?\\s+){0,2}$`)
 // A comma joins an order only when the clause after it addresses the assistant ("..., please write tests", "..., can you add").
 const ORDER_JOIN = new RegExp(`\\b(?:and|then|e|depois|entao)\\s+(?:then\\s+|depois\\s+)?|,\\s*(?=${ORDER_ADDRESS.source.slice(1)})`, 'g')
 const INTRO_CLAUSE = /^([^.!?,:;\n]{1,60}),\s+/
