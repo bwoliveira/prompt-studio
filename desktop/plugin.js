@@ -213,10 +213,15 @@ const PURPOSE_MODAL = /\b(?:that|which|who|whose|que)\s+(?:(?:also|always|never|
 // "a script that helps users read and write files", "que ajuda a ler e escrever": what the script helps or lets someone do
 // (a help verb, its object, a bare verb) is part of the script, so the coordinated verb is not a second order. A coordinator
 // or a comma after the complement ends it ("helps users read and write files and fix the bug").
-const PURPOSE_COMPLEMENT = /\b(?:help|helps|let|lets|allow|allows|enable|enables|permit|permits)\s+(?:(?!(?:and|or|e|ou)\b)[\w-]+\s+){1,3}[\w-]+\s*$|\b(?:ajuda|ajudam)\s+(?:(?!(?:e|ou|a)\b)[\w-]+\s+){0,2}a\s+[\w-]+\s*$/
+const PURPOSE_COMPLEMENT = /\b(?:help|helps|let|lets|allow|allows|enable|enables|permit|permits)\s+(?:(?:the|an?|our|your|their|my|his|her|its|all|some|new)\s+)?(?!(?:the|an?|our|your|their|my|his|her|its|all|some|new|and|or)\b)[\w-]+\s+(?!(?:with|for|on|in|of|to|from|at|by|about|through|via|into|as|than|between|and|or)\b)(?:\w+ly\s+)?[\w-]+(?:\s+(?!(?:and|or)\b)[\w-]+){0,3}\s*$|\b(?:ajuda|ajudam)\s+(?:(?!(?:e|ou)\b)[\w-]+\s+){0,2}a\s+\w+(?:ar|er|ir)\b(?:\s+(?!(?:e|ou)\b)[\w-]+){0,3}\s*$/
 // "to" opens a purpose only before a verb: "to users", "to the team", "to them" and "para os usuarios" name a recipient.
 // A plural noun ends in s (not ss, us, is); a Portuguese infinitive ends in ar, er or ir ("para ler", "para instala-lo").
-const PURPOSE_TAIL = /\bto\s+(?!(?:the|an?|my|our|your|their|his|her|its|this|that|these|those|all|each|every|some|any|no|me|us|you|them|him|it)\b)(?!\d)(?!\w*[^\Wsui]s\b)\w[^.!?;:,]*$|\bpara\s+(?:\w+(?:ar|er|ir)|\w+-(?:lo|la|los|las))\b[^.!?;:,]*$/
+const PURPOSE_TAIL = /\bto\s+(?!(?:the|an?|my|our|your|their|his|her|its|this|that|these|those|all|each|every|some|any|no|me|us|you|them|him|it)\b)(?!\d)(?!\w*[^\Wsui]s\b)\w/g
+const PURPOSE_PARA = /\bpara\s+(?:\w+(?:ar|er|ir)|\w+-(?:lo|la|los|las))\b/
+// After a relative pronoun (a finite verb and its object come first: "that sends data to Redis"), "to" is an infinitive only
+// behind a word that takes one ("used to", "needs to", "helps users to", "in order to").
+const RELATIVE_PRONOUN = /\b(?:that|which|who|whose)\b/
+const PURPOSE_CUE = /\b(?:use|uses|used|using|designed|built|made|meant|intended|supposed|able|ready|going|need|needs|needed|want|wants|wanted|try|tries|trying|help|helps|let|lets|allow|allows|enable|enables|order|written|wrote|serves?|have|has|had)\s+(?:[\w-]+\s+){0,2}$/
 // "which" after a noun ("a function which parses dates") opens a relative clause; after a verb of asking or knowing,
 // a conjunction or "me" ("show me which", "and which") it asks a question and the rest is a topic.
 const QUESTION_CONTEXT = /(?:^|\s)(?:show|tell|explain|ask|know|see|learn|understand|decide|choose|about|whether|if|and|or|me|us)\s+$/
@@ -260,6 +265,15 @@ function pickArtifact(request) {
   }
   if (code && txt) return code.index < txt.index ? 'code' : 'text'
   return code ? 'code' : txt ? 'text' : null
+}
+// The clause before a coordinator ends in an infinitive purpose ("a script to read and write files", "para ler e escrever").
+function purposeTail(before) {
+  const clause = before.slice(before.search(/[^.!?;:,]*$/))
+  for (const m of clause.matchAll(PURPOSE_TAIL)) {
+    const lead = clause.slice(0, m.index)
+    if (!RELATIVE_PRONOUN.test(lead) || PURPOSE_CUE.test(lead)) return true
+  }
+  return PURPOSE_PARA.test(clause)
 }
 function contextBefore(text, at) {
   // The sentinel keeps ^ from matching where the window was cut.
@@ -328,7 +342,7 @@ function createDetector(profile = {}) {
       // "why we first configure nginx and then build the app": a sequence done by the explained agent stays the topic.
       const sequence = /\b(?:then|depois|entao)\b/.test(m[0]) && !(topic && TOPIC_AGENT.test(topic[0]))
       const addressed = purpose && ORDER_ADDRESS.test(rest)
-      const inPurpose = purpose && !addressed && (PURPOSE_MODAL.test(before) || PURPOSE_COMPLEMENT.test(before) || (!sequence && PURPOSE_TAIL.test(before)))
+      const inPurpose = purpose && !addressed && (PURPOSE_MODAL.test(before) || PURPOSE_COMPLEMENT.test(before) || (!sequence && purposeTail(before)))
       if (TOPIC_HEAD.test(rest) || inPurpose || (!sequence && !addressed && topic)) continue
       const next = firstSignal(rest)
       // The offset of the order verb itself, so the rest starts a sentence ("review it?") and is read as an order.

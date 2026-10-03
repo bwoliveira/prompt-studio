@@ -980,6 +980,18 @@ const TABLE = [
   ['Show me a script that helps users read and write files and fix the login bug', 'implementation', '#74 W5 F3 near miss: a second coordinator opens an order'],
   ['Show me a script that helps users read files, and fix the login bug', 'implementation', '#74 W5 F3 near miss: a comma ends the description'],
   ['Me mostre um script que ajuda usuários e corrija o bug do login', 'implementation', '#74 W5 F3 near miss: pt ajuda usuarios, then an order'],
+  // Codex round 1 (local): a named destination is not an infinitive; a help verb needs a bare verb complement
+  ['Show me a script that sends data to Redis and fix the login bug', 'implementation', '#74 W5 R1 to Redis is a destination'],
+  ['Show me a script that sends data to S3 and fix the login bug', 'implementation', '#74 W5 R1 to S3 is a destination'],
+  ['Show me a script that uploads files to Dropbox and fix the login bug', 'implementation', '#74 W5 R1 to Dropbox is a destination'],
+  ['Show me a script that is designed to read and write files', 'answer', '#74 W5 R1 near miss: designed to is a purpose'],
+  ['Show me a script that needs to read and write files', 'answer', '#74 W5 R1 near miss: needs to is a purpose'],
+  ['Show me a script that I use to read and write files', 'answer', '#74 W5 R1 near miss: I use to is a purpose'],
+  ['Show me a script that helps users with files and fix the login bug', 'implementation', '#74 W5 R1 helps users with files has no complement verb'],
+  ['Show me a script that helps the team and fix the login bug', 'implementation', '#74 W5 R1 helps the team has no complement verb'],
+  ['Me mostre um script que ajuda a equipe e corrija o bug do login', 'implementation', '#74 W5 R1 pt ajuda a equipe has no infinitive'],
+  ['Show me a script that helps the team build and deploy apps', 'answer', '#74 W5 R1 near miss: helps the team build'],
+  ['Me mostre um script que ajuda a equipe a ler e escrever arquivos', 'answer', '#74 W5 R1 near miss: pt ajuda a equipe a ler'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
