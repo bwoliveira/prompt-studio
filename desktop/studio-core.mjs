@@ -160,15 +160,16 @@ const REQUESTED_ARTIFACT = /((?:(?:i|we) (?:need|want|would like)|i'd like|we'd 
 // "how to configure nginx and deploy the app", "the architecture and how to configure nginx": a topic, not an order.
 const TOPIC_TAIL = /\b(?:how to|how|why|when|where|what|which|whether|como|por que|porque|quando|onde|o que|qual|quais|se)\s+\w+[^.!?,;]*$/
 const TOPIC_AGENT = /\b(?:we|you|i|they|nos|voce|voces|eles|elas|a gente|first|primeiro)\b/
-// "a script that can build and deploy an app": a coordinator inside the purpose of the artifact (no comma, no "then") extends
-// what the artifact does, it does not order anything.
+// "a script to read and write files": a coordinator inside an infinitive purpose of the artifact (no comma, no "then")
+// extends what the artifact does, it does not order anything. After a finite verb ("that extracts data and fix ...") a bare
+// verb is an order.
 // How an order is wrapped when it is addressed to the assistant ("can you", "help me", "I need you to", "voce pode", "me ajude a").
 const ADDRESS_WRAP = '(?:(?:can|could|would|will)\\s+you|(?:voce|voces)\\s+(?:pode|poderia)|(?:i|we)\\s+(?:need|want)\\s+you\\s+to|(?:preciso|quero)\\s+que\\s+voce|help\\s+(?:me|us)(?:\\s+to)?|(?:me|nos)\\s+ajude\\s+a|ajude(?:-|\\s)(?:me|nos)\\s+a)'
-// ... unless the coordinated clause opens by addressing the assistant ("and please add", "and also add", "and can you add").
-const ORDER_ADDRESS = new RegExp(`^(?:(?:please|por favor|also|tambem|now|agora)\\b|${ADDRESS_WRAP}\\b)`)
+// ... unless the coordinated clause opens by addressing the assistant ("and please add", "and can you add").
+const ORDER_ADDRESS = new RegExp(`^(?:(?:please|por favor)\\b|${ADDRESS_WRAP}\\b)`)
 // "a script that can install and then configure nginx": after a modal the coordinated verb is part of what the script can do.
 const PURPOSE_MODAL = /\b(?:that|which|who|whose|que)\s+(?:(?:also|always|never|just|still|ja|tambem|nunca|sempre)\s+)?(?:can|could|should|will|would|must|may|might|possa|possam|deva|devam|pode|podem)\b[^.!?;:,]*$/
-const PURPOSE_TAIL = /\b(?:that|which|who|whose|to|que|para|onde)\s+\w[^.!?;:,]*$/
+const PURPOSE_TAIL = /\b(?:to|para)\s+\w[^.!?;:,]*$/
 const TOPIC_HEAD = /^\s*(?:how|what|why|when|where|which|whether|como|o que|por que|quando|onde|qual|quais)\b/
 // "and fix the login bug": the order verb opens right after the coordinator, at most behind please/then/an adverb.
 // "Can you recommend a design and build a React dashboard?": a yes/no question addressed to the assistant may carry an order.
