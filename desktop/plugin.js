@@ -2746,6 +2746,8 @@ const lifecycle = {
   suggestSerial: 0,
   // Finished suggestions by question key, so Back / reopening a question does not call the model again.
   suggestionCache: new Map(),
+  // Latest in-flight writer per question. Navigation keeps it; cancellation or a new request revokes it.
+  suggestionRequests: new Map(),
   // The session context read in flight (a promise), so the first automatic suggestion waits for it.
   contextPromise: null,
   // Disposer of the pending automatic-suggestion timer, or null.
@@ -2855,8 +2857,8 @@ const composerAdapter = {
 
   // Puts text into a conversation's composer without ever losing what is there: an empty composer gets the
   // text, one that already holds other text gets it appended below. False when that composer is not on screen.
-  // Serialized with appendDraft: a read-then-write never interleaves with another one, so two placements
-  // (for example a dispose restore during a preview placement) cannot both see an empty composer.
+  // Serialized with appendDraft so a dispose restore cannot race another plugin placement.
+  // The host can still receive typing during an await: only its append operation is safe for placement.
   placeDraft(text, address) {
     return this.serial(() => this.placeNow(text, address))
   },
@@ -2876,10 +2878,10 @@ const composerAdapter = {
     } catch {
       current = null
     }
-    // Replace only a composer read as empty (or already holding this text). An unreadable one (null) may
-    // hold a draft, so the text is appended, never written over it.
+    // An equal draft needs no mutation. Even an empty read can be stale before the asynchronous write:
+    // append against the host's live draft, never replace text typed while the request was pending.
     const existing = typeof current === 'string' ? current.trim() : null
-    if (existing === '' || existing === text.trim()) return this.writeDraft(text, address)
+    if (existing === text.trim()) return true
     if (typeof host.composer.insertText !== 'function') return false
     try {
       return (await host.composer.insertText(address, text, { mode: 'block' })) === true
@@ -3450,8 +3452,10 @@ function releasePending(pending) {
   if ($suggestion.get() === pending) $suggestion.set(null)
 }
 
-function clearSuggestion() {
+function clearSuggestion({ keepInFlight = false } = {}) {
   cancelAutoSuggestion()
+  // Leaving a step may still fill its cache. Stop, AI off, retarget and Close invalidate pending writers.
+  if (!keepInFlight) lifecycle.suggestionRequests.clear()
   lifecycle.suggestSerial += 1
   $suggestion.set(null)
 }
@@ -3607,6 +3611,7 @@ async function requestSuggestion(mode = 'suggest') {
   cancelAutoSuggestion()
   const key = questionKey(state)
   const serial = ++lifecycle.suggestSerial
+  lifecycle.suggestionRequests.set(key, serial)
   $suggestion.set({ key, mode, status: 'loading' })
   let next
   try {
@@ -3638,7 +3643,10 @@ async function requestSuggestion(mode = 'suggest') {
   } catch (error) {
     next = { key, mode, status: 'error', ...describeFailure(error) }
   }
-  // Keep good suggestions even if the user already moved on: Back will show them instantly.
+  // A cancelled or superseded request may finish, but no longer owns this question's cache.
+  if (lifecycle.suggestionRequests.get(key) !== serial) return
+  lifecycle.suggestionRequests.delete(key)
+  // Keep good suggestions after mere navigation: Back will show them instantly.
   if (next.status === 'ready' && !improving) lifecycle.suggestionCache.set(key, next)
   if (serial !== lifecycle.suggestSerial || questionKey($studio.get()) !== key) return
   $suggestion.set(next)
@@ -3680,7 +3688,7 @@ const QUESTION_HELP_ID = 'prompt-studio-question-help'
 function askNext() {
   const state = $studio.get()
   if (state.status !== 'asking') return
-  clearSuggestion()
+  clearSuggestion({ keepInFlight: true })
   try {
     update({ type: 'INTERROGATION', response: nextQuestion(currentTarget(), state.intent, state.ladder, activeLocale()) })
   } catch (error) {
@@ -3723,7 +3731,7 @@ function reopen(state, rung) {
 function editStep(index) {
   const before = $studio.get()
   if (!['active', 'done'].includes(before.status)) return
-  clearSuggestion()
+  clearSuggestion({ keepInFlight: true })
   update({ type: 'EDIT_STEP', index })
   const state = $studio.get()
   if (!state.editing) return
@@ -3737,7 +3745,7 @@ function goBack() {
   const state = $studio.get()
   // While editing, Back undoes the edit and keeps the original answer.
   if (state.editing) {
-    clearSuggestion()
+    clearSuggestion({ keepInFlight: true })
     update({ type: 'CANCEL_EDIT' })
     askNext()
     return
@@ -3745,7 +3753,7 @@ function goBack() {
   if (!['active', 'done'].includes(state.status) || !state.ladder.length) return
   // Reopen exactly the last answered field, with its own options and previous answer.
   const previous = state.ladder[state.ladder.length - 1]
-  clearSuggestion()
+  clearSuggestion({ keepInFlight: true })
   update({ type: 'RETARGET', ladder: state.ladder.slice(0, -1) })
   if (!reopen($studio.get(), previous)) askNext()
 }
@@ -4190,19 +4198,23 @@ function focusTarget(root, state) {
 
 function useStudioFocus(state) {
   const suggestion = useValue($suggestion)
+  const settingsOpen = useValue($settingsOpen)
   const stepKey = `${state.status}|${questionKey(state)}|${state.editing?.index ?? ''}|${state.preview?.showing ?? ''}`
   // Every step or status change: move to the first logical target.
   useEffect(() => {
+    if (settingsOpen || foreignOverlayOpen()) return
     const root = document.querySelector('[data-studio-strip]')
     if (root) focusTarget(root, state)?.focus({ preventScroll: true })
   }, [stepKey])
   // A clicked AI button can unmount (Stop, Discard, Use): if the focus fell out of the studio,
   // bring it back to the same first target instead of leaving it on <body>. The same when it waits on the studio
-  // itself (cards hidden while the AI is asked) and the cards arrive.
+  // itself (cards hidden while the AI is asked) and the cards arrive. On closing Settings recover only lost
+  // focus, leaving a target restored by the host alone. Neither effect takes focus from an open overlay.
   useEffect(() => {
+    if (settingsOpen || foreignOverlayOpen()) return
     const root = document.querySelector('[data-studio-strip]')
     if (root && (!root.contains(document.activeElement) || document.activeElement === root)) focusTarget(root, state)?.focus({ preventScroll: true })
-  }, [suggestion?.status, suggestion?.key])
+  }, [suggestion?.status, suggestion?.key, settingsOpen])
 }
 
 // Live regions are mounted empty and filled one commit later: a screen reader announces a change inside a region it
@@ -4529,7 +4541,7 @@ async function generatePrompt() {
     update({ type: 'BRIEF_FAILED' })
     return
   }
-  clearSuggestion()
+  clearSuggestion({ keepInFlight: true })
   let prompt = engineResult.prompt
   // Conflicts between an answer and the draft (e.g. a deliverable picked against the draft's verb) are shown by
   // the preview in the Studio's current language, for both versions: it keeps the target and the ladder and

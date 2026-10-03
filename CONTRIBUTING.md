@@ -25,6 +25,10 @@ label and rebuild. The file that holds the map is named once, as `SHORTCUTS_SOUR
 
 ## Tests
 
+The adversarial battery covers model changes, malformed contexts, cancellation/provider failures, response formats,
+and keyboard/focus races. Its focused commands and scope are in [Regression tests](docs/REGRESSION-TESTS.md); all its
+cases are also discovered by the normal suites below.
+
 ```bash
 npm ci                            # once: the pinned dev dependencies (package.json, package-lock.json)
 npm test                          # UI and engine tests; fails, never skips, when a dependency is missing

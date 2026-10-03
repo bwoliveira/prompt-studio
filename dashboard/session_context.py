@@ -189,7 +189,7 @@ def context(payload: Mapping[str, Any], llm: Callable[..., Any] | None = None, d
             opener: Callable[[str], Any] | None = None) -> dict[str, Any]:
     session_id = payload.get("session_id") if isinstance(payload.get("session_id"), str) else ""
     profile = payload.get("profile") if isinstance(payload.get("profile"), str) else ""
-    if not SESSION_ID_RE.match(session_id) or not PROFILE_RE.match(profile or ""):
+    if not SESSION_ID_RE.fullmatch(session_id or "") or not PROFILE_RE.fullmatch(profile or ""):
         return _error("bad_request", "invalid session_id or profile")
     choice = payload.get("model_choice") if isinstance(payload.get("model_choice"), Mapping) else None
     started = time.monotonic()

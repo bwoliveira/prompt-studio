@@ -4,6 +4,27 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
 
 ## Unreleased
 
+### Regression protection
+
+- Tests: an adversarial battery covers model/settings changes, large or malformed contexts, cancellation and provider
+  errors, languages and malformed responses, and keyboard/focus races. It runs in the existing Node and Python suites
+  without real provider calls; focused commands are in `docs/REGRESSION-TESTS.md`.
+- Fix: putting a prompt in the composer or returning a draft on Close no longer overwrites text typed while the SDK
+  write is pending. Placement appends to the live draft; text already present is left untouched.
+- Fix: a cancelled or superseded suggestion cannot overwrite the cache used by Back or a later opening. Ordinary
+  navigation still keeps useful late suggestions without another model call.
+- Fix: suggestions and generated prompts arriving behind an open menu or Settings no longer steal keyboard focus.
+  Closing Settings restores lost focus without replacing a target already restored by Hermes.
+- Fix: composition preserves protected pasted blocks in large baselines, including the REST limit of 250,000
+  characters, without sending those blocks to the model. Direct context reads reject malformed session/profile IDs
+  before opening the session store, matching the REST validation.
+- Fix: malformed non-string text suggestions are rejected instead of becoming a successful empty answer. Literal
+  `<think>`, `<thinking>` and `<reasoning>` tags inside valid JSON strings are preserved; external reasoning is not
+  treated as the answer. JSON-aware text is not cleaned a second time by the host's destructive extractor; the
+  plugin also recognizes the host's other reasoning markers, including CJK tags, outside the JSON answer.
+- Fix: a terminal provider error mentioning `response_format` no longer triggers a JSON-mode retry and a second
+  provider call. Genuine JSON-mode incompatibility still gets its bounded fallback.
+
 ## 1.9.0
 
 ### Keyboard and Mac

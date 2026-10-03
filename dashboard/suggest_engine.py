@@ -194,7 +194,7 @@ def _match_option(value: str, options: list[str]) -> str | None:
 
 def parse_suggestion(text: str, field: Mapping[str, Any]) -> dict[str, Any]:
     data = _llm._json_object(text)
-    if not isinstance(data, dict) or "value" not in data:
+    if not isinstance(data, dict) or "value" not in data or (field.get("kind") != "enum" and not isinstance(data["value"], str)):
         return {"ok": False, "code": "invalid_suggestion", "error": "model reply is not a valid suggestion"}
     value = data.get("value")
     value = value.strip() if isinstance(value, str) else ""
@@ -405,15 +405,11 @@ def keep_required_lines(prompt: str, baseline: str) -> tuple[str, list[str]]:
     return "\n".join(lines[:end] + restored + lines[end:]), restored
 
 
-# The engines cap the pasted text at THIRD_PARTY_LIMIT; escaping (& -> &amp;) can grow it up to 5x.
-BASELINE_RAW_LIMIT = COMPOSE_LIMIT + 5 * THIRD_PARTY_LIMIT + 2000
-
-
 def split_baseline(payload: Mapping[str, Any]) -> tuple[str, str]:
     """Split the pasted block off the WHOLE baseline first, then cap only the rest: capping first
     could cut the block's closing tag, send the pasted text to the model and lose the exact block."""
     raw = payload.get("baseline")
-    raw = raw.strip()[:BASELINE_RAW_LIMIT] if isinstance(raw, str) else ""
+    raw = raw.strip() if isinstance(raw, str) else ""
     masked, block = split_third_party(raw)
     return masked[:COMPOSE_LIMIT], block
 
@@ -428,8 +424,6 @@ def compose_truncated(payload: Mapping[str, Any]) -> bool:
     raw = payload.get("baseline")
     if not isinstance(raw, str):
         return False
-    if _cut(raw, BASELINE_RAW_LIMIT):
-        return True
     return len(split_third_party(raw.strip())[0]) > COMPOSE_LIMIT
 
 

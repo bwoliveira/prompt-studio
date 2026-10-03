@@ -166,6 +166,8 @@ const lifecycle = {
   suggestSerial: 0,
   // Finished suggestions by question key, so Back / reopening a question does not call the model again.
   suggestionCache: new Map(),
+  // Latest in-flight writer per question. Navigation keeps it; cancellation or a new request revokes it.
+  suggestionRequests: new Map(),
   // The session context read in flight (a promise), so the first automatic suggestion waits for it.
   contextPromise: null,
   // Disposer of the pending automatic-suggestion timer, or null.

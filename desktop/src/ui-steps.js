@@ -12,7 +12,7 @@ const QUESTION_HELP_ID = 'prompt-studio-question-help'
 function askNext() {
   const state = $studio.get()
   if (state.status !== 'asking') return
-  clearSuggestion()
+  clearSuggestion({ keepInFlight: true })
   try {
     update({ type: 'INTERROGATION', response: nextQuestion(currentTarget(), state.intent, state.ladder, activeLocale()) })
   } catch (error) {
@@ -55,7 +55,7 @@ function reopen(state, rung) {
 function editStep(index) {
   const before = $studio.get()
   if (!['active', 'done'].includes(before.status)) return
-  clearSuggestion()
+  clearSuggestion({ keepInFlight: true })
   update({ type: 'EDIT_STEP', index })
   const state = $studio.get()
   if (!state.editing) return
@@ -69,7 +69,7 @@ function goBack() {
   const state = $studio.get()
   // While editing, Back undoes the edit and keeps the original answer.
   if (state.editing) {
-    clearSuggestion()
+    clearSuggestion({ keepInFlight: true })
     update({ type: 'CANCEL_EDIT' })
     askNext()
     return
@@ -77,7 +77,7 @@ function goBack() {
   if (!['active', 'done'].includes(state.status) || !state.ladder.length) return
   // Reopen exactly the last answered field, with its own options and previous answer.
   const previous = state.ladder[state.ladder.length - 1]
-  clearSuggestion()
+  clearSuggestion({ keepInFlight: true })
   update({ type: 'RETARGET', ladder: state.ladder.slice(0, -1) })
   if (!reopen($studio.get(), previous)) askNext()
 }
@@ -522,19 +522,23 @@ function focusTarget(root, state) {
 
 function useStudioFocus(state) {
   const suggestion = useValue($suggestion)
+  const settingsOpen = useValue($settingsOpen)
   const stepKey = `${state.status}|${questionKey(state)}|${state.editing?.index ?? ''}|${state.preview?.showing ?? ''}`
   // Every step or status change: move to the first logical target.
   useEffect(() => {
+    if (settingsOpen || foreignOverlayOpen()) return
     const root = document.querySelector('[data-studio-strip]')
     if (root) focusTarget(root, state)?.focus({ preventScroll: true })
   }, [stepKey])
   // A clicked AI button can unmount (Stop, Discard, Use): if the focus fell out of the studio,
   // bring it back to the same first target instead of leaving it on <body>. The same when it waits on the studio
-  // itself (cards hidden while the AI is asked) and the cards arrive.
+  // itself (cards hidden while the AI is asked) and the cards arrive. On closing Settings recover only lost
+  // focus, leaving a target restored by the host alone. Neither effect takes focus from an open overlay.
   useEffect(() => {
+    if (settingsOpen || foreignOverlayOpen()) return
     const root = document.querySelector('[data-studio-strip]')
     if (root && (!root.contains(document.activeElement) || document.activeElement === root)) focusTarget(root, state)?.focus({ preventScroll: true })
-  }, [suggestion?.status, suggestion?.key])
+  }, [suggestion?.status, suggestion?.key, settingsOpen])
 }
 
 // Live regions are mounted empty and filled one commit later: a screen reader announces a change inside a region it

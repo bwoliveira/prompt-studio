@@ -93,8 +93,8 @@ const composerAdapter = {
 
   // Puts text into a conversation's composer without ever losing what is there: an empty composer gets the
   // text, one that already holds other text gets it appended below. False when that composer is not on screen.
-  // Serialized with appendDraft: a read-then-write never interleaves with another one, so two placements
-  // (for example a dispose restore during a preview placement) cannot both see an empty composer.
+  // Serialized with appendDraft so a dispose restore cannot race another plugin placement.
+  // The host can still receive typing during an await: only its append operation is safe for placement.
   placeDraft(text, address) {
     return this.serial(() => this.placeNow(text, address))
   },
@@ -114,10 +114,10 @@ const composerAdapter = {
     } catch {
       current = null
     }
-    // Replace only a composer read as empty (or already holding this text). An unreadable one (null) may
-    // hold a draft, so the text is appended, never written over it.
+    // An equal draft needs no mutation. Even an empty read can be stale before the asynchronous write:
+    // append against the host's live draft, never replace text typed while the request was pending.
     const existing = typeof current === 'string' ? current.trim() : null
-    if (existing === '' || existing === text.trim()) return this.writeDraft(text, address)
+    if (existing === text.trim()) return true
     if (typeof host.composer.insertText !== 'function') return false
     try {
       return (await host.composer.insertText(address, text, { mode: 'block' })) === true
