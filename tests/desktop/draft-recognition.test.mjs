@@ -887,8 +887,8 @@ const TABLE = [
   ['Show me a script that extracts data. Make it faster.', 'implementation', '#74 a later order sentence'],
   ['Show me a script that extracts data and then write unit tests for it', 'implementation', '#74 and then write'],
   ['Show me a script that extracts data, and fix the login bug', 'implementation', '#74 and fix'],
-  ['Give me a function that parses dates and add unit tests', 'implementation', '#74 give me, and add'],
-  ['Please show me a script that extracts data and implement it', 'implementation', '#74 and implement'],
+  ['Give me a function that parses dates, and add unit tests', 'implementation', '#74 give me, comma and add'],
+  ['Please show me a script that extracts data, and implement it', 'implementation', '#74 comma and implement'],
   ['Show me a script that extracts data. Help me add unit tests.', 'implementation', '#74 help me add'],
   ['Show me a script that extracts data. Will you add unit tests?', 'implementation', '#74 will you add'],
   ['Me mostre um script que extrai dados e depois escreva testes unitários', 'implementation', '#74 pt and then write'],
@@ -897,6 +897,15 @@ const TABLE = [
   ['Você pode adicionar testes unitários?', 'implementation', '#74 pt adicionar is a build verb'],
   ['Write a script that extracts data', 'implementation', '#74 the build verb itself'],
   ['Crie um script que extraia dados', 'implementation', '#74 pt the build verb itself'],
+  // Codex round 1: a mark that ends a clause ends the request; a coordinated verb inside the artifact's purpose is not an order
+  ['Show me a script that extracts data; write unit tests for it.', 'implementation', '#74 R1 an order after a semicolon'],
+  ['Show me a script that extracts data\nWrite unit tests for it.', 'implementation', '#74 R1 an order on the next line'],
+  ['Show me a script that extracts data: write unit tests for it', 'implementation', '#74 R1 an order after a colon'],
+  ['Me mostre um script que extrai dados; escreva testes unitários', 'implementation', '#74 R1 pt an order after a semicolon'],
+  ['Can you show me a script that can build and deploy an app?', 'answer', '#74 R1 build and deploy describe the script'],
+  ['Show me a script that can install and configure nginx', 'answer', '#74 R1 install and configure describe the script'],
+  ['Me mostre um script que possa instalar e configurar o nginx', 'answer', '#74 R1 pt instalar e configurar describe the script'],
+  ['Give me a function to read and write files', 'answer', '#74 R1 to read and write describe the function'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
