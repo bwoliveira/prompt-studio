@@ -183,10 +183,11 @@ const CONTEXT_WINDOW = 120
 // reading of what the artifact is (existing, owned, found in a source, a recommendation): all of them are answers.
 // Languages: Portuguese (unaccented) + English.
 const SHOW_OPEN = /^(?:(?:please|pls|por favor),?\s+)?(?:(?:(?:can|could|would|will)\s+you|(?:(?:voce|voces)\s+)?(?:pode|poderia|podem|poderiam)(?:\s+por favor)?)\s+(?:(?:please|kindly)\s+)?)?(?:(?:show|give|send|tell|pass)\s+(?:me|us)|(?:me|nos)\s+(?:mostrar|mostre|dar|de|dizer|diga|passar|passe|enviar|envie|mandar|mande)|(?:mostre|de|diga|passe|envie|mande)-(?:me|nos))\b/
+const PT_SHOW = /\b(?:mostr\w+|dar|de|dizer|diga|passar|passe|enviar|envie|mandar|mande|pode\w*|voces?)\b/
 const SHOW_FORM = new RegExp(`${SHOW_OPEN.source}(?:[^.?!;:\\n]|\\.(?=\\S))*(?:[?!;:\\n]|\\.(?!\\S)|$)`)
-// The head of the phrase asked for ends at a preposition, a clause word or a mark ("the name of the function", "a review of
+// The head of the phrase asked for ends at a preposition, a clause word, a courtesy word or a mark ("the name of the function", "a review of
 // the code" and "the API key" ask for something else than code).
-const SHOW_HEAD = /[.!?\n]|\s+(?:of|to|for|from|in|on|at|about|between|with|without|by|that|which|who|whose|where|when|and|or|but|de|do|da|dos|das|para|em|no|na|nos|nas|sobre|entre|com|sem|por|que|e|ou|mas)\b/
+const SHOW_HEAD = /[.!?,\n]|\s+(?:please|pls|thanks|thank|obrigado|obrigada|of|to|for|from|in|on|at|about|between|with|without|by|that|which|who|whose|where|when|and|or|but|de|do|da|dos|das|para|em|no|na|nos|nas|sobre|entre|com|sem|por|que|e|ou|mas)\b/
 // The phrase asked for ends with code: a code artifact, or anything the code category knows ("a dashboard", "the login
 // page"). The last word is the head noun, not a modifier, as in "the API key" or "a code review".
 const CODE_HEAD = new RegExp(`(?:${CODE_ARTIFACT.source}|${CATEGORY_RULES.find(([id]) => id === 'code')[1].source})\\s*$`)
@@ -215,7 +216,7 @@ const PURPOSE_MODAL = /\b(?:that|which|who|whose|que)\s+(?:(?:also|always|never|
 // (a help verb, its object, a bare verb) is part of the script, so the coordinated verb is not a second order. A coordinator
 // or a comma after the complement ends it ("helps users read and write files and fix the bug").
 const NOT_BARE_OBJECT = 'the|an?|our|your|their|my|his|her|its|all|some|new|and|or|with|for|on|in|of|to|from|at|by|about|through|via|into|as|than|between'
-const PURPOSE_COMPLEMENT = new RegExp(`\\b(?:help|helps|let|lets|allow|allows|enable|enables|permit|permits)\\s+(?:(?:the|an?|our|your|their|my|his|her|its|all|some|new)\\s+)?(?!(?:${NOT_BARE_OBJECT})\\b)[\\w-]+\\s+(?!(?:${NOT_BARE_OBJECT})\\b)(?:\\w+ly\\s+)?[\\w-]+(?:\\s+(?!(?:and|or)\\b)[\\w-]+){0,3}\\s*$|\\b(?:ajuda|ajudam)\\s+(?:(?!(?:e|ou)\\b)[\\w-]+\\s+){0,2}a\\s+\\w+(?:ar|er|ir)\\b(?:\\s+(?!(?:e|ou)\\b)[\\w-]+){0,3}\\s*$`)
+const PURPOSE_COMPLEMENT = new RegExp(`\\b(?:help|helps|let|lets|allow|allows|enable|enables|permit|permits)\\s+(?:(?!(?:${NOT_BARE_OBJECT})\\b)[\\w-]+\\s+(?!(?:${NOT_BARE_OBJECT})\\b)(?:\\w+ly\\s+)?(?!\\w*[^\\Wsui]s\\b)[\\w-]+|(?:the|an?|our|your|their|my|his|her|its|all|some|new)\\s+(?:[\\w-]+\\s+){1,2}(?:\\w+ly\\s+)?${MAKE_VERB.source})(?:\\s+(?!(?:and|or)\\b)[\\w-]+){0,3}\\s*$|\\b(?:ajuda|ajudam)\\s+(?:(?!(?:e|ou)\\b)[\\w-]+\\s+){0,2}a\\s+\\w+(?:ar|er|ir)\\b(?:\\s+(?!(?:e|ou)\\b)[\\w-]+){0,3}\\s*$`)
 // "to" opens a purpose only before a verb: "to users", "to the team", "to them" and "para os usuarios" name a recipient.
 // A plural noun ends in s (not ss, us, is); a Portuguese infinitive ends in ar, er or ir ("para ler", "para instala-lo").
 const PURPOSE_TAIL = /\bto\s+(?!(?:the|an?|my|our|your|their|his|her|its|this|that|these|those|all|each|every|some|any|no|me|us|you|them|him|it)\b)(?!\d)(?!\w*[^\Wsui]s\b)\w/g
@@ -328,8 +329,12 @@ function createDetector(profile = {}) {
   const foldDraft = text => fold(text, foldLimit)
 
   // The phrase after "show me" asks for code: code heads the phrase asked for.
-  function asksCode(phrase) {
-    return CODE_HEAD.test(phrase.slice(0, 300).split(SHOW_HEAD, 1)[0])
+  // In Portuguese an adjective follows the noun ("uma funcao simples", "um script novo"): up to two words after the code noun.
+  function asksCode(phrase, pt) {
+    const head = phrase.slice(0, 300).split(SHOW_HEAD, 1)[0]
+    if (CODE_HEAD.test(head)) return true
+    const one = head.replace(/\s+[\w-]+\s*$/, '')
+    return pt && (CODE_HEAD.test(one) || CODE_HEAD.test(one.replace(/\s+[\w-]+\s*$/, '')))
   }
   function coordinatedOrder(text, purpose = false) {
     ORDER_JOIN.lastIndex = 0
@@ -382,7 +387,8 @@ function createDetector(profile = {}) {
     }
     // "Can you show me a script that extracts data and then write unit tests?": the request carries an order after it.
     const show = SHOW_FORM.exec(goal)
-    if (show && asksCode(show[0].slice(SHOW_OPEN.exec(show[0])[0].length))) {
+    const open = show && SHOW_OPEN.exec(show[0])[0]
+    if (show && asksCode(show[0].slice(open.length), PT_SHOW.test(open))) {
       const order = coordinatedOrder(show[0], true)
       return order < 0 ? show : [show[0].slice(0, order)]
     }

@@ -1009,6 +1009,19 @@ const TABLE = [
   ['Show me a function where the bug occurs and fix it', 'implementation', '#74 W5 R3 where after a function'],
   ['Show me how it works and where it fails and fix the bug', 'answer', '#74 W5 R3 near miss: how and where are topics'],
   ['Show me a script and tell me where it fails and fix the bug', 'answer', '#74 W5 R3 near miss: tell me where is a topic'],
+  // Codex round 4 (local): a compound-noun object is not a complement; a trailing courtesy word or a Portuguese adjective
+  // does not hide the code noun a show request asks for
+  ['Show me a script that helps the sales team and fix the login bug', 'implementation', '#74 W5 R4 helps the sales team has no complement verb'],
+  ['Show me a script that helps sales teams and fix the login bug', 'implementation', '#74 W5 R4 helps sales teams has no complement verb'],
+  ['Show me a script that helps the sales team build and deploy apps', 'answer', '#74 W5 R4 near miss: a build verb after the object'],
+  ['Me mostre uma função simples que leia datas', 'answer', '#74 W5 R4 pt adjective after the noun'],
+  ['Me mostre um script novo para configurar o nginx', 'answer', '#74 W5 R4 pt novo after the noun'],
+  ['Me mostre uma função simples', 'answer', '#74 W5 R4 pt adjective, nothing after'],
+  ['Show me a script, please.', 'answer', '#74 W5 R4 trailing please'],
+  ['Show me a script please', 'answer', '#74 W5 R4 trailing please, no comma'],
+  ['Me mostre um script, por favor', 'answer', '#74 W5 R4 pt trailing por favor'],
+  ['Me mostre um script novo e corrija o bug do login', 'implementation', '#74 W5 R4 near miss: pt adjective, then an order'],
+  ['Can you show me a code review please', 'review', '#74 W5 R4 near miss: a code review is a review'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
