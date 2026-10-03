@@ -906,6 +906,13 @@ const TABLE = [
   ['Show me a script that can install and configure nginx', 'answer', '#74 R1 install and configure describe the script'],
   ['Me mostre um script que possa instalar e configurar o nginx', 'answer', '#74 R1 pt instalar e configurar describe the script'],
   ['Give me a function to read and write files', 'answer', '#74 R1 to read and write describe the function'],
+  // Codex round 2: a coordinator that opens with please, also or a request to the assistant is an order, even inside the purpose
+  ['Can you show me a function that parses dates and please add unit tests?', 'implementation', '#74 R2 and please add'],
+  ['Show me a script that extracts data and also add unit tests', 'implementation', '#74 R2 and also add'],
+  ['Show me a script that extracts data and can you add unit tests?', 'implementation', '#74 R2 and can you add'],
+  ['Me mostre um script que extrai dados e por favor adicione testes unitários', 'implementation', '#74 R2 pt e por favor'],
+  ['Você pode me mostrar um script que extrai dados e também adicione testes', 'implementation', '#74 R2 pt e tambem'],
+  ['Show me a script that extracts data and also prints a report', 'answer', '#74 R2 near miss: also inside the purpose, no build verb'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
