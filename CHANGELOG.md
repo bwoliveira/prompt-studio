@@ -134,6 +134,7 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
 
 ### Documentation
 
+- Docs: the README lists macOS as tested (Hermes Desktop on a MacBook Pro, 1.9.0 checked by the maintainer).
 - Docs: the README is now for users (200 lines at most), with the keyboard table per platform generated from the shortcut
   map (`node scripts/build.mjs` writes it, `--check` fails when it is stale). Contributor material moved to
   `CONTRIBUTING.md` and `docs/DESKTOP-DEV.md`; configuration, model and remote-install details to `docs/CONFIGURATION.md`,
