@@ -3444,9 +3444,10 @@ function questionKey(state) {
 const isWaiting = suggestion => suggestion?.status === 'loading' || suggestion?.status === 'pending'
 
 // The delay is over or was abandoned without a request: the step leaves the waiting state (cards, Ask button).
-function releasePending(key) {
-  const current = $suggestion.get()
-  if (current?.status === 'pending' && (key === undefined || current.key === key)) $suggestion.set(null)
+// Only the timer that set `pending` (the same object) may release it: a callback left over from a closed opening
+// must not clear the waiting state of a newer one that has the same question key.
+function releasePending(pending) {
+  if ($suggestion.get() === pending) $suggestion.set(null)
 }
 
 function clearSuggestion() {
@@ -3472,18 +3473,19 @@ function scheduleAutoSuggestion() {
   const delay = globalThis.__promptStudioTest?.autoSuggestDelayMs ?? AUTO_SUGGEST_DELAY_MS
   const serial = lifecycle.suggestSerial
   // Without a plugin context no request can go out, so there is nothing to wait for.
-  if (lifecycle.pluginContext) $suggestion.set({ key, mode: 'suggest', status: 'pending' })
+  const pending = lifecycle.pluginContext ? { key, mode: 'suggest', status: 'pending' } : null
+  if (pending) $suggestion.set(pending)
   lifecycle.autoSuggestTimer = later(async () => {
     lifecycle.autoSuggestTimer = null
     // A pending session context read comes first (it has its own deadline); manual asks never wait.
     if (lifecycle.contextPromise) await lifecycle.contextPromise
     const state = $studio.get()
     if (serial !== lifecycle.suggestSerial || $aiMode.get() !== 'auto' || state.status !== 'active' || questionKey(state) !== key) {
-      releasePending(key)
+      releasePending(pending)
       return
     }
     requestSuggestion()
-    releasePending(key)
+    releasePending(pending)
   }, delay)
 }
 

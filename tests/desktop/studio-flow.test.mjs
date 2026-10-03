@@ -2770,6 +2770,34 @@ test('#75 (Codex): while the cards wait for the AI the focus is inside the Studi
   }
 })
 
+test('#75 (Codex): a timer left over from a closed opening does not clear the waiting state of the new one', { skip }, async () => {
+  const pending = holdSuggest()
+  let releaseOld
+  backend.context = () => new Promise(resolve => { releaseOld = () => resolve({ ok: true, summary: 'OLD', model: 'm', ms: 1 }) })
+  try {
+    await freshSettings('sess-1')
+    globalThis.__promptStudioTest.autoSuggestDelayMs = 20
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    await click('[data-studio-open]')
+    await new Promise(resolve => setTimeout(resolve, 80)) // the first timer fired and waits for the old context read
+    await click('[data-studio-cancel]')
+    globalThis.__promptStudioTest.autoSuggestDelayMs = 600
+    backend.context = () => ({ ok: true, summary: 'NEW', model: 'm', ms: 1 })
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    await click('[data-studio-open]')
+    await waitFor(() => $('[data-studio-ai-loading]'))
+    releaseOld()
+    await settle()
+    assert.ok($('[data-studio-ai-loading]'), 'the new opening is still waiting for its own delay')
+    assert.ok($('[data-studio-options]') === null, 'no cards flash up')
+    assert.equal(pending.length, 0)
+    await waitFor(() => pending.length > 0, { timeout: 2000 })
+    assert.ok($('[data-studio-ai-loading]') && $('[data-studio-options]') === null)
+  } finally {
+    globalThis.__promptStudioTest.autoSuggestDelayMs = 0
+  }
+})
+
 test('LOAD-3: while the AI writes the prompt, only Cancel and the mode switch remain', { skip }, async () => {
   await freshSettings(null)
   let release
