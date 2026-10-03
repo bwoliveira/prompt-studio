@@ -929,7 +929,7 @@ test('draft recognition: a long draft full of context nouns is analysed in linea
 })
 
 test('draft recognition: a question form that fails on a long run of spaces is still linear on every engine (Codex P2)', () => {
-  for (const goal of ['How do I configure nginx' + ' '.repeat(128000) + '!', 'Can I configure nginx' + ' '.repeat(128000) + '!', 'How do I configure nginx' + '\n '.repeat(64000) + '!', 'Write ' + 'test '.repeat(40000) + 'for students.']) {
+  for (const goal of ['How do I configure nginx' + ' '.repeat(128000) + '!', 'Can I configure nginx' + ' '.repeat(128000) + '!', 'How do I configure nginx' + '\n '.repeat(64000) + '!', 'Write ' + 'test '.repeat(40000) + 'for students.', 'Can you show me a script that extracts data' + ' '.repeat(128000) + '!', 'Show me a script that extracts data' + '\n '.repeat(64000) + '!', 'Show me a script that extracts data' + ' and '.repeat(20000) + 'write tests.']) {
     for (const [id, engine] of Object.entries(ENGINES)) {
       const started = performance.now()
       const out = engine.analyze({ goal })

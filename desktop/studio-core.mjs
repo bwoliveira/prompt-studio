@@ -142,7 +142,7 @@ const CONTEXT_WINDOW = 120
 // reading of what the artifact is (existing, owned, found in a source, a recommendation): all of them are answers.
 // Languages: Portuguese (unaccented) + English.
 const SHOW_OPEN = /^(?:(?:please|pls|por favor),?\s+)?(?:(?:(?:can|could|would|will)\s+you|(?:(?:voce|voces)\s+)?(?:pode|poderia|podem|poderiam)(?:\s+por favor)?)\s+(?:(?:please|kindly)\s+)?)?(?:(?:show|give|send|tell|pass)\s+(?:me|us)|(?:me|nos)\s+(?:mostrar|mostre|dar|de|dizer|diga|passar|passe|enviar|envie|mandar|mande)|(?:mostre|de|diga|passe|envie|mande)-(?:me|nos))\b/
-const SHOW_FORM = new RegExp(`${SHOW_OPEN.source}(?:[^.?!\\n]|\\.(?=\\S)|\\n(?![ \\t]*\\n))*(?:[?!]|\\.(?!\\S)|$|(?=\\n[ \\t]*\\n))`)
+const SHOW_FORM = new RegExp(`${SHOW_OPEN.source}(?:[^.?!;:\\n]|\\.(?=\\S))*(?:[?!;:\\n]|\\.(?!\\S)|$)`)
 // The head of the phrase asked for ends at a preposition, a clause word or a mark ("the name of the function", "a review of
 // the code" and "the API key" ask for something else than code).
 const SHOW_HEAD = /[.!?\n]|\s+(?:of|to|for|from|in|on|at|about|between|with|without|by|that|which|who|whose|where|when|and|or|but|de|do|da|dos|das|para|em|no|na|nos|nas|sobre|entre|com|sem|por|que|e|ou|mas)\b/
@@ -160,6 +160,9 @@ const REQUESTED_ARTIFACT = /((?:(?:i|we) (?:need|want|would like)|i'd like|we'd 
 // "how to configure nginx and deploy the app", "the architecture and how to configure nginx": a topic, not an order.
 const TOPIC_TAIL = /\b(?:how to|how|why|when|where|what|which|whether|como|por que|porque|quando|onde|o que|qual|quais|se)\s+\w+[^.!?,;]*$/
 const TOPIC_AGENT = /\b(?:we|you|i|they|nos|voce|voces|eles|elas|a gente|first|primeiro)\b/
+// "a script that can build and deploy an app": a coordinator inside the purpose of the artifact (no comma, no "then") extends
+// what the artifact does, it does not order anything.
+const PURPOSE_TAIL = /\b(?:that|which|who|whose|to|que|para|onde)\s+\w[^.!?;:,]*$/
 const TOPIC_HEAD = /^\s*(?:how|what|why|when|where|which|whether|como|o que|por que|quando|onde|qual|quais)\b/
 // "and fix the login bug": the order verb opens right after the coordinator, at most behind please/then/an adverb.
 // "Can you recommend a design and build a React dashboard?": a yes/no question addressed to the assistant may carry an order.
@@ -254,7 +257,7 @@ function createDetector(profile = {}) {
   function asksCode(phrase) {
     return CODE_HEAD.test(phrase.slice(0, 300).split(SHOW_HEAD, 1)[0])
   }
-  function coordinatedOrder(text) {
+  function coordinatedOrder(text, purpose = false) {
     ORDER_JOIN.lastIndex = 0
     for (let n = 0, m; n < 8 && (m = ORDER_JOIN.exec(text)); n++) {
       const before = text.slice(Math.max(0, m.index - CONTEXT_WINDOW), m.index)
@@ -263,7 +266,7 @@ function createDetector(profile = {}) {
       const topic = TOPIC_TAIL.exec(before)
       // "why we first configure nginx and then build the app": a sequence done by the explained agent stays the topic.
       const sequence = /\b(?:then|depois|entao)\b/.test(m[0]) && !(topic && TOPIC_AGENT.test(topic[0]))
-      if (TOPIC_HEAD.test(rest) || (!sequence && topic)) continue
+      if (TOPIC_HEAD.test(rest) || (!sequence && (topic || (purpose && PURPOSE_TAIL.test(before))))) continue
       const next = firstSignal(rest)
       // The offset of the order verb itself, so the rest starts a sentence ("review it?") and is read as an order.
       if (next.verb && ORDER_LEAD.test(rest.slice(0, next.at))) return m.index + m[0].length + next.at
@@ -301,7 +304,7 @@ function createDetector(profile = {}) {
     // "Can you show me a script that extracts data and then write unit tests?": the request carries an order after it.
     const show = SHOW_FORM.exec(goal)
     if (show && asksCode(show[0].slice(SHOW_OPEN.exec(show[0])[0].length))) {
-      const order = coordinatedOrder(show[0])
+      const order = coordinatedOrder(show[0], true)
       return order < 0 ? show : [show[0].slice(0, order)]
     }
     const yesNo = YESNO_FORM.exec(goal)
