@@ -978,6 +978,12 @@ const TABLE = [
   ['Show me a script that extracts data and fix the bug', 'implementation', '#74 W5 F3 near miss: a finite verb, then an order'],
   ['Show me a script that helps users and fix the login bug', 'implementation', '#74 W5 F3 near miss: helps users is not followed by a verb'],
   ['Show me a script that helps users read and write files and fix the login bug', 'implementation', '#74 W5 F3 near miss: a second coordinator opens an order'],
+  ['Show me a script that has access to Redis and fix the login bug', 'implementation', '#74 W5 R5 has is not a purpose cue'],
+  ['Show me a script that serves files to users and fix the login bug', 'implementation', '#74 W5 R5 serves is not a purpose cue'],
+  ['Show me a script that helps sales staff and fix the login bug', 'implementation', '#74 W5 R5 a noun pair is not object + bare verb'],
+  ['Show me a script that helps the sales team and fix the login bug', 'implementation', '#74 W5 R5 determiner object without a bare verb'],
+  ['Show me a script that helps them read and write files', 'answer', '#74 W5 R5 pronoun object + bare verb stays the description'],
+  ['Show me a script that helps people build and deploy apps', 'answer', '#74 W5 R5 people + bare verb stays the description'],
   ['Show me a script that helps users read files, and fix the login bug', 'implementation', '#74 W5 F3 near miss: a comma ends the description'],
   ['Me mostre um script que ajuda usuários e corrija o bug do login', 'implementation', '#74 W5 F3 near miss: pt ajuda usuarios, then an order'],
   // Codex round 1 (local): a named destination is not an infinitive; a help verb needs a bare verb complement
