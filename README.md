@@ -52,7 +52,7 @@ scripts/push-desktop.sh me@my-laptop --dry-run    # print the plan, open no conn
 ```
 
 The app machine needs `ssh` and a POSIX login shell (Linux, macOS). The script copies `desktop/plugin.js` to
-`~/.hermes/desktop-plugins/prompt-studio/plugin.js` there (`--dir` for another Hermes home) with one `ssh` call and
+`~/.hermes/desktop-plugins/prompt-studio/plugin.js` there (`--dir` names another `desktop-plugins` folder) with one `ssh` call and
 checks a checksum before it says `[OK]`; repeat after each update. If the app machine also has a local install, the
 script refuses (Desktop would overwrite the pushed file): `--replace-managed` converts that folder, but only after you
 close Hermes Desktop on the app machine. Every option, the Windows path and the managed-folder rules are in
