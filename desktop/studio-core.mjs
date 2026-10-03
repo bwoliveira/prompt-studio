@@ -169,6 +169,10 @@ const ADDRESS_WRAP = '(?:(?:can|could|would|will)\\s+you|(?:voce|voces)\\s+(?:po
 const ORDER_ADDRESS = new RegExp(`^(?:(?:please|por favor)\\b|${ADDRESS_WRAP}\\b)`)
 // "a script that can install and then configure nginx": after a modal the coordinated verb is part of what the script can do.
 const PURPOSE_MODAL = /\b(?:that|which|who|whose|que)\s+(?:(?:also|always|never|just|still|ja|tambem|nunca|sempre)\s+)?(?:can|could|should|will|would|must|may|might|possa|possam|deva|devam|pode|podem)\b[^.!?;:,]*$/
+// "a script that helps users read and write files", "que ajuda a ler e escrever": what the script helps or lets someone do
+// (a help verb, its object, a bare verb) is part of the script, so the coordinated verb is not a second order. A coordinator
+// or a comma after the complement ends it ("helps users read and write files and fix the bug").
+const PURPOSE_COMPLEMENT = /\b(?:help|helps|let|lets|allow|allows|enable|enables|permit|permits)\s+(?:(?!(?:and|or|e|ou)\b)[\w-]+\s+){1,3}[\w-]+\s*$|\b(?:ajuda|ajudam)\s+(?:(?!(?:e|ou|a)\b)[\w-]+\s+){0,2}a\s+[\w-]+\s*$/
 // "to" opens a purpose only before a verb: "to users", "to the team", "to them" and "para os usuarios" name a recipient.
 // A plural noun ends in s (not ss, us, is); a Portuguese infinitive ends in ar, er or ir ("para ler", "para instala-lo").
 const PURPOSE_TAIL = /\bto\s+(?!(?:the|an?|my|our|your|their|his|her|its|this|that|these|those|all|each|every|some|any|no|me|us|you|them|him|it)\b)(?!\d)(?!\w*[^\Wsui]s\b)\w[^.!?;:,]*$|\bpara\s+(?:\w+(?:ar|er|ir)|\w+-(?:lo|la|los|las))\b[^.!?;:,]*$/
@@ -283,7 +287,7 @@ function createDetector(profile = {}) {
       // "why we first configure nginx and then build the app": a sequence done by the explained agent stays the topic.
       const sequence = /\b(?:then|depois|entao)\b/.test(m[0]) && !(topic && TOPIC_AGENT.test(topic[0]))
       const addressed = purpose && ORDER_ADDRESS.test(rest)
-      const inPurpose = purpose && !addressed && (PURPOSE_MODAL.test(before) || (!sequence && PURPOSE_TAIL.test(before)))
+      const inPurpose = purpose && !addressed && (PURPOSE_MODAL.test(before) || PURPOSE_COMPLEMENT.test(before) || (!sequence && PURPOSE_TAIL.test(before)))
       if (TOPIC_HEAD.test(rest) || inPurpose || (!sequence && !addressed && topic)) continue
       const next = firstSignal(rest)
       // The offset of the order verb itself, so the rest starts a sentence ("review it?") and is read as an order.

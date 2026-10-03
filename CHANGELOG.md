@@ -33,6 +33,11 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
   also in a later sentence or after "and" ("... and then write unit tests", "Can you make it faster?", "Help me add
   unit tests", "Você pode adicionar testes unitários?"). This replaces the rules that told an existing, owned or
   looked-up artifact from a new one and missed a new phrasing in every review; the three engines read it the same way.
+  An explicit order is not lost behind the description of the artifact: "Show me a script that sends data to users and
+  fix the login bug" and "Show me a function which parses dates and fix the login bug" are tasks ("to users" is a
+  recipient, not a purpose; "which" opens a relative clause), and so is an order addressed to the assistant after a
+  comma ("..., please write unit tests for it", "..., por favor escreva testes"). What the script helps someone do
+  ("a script that helps users read and write files", "que ajuda a ler e escrever arquivos") stays part of the answer.
 - Feature: a provider failure now says what happened. A wrong or expired API key (401) is `auth_failed`, a model or plan
   the provider refuses (403) stays `provider_refused` (its text no longer mentions the key), a rate limit (429) is
   `rate_limited` and a provider call that timed out on its own (client timeout, 408, 504) is `provider_timeout`; each has its own

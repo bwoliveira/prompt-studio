@@ -967,6 +967,19 @@ const TABLE = [
   ['Show me a script that extracts data, help me understand it', 'answer', '#74 W5 F2 near miss: help me understand'],
   ['Show me a script that extracts data, which parses dates and writes files', 'answer', '#74 W5 F2 near miss: a comma that continues the description'],
   ['Show me a script that extracts data, write unit tests for it', 'answer', '#74 W5 F2 near miss: a bare verb after a comma stays part of the description'],
+  // Hermes review F3: what a script helps or lets users do describes the script; it is not a second order
+  ['Show me a script that helps users read and write files', 'answer', '#74 W5 F3 helps users read and write'],
+  ['Me mostre um script que ajuda a ler e escrever arquivos', 'answer', '#74 W5 F3 pt ajuda a ler e escrever'],
+  ['Show me a script that helps users build and deploy apps', 'answer', '#74 W5 F3 helps users build and deploy'],
+  ['Can you show me a script that helps users build and deploy apps?', 'answer', '#74 W5 F3 can you, helps users build and deploy'],
+  ['Show me a script that lets me parse and write files', 'answer', '#74 W5 F3 lets me parse and write'],
+  ['Show me a script that helps users read files and write tests', 'answer', '#74 W5 F3 helps users read files and write tests'],
+  ['Me mostre um script que ajuda os usuários a ler e escrever arquivos', 'answer', '#74 W5 F3 pt ajuda os usuarios a ler e escrever'],
+  ['Show me a script that extracts data and fix the bug', 'implementation', '#74 W5 F3 near miss: a finite verb, then an order'],
+  ['Show me a script that helps users and fix the login bug', 'implementation', '#74 W5 F3 near miss: helps users is not followed by a verb'],
+  ['Show me a script that helps users read and write files and fix the login bug', 'implementation', '#74 W5 F3 near miss: a second coordinator opens an order'],
+  ['Show me a script that helps users read files, and fix the login bug', 'implementation', '#74 W5 F3 near miss: a comma ends the description'],
+  ['Me mostre um script que ajuda usuários e corrija o bug do login', 'implementation', '#74 W5 F3 near miss: pt ajuda usuarios, then an order'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
@@ -1012,6 +1025,20 @@ test('draft recognition: repeated stated goals are analysed in linear time on ev
     }
   }
   for (const [id, engine] of Object.entries(ENGINES)) assert.equal(engine.analyze({ goal: 'Aim is fix. Aim is fix. Review the code.' }).deliverable, 'review', id)
+})
+
+test('draft recognition: repeated show-me purpose, complement and comma forms are analysed in linear time on every engine (Hermes review)', () => {
+  const goals = ['Show me a script that helps users read and write files, please fix it. '.repeat(3000), 'Show me a script that sends data to users and fix it, which parses dates, please write tests '.repeat(2500),
+    'Show me a script that extracts data, please '.repeat(5000), 'Show me a script that ' + 'helps users read and write '.repeat(8000) + 'files', 'Show me a script that sends data to users' + ', please write tests'.repeat(10000)]
+  for (const goal of goals) {
+    for (const [id, engine] of Object.entries(ENGINES)) {
+      const started = performance.now()
+      const out = engine.analyze({ goal })
+      const took = performance.now() - started
+      assert.ok(typeof out.deliverable === 'string', id)
+      assert.ok(took < 1500, `${id}: analyze took ${Math.round(took)} ms on a ${goal.length}-character draft`)
+    }
+  }
 })
 
 test('draft recognition: an instruction in the requirements field is not a modifier of the goal artifact on any engine (Codex P1)', () => {
