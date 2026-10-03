@@ -38,6 +38,8 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
   recipient, not a purpose; "which" opens a relative clause), and so is an order addressed to the assistant after a
   comma ("..., please write unit tests for it", "..., por favor escreva testes"). What the script helps someone do
   ("a script that helps users read and write files", "que ajuda a ler e escrever arquivos") stays part of the answer.
+  Known limit: a verb joined by "and" after a purpose ("Give me a script to configure nginx and write tests") is read
+  as part of the purpose, so the draft stays an answer; pick "Working implementation" in the Deliverable step.
 - Feature: a provider failure now says what happened. A wrong or expired API key (401) is `auth_failed`, a model or plan
   the provider refuses (403) stays `provider_refused` (its text no longer mentions the key), a rate limit (429) is
   `rate_limited` and a provider call that timed out on its own (client timeout, 408, 504) is `provider_timeout`; each has its own
