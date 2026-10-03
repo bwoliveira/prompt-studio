@@ -159,8 +159,8 @@ Code (Claude models need the provider `commandcode-anthropic`), the effort and `
   is shown under it (Desktop also shows a *Plugin "…" failed to load* toast at startup). Update the plugin
   (`hermes plugins update prompt-studio`) and Hermes to the latest stable release, then reopen Hermes Desktop. Prompt
   Studio 1.8.0 and later need Hermes Desktop 0.21.5 or newer; with a remote backend, push the Desktop half again.
-- **The Studio asks you to update Hermes:** the Desktop is older than 0.21.5 and has no `host.composer`. Update
-  Hermes Desktop and reopen the app.
+- **The Studio asks you to update:** a Desktop older than 0.21.5 has no `host.composer`, so update Hermes Desktop. If
+  it says Hermes changed in a way this version does not support, update the plugin. Then reopen the app.
 - **Attachments:** files attached in the message field stay there while the Studio is open. **Put in composer to
   edit** (Alt+E) keeps them with the prompt; **Send now** (F9) sends only the text, and the preview says so in red.
 
