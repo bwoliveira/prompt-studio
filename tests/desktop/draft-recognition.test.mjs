@@ -933,6 +933,24 @@ const TABLE = [
   ['Show me a script that can install and also configure nginx', 'answer', '#74 R5 also inside a modal purpose'],
   ['Me mostre um script que possa instalar e também configurar o nginx', 'answer', '#74 R5 pt tambem inside a modal purpose'],
   ['Give me a function to read and also write files', 'answer', '#74 R5 also inside an infinitive purpose'],
+  // Hermes review F1: a context guard must not swallow an explicit order. "to users" is a recipient, not a purpose;
+  // "which" after the artifact opens a relative clause, not a question topic
+  ['Show me a script that sends data to users and fix the login bug', 'implementation', '#74 W5 F1 to users is a recipient, then an order'],
+  ['Show me a script that sends data to the users and fix the login bug', 'implementation', '#74 W5 F1 to the users'],
+  ['Show me a script that sends data to them and fix the login bug', 'implementation', '#74 W5 F1 to them'],
+  ['Me mostre um script que envia dados para usuários e corrija o bug do login', 'implementation', '#74 W5 F1 pt para usuarios is a recipient'],
+  ['Me mostre um script que envia dados para os usuários e corrija o bug do login', 'implementation', '#74 W5 F1 pt para os usuarios'],
+  ['Show me a function which parses dates and fix the login bug', 'implementation', '#74 W5 F1 which is a relative clause, then an order'],
+  ['Can you show me a function which parses dates and fix the login bug?', 'implementation', '#74 W5 F1 can you, which clause, then an order'],
+  ['Show me a Python script which parses dates and fix the login bug', 'implementation', '#74 W5 F1 which after a modified artifact'],
+  ['Show me a script that sends data to users, and fix the login bug', 'implementation', '#74 W5 F1 comma and fix'],
+  ['Show me a function which parses dates and writes files', 'answer', '#74 W5 F1 near miss: no order after the which clause'],
+  ['Show me a script to send data to users and fix the login bug', 'answer', '#74 W5 F1 near miss: an infinitive purpose keeps the coordinated verb'],
+  ['Show me a script that helps users to read and write files', 'answer', '#74 W5 F1 near miss: to read is a purpose'],
+  ['Me mostre um script para ler e escrever arquivos', 'answer', '#74 W5 F1 near miss: pt para ler is a purpose'],
+  ['Me mostre um script para instalar e configurar o nginx', 'answer', '#74 W5 F1 near miss: pt para instalar is a purpose'],
+  ['Can you show me which library parses ISO dates and fix the login bug?', 'answer', '#74 W5 F1 near miss: a which question stays a topic'],
+  ['Show me how it works and which library parses dates and fix the bug', 'answer', '#74 W5 F1 near miss: how and which are topics'],
 ]
 
 for (const [draft, expected, why] of TABLE) {

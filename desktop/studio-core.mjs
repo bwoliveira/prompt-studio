@@ -169,7 +169,12 @@ const ADDRESS_WRAP = '(?:(?:can|could|would|will)\\s+you|(?:voce|voces)\\s+(?:po
 const ORDER_ADDRESS = new RegExp(`^(?:(?:please|por favor)\\b|${ADDRESS_WRAP}\\b)`)
 // "a script that can install and then configure nginx": after a modal the coordinated verb is part of what the script can do.
 const PURPOSE_MODAL = /\b(?:that|which|who|whose|que)\s+(?:(?:also|always|never|just|still|ja|tambem|nunca|sempre)\s+)?(?:can|could|should|will|would|must|may|might|possa|possam|deva|devam|pode|podem)\b[^.!?;:,]*$/
-const PURPOSE_TAIL = /\b(?:to|para)\s+\w[^.!?;:,]*$/
+// "to" opens a purpose only before a verb: "to users", "to the team", "to them" and "para os usuarios" name a recipient.
+// A plural noun ends in s (not ss, us, is); a Portuguese infinitive ends in ar, er or ir ("para ler", "para instala-lo").
+const PURPOSE_TAIL = /\bto\s+(?!(?:the|an?|my|our|your|their|his|her|its|this|that|these|those|all|each|every|some|any|no|me|us|you|them|him|it)\b)(?!\d)(?!\w*[^\Wsui]s\b)\w[^.!?;:,]*$|\bpara\s+(?:\w+(?:ar|er|ir)|\w+-(?:lo|la|los|las))\b[^.!?;:,]*$/
+// "which" after a noun ("a function which parses dates") opens a relative clause; after a verb of asking or knowing,
+// a conjunction or "me" ("show me which", "and which") it asks a question and the rest is a topic.
+const QUESTION_CONTEXT = /(?:^|\s)(?:show|tell|explain|ask|know|see|learn|understand|decide|choose|about|whether|if|and|or|me|us)\s+$/
 const TOPIC_HEAD = /^\s*(?:how|what|why|when|where|which|whether|como|o que|por que|quando|onde|qual|quais)\b/
 // "and fix the login bug": the order verb opens right after the coordinator, at most behind please/then/an adverb.
 // "Can you recommend a design and build a React dashboard?": a yes/no question addressed to the assistant may carry an order.
@@ -270,7 +275,8 @@ function createDetector(profile = {}) {
       const before = text.slice(Math.max(0, m.index - CONTEXT_WINDOW), m.index)
       const rest = text.slice(m.index + m[0].length, m.index + m[0].length + CONTEXT_WINDOW)
       // "how to configure nginx and deploy the app": the coordinator extends the topic, not the request; "and then" orders.
-      const topic = TOPIC_TAIL.exec(before)
+      let topic = TOPIC_TAIL.exec(before)
+      if (purpose && topic && topic[0].startsWith('which') && !QUESTION_CONTEXT.test(before.slice(0, topic.index))) topic = TOPIC_TAIL.exec(before.slice(topic.index + 5))
       // "why we first configure nginx and then build the app": a sequence done by the explained agent stays the topic.
       const sequence = /\b(?:then|depois|entao)\b/.test(m[0]) && !(topic && TOPIC_AGENT.test(topic[0]))
       const addressed = purpose && ORDER_ADDRESS.test(rest)
