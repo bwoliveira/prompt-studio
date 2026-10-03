@@ -169,7 +169,8 @@ const PURPOSE_MODAL = /\b(?:that|which|who|whose|que)\s+(?:(?:also|always|never|
 // "a script that helps users read and write files", "que ajuda a ler e escrever": what the script helps or lets someone do
 // (a help verb, its object, a bare verb) is part of the script, so the coordinated verb is not a second order. A coordinator
 // or a comma after the complement ends it ("helps users read and write files and fix the bug").
-const PURPOSE_COMPLEMENT = /\b(?:help|helps|let|lets|allow|allows|enable|enables|permit|permits)\s+(?:(?:the|an?|our|your|their|my|his|her|its|all|some|new)\s+)?(?!(?:the|an?|our|your|their|my|his|her|its|all|some|new|and|or)\b)[\w-]+\s+(?!(?:with|for|on|in|of|to|from|at|by|about|through|via|into|as|than|between|and|or)\b)(?:\w+ly\s+)?[\w-]+(?:\s+(?!(?:and|or)\b)[\w-]+){0,3}\s*$|\b(?:ajuda|ajudam)\s+(?:(?!(?:e|ou)\b)[\w-]+\s+){0,2}a\s+\w+(?:ar|er|ir)\b(?:\s+(?!(?:e|ou)\b)[\w-]+){0,3}\s*$/
+const NOT_BARE_OBJECT = 'the|an?|our|your|their|my|his|her|its|all|some|new|and|or|with|for|on|in|of|to|from|at|by|about|through|via|into|as|than|between'
+const PURPOSE_COMPLEMENT = new RegExp(`\\b(?:help|helps|let|lets|allow|allows|enable|enables|permit|permits)\\s+(?:(?:the|an?|our|your|their|my|his|her|its|all|some|new)\\s+)?(?!(?:${NOT_BARE_OBJECT})\\b)[\\w-]+\\s+(?!(?:${NOT_BARE_OBJECT})\\b)(?:\\w+ly\\s+)?[\\w-]+(?:\\s+(?!(?:and|or)\\b)[\\w-]+){0,3}\\s*$|\\b(?:ajuda|ajudam)\\s+(?:(?!(?:e|ou)\\b)[\\w-]+\\s+){0,2}a\\s+\\w+(?:ar|er|ir)\\b(?:\\s+(?!(?:e|ou)\\b)[\\w-]+){0,3}\\s*$`)
 // "to" opens a purpose only before a verb: "to users", "to the team", "to them" and "para os usuarios" name a recipient.
 // A plural noun ends in s (not ss, us, is); a Portuguese infinitive ends in ar, er or ir ("para ler", "para instala-lo").
 const PURPOSE_TAIL = /\bto\s+(?!(?:the|an?|my|our|your|their|his|her|its|this|that|these|those|all|each|every|some|any|no|me|us|you|them|him|it)\b)(?!\d)(?!\w*[^\Wsui]s\b)\w/g
@@ -178,8 +179,8 @@ const PURPOSE_PARA = /\bpara\s+(?:\w+(?:ar|er|ir)|\w+-(?:lo|la|los|las))\b/
 // behind a word that takes one ("used to", "needs to", "helps users to", "in order to").
 const RELATIVE_PRONOUN = /\b(?:that|which|who|whose)\b/
 const PURPOSE_CUE = /\b(?:use|uses|used|using|designed|built|made|meant|intended|supposed|able|ready|going|need|needs|needed|want|wants|wanted|try|tries|trying|help|helps|let|lets|allow|allows|enable|enables|order|written|wrote|serves?|have|has|had)\s+(?:[\w-]+\s+){0,2}$/
-// "which" after a noun ("a function which parses dates") opens a relative clause; after a verb of asking or knowing,
-// a conjunction or "me" ("show me which", "and which") it asks a question and the rest is a topic.
+// "which" and "where" after a noun ("a function which parses dates", "a script where the bug occurs") open a relative clause;
+// after a verb of asking or knowing, a conjunction or "me" ("show me which", "and where") they ask a question: a topic.
 const QUESTION_CONTEXT = /(?:^|\s)(?:show|tell|explain|ask|know|see|learn|understand|decide|choose|about|whether|if|and|or|me|us)\s+$/
 const TOPIC_HEAD = /^\s*(?:how|what|why|when|where|which|whether|como|o que|por que|quando|onde|qual|quais)\b/
 // "and fix the login bug": the order verb opens right after the coordinator, at most behind please/then/an adverb.
@@ -294,7 +295,7 @@ function createDetector(profile = {}) {
       const rest = text.slice(m.index + m[0].length, m.index + m[0].length + CONTEXT_WINDOW)
       // "how to configure nginx and deploy the app": the coordinator extends the topic, not the request; "and then" orders.
       let topic = TOPIC_TAIL.exec(before)
-      if (purpose && topic && topic[0].startsWith('which') && !QUESTION_CONTEXT.test(before.slice(0, topic.index))) topic = TOPIC_TAIL.exec(before.slice(topic.index + 5))
+      if (purpose && topic && /^(?:which|where)\s/.test(topic[0]) && !QUESTION_CONTEXT.test(before.slice(0, topic.index))) topic = TOPIC_TAIL.exec(before.slice(topic.index + topic[0].search(/\s/)))
       // "why we first configure nginx and then build the app": a sequence done by the explained agent stays the topic.
       const sequence = /\b(?:then|depois|entao)\b/.test(m[0]) && !(topic && TOPIC_AGENT.test(topic[0]))
       const addressed = purpose && ORDER_ADDRESS.test(rest)

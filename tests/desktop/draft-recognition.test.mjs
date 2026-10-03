@@ -1001,6 +1001,14 @@ const TABLE = [
   ['Show me a script that extracts data, also please write unit tests for it', 'implementation', '#74 W5 R2 comma, also please write'],
   ['Show me a script that can read files and also write tests', 'answer', '#74 W5 R2 near miss: also inside a modal purpose, no address'],
   ['Show me a script that can read files and also help me understand it', 'answer', '#74 W5 R2 near miss: also help me understand'],
+  // Codex round 3 (local): a preposition is not the object of a help verb; where opens a relative clause like which
+  ['Show me a script that helps with logging and fix the login bug', 'implementation', '#74 W5 R3 helps with logging has no complement verb'],
+  ['Show me a script that helps with logging and monitoring and fix the login bug', 'implementation', '#74 W5 R3 helps with logging and monitoring'],
+  ['Show me a script that helps me with logging and write tests', 'implementation', '#74 W5 R3 helps me with logging'],
+  ['Show me a script where the login bug occurs and fix it', 'implementation', '#74 W5 R3 where is a relative clause'],
+  ['Show me a function where the bug occurs and fix it', 'implementation', '#74 W5 R3 where after a function'],
+  ['Show me how it works and where it fails and fix the bug', 'answer', '#74 W5 R3 near miss: how and where are topics'],
+  ['Show me a script and tell me where it fails and fix the bug', 'answer', '#74 W5 R3 near miss: tell me where is a topic'],
 ]
 
 for (const [draft, expected, why] of TABLE) {
