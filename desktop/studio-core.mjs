@@ -146,7 +146,7 @@ const PT_SHOW = /\b(?:mostr\w+|dar|de|dizer|diga|passar|passe|enviar|envie|manda
 const SHOW_FORM = new RegExp(`${SHOW_OPEN.source}(?:[^.?!;:\\n]|\\.(?=\\S))*(?:[?!;:\\n]|\\.(?!\\S)|$)`)
 // The head of the phrase asked for ends at a preposition, a clause word, a courtesy word or a mark ("the name of the function", "a review of
 // the code" and "the API key" ask for something else than code).
-const SHOW_HEAD = /[.!?,\n]|\s+(?:please|pls|thanks|thank|obrigado|obrigada|of|to|for|from|in|on|at|about|between|with|without|by|that|which|who|whose|where|when|and|or|but|de|do|da|dos|das|para|em|no|na|nos|nas|sobre|entre|com|sem|por|que|e|ou|mas)\b/
+const SHOW_HEAD = /[.!?,\n]|\s+(?:please|pls|thanks|thank|obrigado|obrigada|of|to|for|from|in|on|at|about|between|with|without|by|through|via|inside|using|that|which|who|whose|where|when|and|or|but|de|do|da|dos|das|para|em|no|na|nos|nas|sobre|entre|com|sem|por|que|e|ou|mas)\b/
 // The phrase asked for ends with code: a code artifact, or anything the code category knows ("a dashboard", "the login
 // page"). The last word is the head noun, not a modifier, as in "the API key" or "a code review".
 const CODE_HEAD = new RegExp(`(?:${CODE_ARTIFACT.source}|${CATEGORY_RULES.find(([id]) => id === 'code')[1].source})\\s*$`)
@@ -170,7 +170,7 @@ const ADDRESS_WRAP = '(?:(?:can|could|would|will)\\s+you|(?:voce|voces)\\s+(?:po
 // An adverb in front ("and also can you add", "e tambem por favor adicione") does not hide it.
 const ORDER_ADDRESS = new RegExp(`^(?:(?:also|then|now|just|tambem|depois|agora|so|\\w+ly|\\w+mente)\\s*,?\\s+){0,2}(?:(?:please|por favor)\\b|${ADDRESS_WRAP}\\b)`)
 // "a script that can install and then configure nginx": after a modal the coordinated verb is part of what the script can do.
-const PURPOSE_MODAL = /\b(?:that|which|who|whose|que)\s+(?:(?:also|always|never|just|still|ja|tambem|nunca|sempre)\s+)?(?:can|could|should|will|would|must|may|might|possa|possam|deva|devam|pode|podem)\b[^.!?;:,]*$/
+const PURPOSE_MODAL = /\b(?:that|which|who|whose|que)\s+(?:(?:also|always|never|just|still|ja|tambem|nunca|sempre)\s+)?(?:can|could|should|will|would|must|may|might|possa|possam|deva|devam|pode|podem)\b[^.!?;:]*$/
 // "a script that helps users read and write files", "que ajuda a ler e escrever": what the script helps or lets someone do
 // (a help verb, a pronoun or people-noun object, a bare verb) is part of the script, so the coordinated verb is not a second order. A coordinator
 // or a comma after the complement ends it ("helps users read and write files and fix the bug").
