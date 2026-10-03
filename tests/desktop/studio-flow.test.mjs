@@ -2566,14 +2566,16 @@ test('LOAD-2: Auto, while the step suggestion loads the choices it changes are h
 function watchStepFlash(forbidden) {
   const seen = []
   const status = []
+  let paused = false
   const check = () => {
+    if (paused) return
     for (const sel of forbidden) if ($(sel) && !seen.includes(sel)) seen.push(sel)
     const text = $('[data-studio-ai-status]')?.textContent ?? ''
     if (text !== status.at(-1)) status.push(text)
   }
   const observer = new MutationObserver(check)
   observer.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true })
-  return { seen, status, stop() { observer.disconnect() } }
+  return { seen, status, pause() { paused = true }, resume() { paused = false }, stop() { observer.disconnect() } }
 }
 const SLOW_DELAY = 150
 const EARLY_CARDS = ['[data-studio-options]', '[data-studio-recommend]', '[data-studio-option]', '[data-studio-ai-suggest]']
@@ -2631,12 +2633,16 @@ test('#75: the AI status live region says "asking" once through the debounce and
 test('#75: Auto walk: every step (choice and text, going back too) is in the waiting state from its first frame', { skip }, async () => {
   globalThis.__promptStudioTest.autoSuggestDelayMs = SLOW_DELAY
   const pending = holdSuggest()
-  const watch = watchStepFlash([...EARLY_CARDS, '[data-studio-skip]'])
+  // Text steps keep their fixed option buttons while the AI is asked (nothing flashes there), so only the cards, the default button and Ask are watched.
+  const watch = watchStepFlash(['[data-studio-options]', '[data-studio-recommend]', '[data-studio-ai-suggest]'])
   const answerHeld = async () => {
     await waitFor(() => pending.length > 0 && pending.at(-1).body.field.id === field())
     const last = pending.at(-1)
+    watch.pause() // the cards of the answered step are meant to appear now
     last.resolve({ ok: true, value: last.body.field.kind === 'enum' ? last.body.field.recommended : '', reason: 'x' })
     await waitFor(notLoading)
+    await settle()
+    watch.resume()
   }
   try {
     await freshSettings(null)
@@ -2652,16 +2658,18 @@ test('#75: Auto walk: every step (choice and text, going back too) is in the wai
       await answerHeld()
       if (i === 2) {
         // Back to the step before and forward again: same behavior (the first answer was cached, so it shows at once).
+        watch.pause() // a cached step legitimately shows its cards at once
         await click('[data-studio-back]')
         assert.ok($('[data-studio-ai-loading]') === null, 'a cached suggestion shows at once, no waiting state')
-        await click(($('[data-studio-ai-pick]') ? '[data-studio-ai-pick]' : '[data-studio-recommend]'))
+        await answerStep()
+        watch.resume()
         continue
       }
       await click($('[data-studio-ai-use]') ? '[data-studio-ai-use]' : $('[data-studio-recommend]') ? '[data-studio-recommend]' : '[data-studio-skip]')
       if ($('[data-studio-confirm]') && $('[data-studio-answer-input]')?.value) await click('[data-studio-confirm]')
     }
     assert.ok(sawText, 'the walk met a text step')
-    assert.deepEqual(watch.seen.filter(sel => sel !== '[data-studio-skip]'), [], 'no early cards on any step')
+    assert.deepEqual(watch.seen, [], 'no early cards on any step')
   } finally {
     watch.stop()
     globalThis.__promptStudioTest.autoSuggestDelayMs = 0
@@ -2731,9 +2739,9 @@ test('#75: Auto with a pending context read: the waiting state starts when the s
     await waitFor(() => $('[data-studio-ai-loading]'))
     assert.ok($('[data-studio-options]') === null)
     await waitFor(() => pending.length > 0)
+    assert.deepEqual(watch.seen, [], 'no early cards while the context is read or the request is out')
     pending.at(-1).resolve({ ok: true, value: pending.at(-1).body.field.recommended, reason: 'x' })
     await waitFor(() => $('[data-studio-options]'))
-    assert.deepEqual(watch.seen, [])
   } finally {
     watch.stop()
     globalThis.__promptStudioTest.autoSuggestDelayMs = 0

@@ -3,8 +3,10 @@
 // and the row that shows it.
 // ---------------------------------------------------------------------------
 
-// Current suggestion: { key, mode: 'suggest'|'improve', status: 'loading'|'ready'|'error'|'dismissed',
+// Current suggestion: { key, mode: 'suggest'|'improve', status: 'pending'|'loading'|'ready'|'error'|'dismissed',
 //   value, reason, agrees, errorKey, detail, model, latency }
+// 'pending' is the auto-ask delay: nothing is sent yet, but the step already looks like 'loading' (waiting state),
+// so its cards or the Ask button never show for a moment and then vanish when the request starts.
 const $suggestion = atom(null)
 
 // Identity of "this question with these answers before it": a suggestion for it stays valid
@@ -15,6 +17,14 @@ function questionKey(state) {
   return `${currentTarget()}|${state.current.category}|${state.intent.length}|${before}`
 }
 
+const isWaiting = suggestion => suggestion?.status === 'loading' || suggestion?.status === 'pending'
+
+// The delay is over or was abandoned without a request: the step leaves the waiting state (cards, Ask button).
+function releasePending(key) {
+  const current = $suggestion.get()
+  if (current?.status === 'pending' && (key === undefined || current.key === key)) $suggestion.set(null)
+}
+
 function clearSuggestion() {
   cancelAutoSuggestion()
   lifecycle.suggestSerial += 1
@@ -23,7 +33,8 @@ function clearSuggestion() {
 
 // Auto mode waits a moment before asking (SP-2): the plugin REST door cannot abort a call, so
 // clicking through steps quickly would otherwise queue one backend request per step. Leaving the
-// step (clearSuggestion) or scheduling again cancels the pending ask; manual asks stay immediate.
+// step (clearSuggestion) or scheduling again cancels the pending ask; manual asks stay immediate. The step shows
+// the waiting state ('pending') meanwhile; every way out of the delay releases it.
 const AUTO_SUGGEST_DELAY_MS = 400
 
 function cancelAutoSuggestion() {
@@ -36,13 +47,19 @@ function scheduleAutoSuggestion() {
   const key = questionKey($studio.get())
   const delay = globalThis.__promptStudioTest?.autoSuggestDelayMs ?? AUTO_SUGGEST_DELAY_MS
   const serial = lifecycle.suggestSerial
+  // Without a plugin context no request can go out, so there is nothing to wait for.
+  if (lifecycle.pluginContext) $suggestion.set({ key, mode: 'suggest', status: 'pending' })
   lifecycle.autoSuggestTimer = later(async () => {
     lifecycle.autoSuggestTimer = null
     // A pending session context read comes first (it has its own deadline); manual asks never wait.
     if (lifecycle.contextPromise) await lifecycle.contextPromise
     const state = $studio.get()
-    if (serial !== lifecycle.suggestSerial || $aiMode.get() !== 'auto' || state.status !== 'active' || questionKey(state) !== key) return
+    if (serial !== lifecycle.suggestSerial || $aiMode.get() !== 'auto' || state.status !== 'active' || questionKey(state) !== key) {
+      releasePending(key)
+      return
+    }
     requestSuggestion()
+    releasePending(key)
   }, delay)
 }
 
@@ -57,6 +74,10 @@ function refreshSuggestion() {
     return
   }
   if (mode === 'auto' && state.current.autoSuggest !== false) scheduleAutoSuggestion()
+  else if ($suggestion.get()?.status === 'pending') {
+    cancelAutoSuggestion()
+    $suggestion.set(null)
+  }
 }
 
 function mySuggestion(state, suggestion) {
@@ -71,7 +92,8 @@ function AiStatus({ state, reading }) {
   const mode = useValue($aiMode)
   const mine = mySuggestion(state, useValue($suggestion))
   const shown = !reading && state.status === 'active' && state.current && !state.current.paste && mode !== 'off'
-  const key = shown && mine && mine.status !== 'dismissed' ? mine.status : ''
+  // The waiting state before the request goes out is read like the request itself: one "asking" message, not two.
+  const key = shown && mine && mine.status !== 'dismissed' ? (mine.status === 'pending' ? 'loading' : mine.status) : ''
   return jsx(LiveRegion, { 'data-studio-ai-status': true, style: visuallyHidden, text: key ? t(`ai.status.${key}`) : '' })
 }
 
@@ -87,7 +109,7 @@ function SuggestionRow({ state }) {
   const children = []
   if (!mine || mine.status === 'dismissed') {
     children.push(jsx(Button, { data: { 'data-studio-ai-suggest': true }, onClick: () => requestSuggestion('suggest'), keyHint: SHORTCUTS.ask, children: isEnum ? t('ai.askEnum') : t('ai.askText') }))
-  } else if (mine.status === 'loading') {
+  } else if (isWaiting(mine)) {
     children.push(jsxs('span', {
       'data-studio-ai-loading': true,
       style: { ...typeStyle, alignItems: 'center', display: 'inline-flex', fontSize: '12px', gap: '6px' },
