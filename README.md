@@ -19,7 +19,7 @@ documentation ([how each prompt is built](docs/MODELS.md)).
   on an older Desktop it does not open and asks you to update Hermes.
 - The `hermes` CLI on `PATH`, or its path in `HERMES_BIN`.
 - Python 3.12 or later for the installer (set `PYTHON_BIN` to pick an interpreter).
-- **Platforms:** tested only on Linux (Linux Mint). Windows and macOS are not tested; on Windows install with
+- **Platforms:** tested on Linux (Linux Mint) and macOS. Windows is not tested; on Windows install with
   `hermes plugins install` (below), as `install.sh` is a bash script.
 
 ## Install
