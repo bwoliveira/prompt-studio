@@ -40,6 +40,8 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
   ("a script that helps users read and write files", "que ajuda a ler e escrever arquivos") stays part of the answer.
   Known limit: a verb joined by "and" after a purpose ("Give me a script to configure nginx and write tests") is read
   as part of the purpose, so the draft stays an answer; pick "Working implementation" in the Deliverable step.
+  The same holds for a second "and" after what a script helps someone do ("a script that helps users read files and
+  write logs and create reports" is read as a task).
 - Feature: a provider failure now says what happened. A wrong or expired API key (401) is `auth_failed`, a model or plan
   the provider refuses (403) stays `provider_refused` (its text no longer mentions the key), a rate limit (429) is
   `rate_limited` and a provider call that timed out on its own (client timeout, 408, 504) is `provider_timeout`; each has its own
