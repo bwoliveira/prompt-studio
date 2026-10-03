@@ -207,6 +207,8 @@ const TOPIC_AGENT = /\b(?:we|you|i|they|nos|voce|voces|eles|elas|a gente|first|p
 const ADDRESS_WRAP = '(?:(?:can|could|would|will)\\s+you|(?:voce|voces)\\s+(?:pode|poderia)|(?:i|we)\\s+(?:need|want)\\s+you\\s+to|(?:preciso|quero)\\s+que\\s+voce|help\\s+(?:me|us)(?:\\s+to)?|(?:me|nos)\\s+ajude\\s+a|ajude(?:-|\\s)(?:me|nos)\\s+a)'
 // ... unless the coordinated clause opens by addressing the assistant ("and please add", "and also add", "and can you add").
 const ORDER_ADDRESS = new RegExp(`^(?:(?:please|por favor|also|tambem|now|agora)\\b|${ADDRESS_WRAP}\\b)`)
+// "a script that can install and then configure nginx": after a modal the coordinated verb is part of what the script can do.
+const PURPOSE_MODAL = /\b(?:that|which|who|whose|que)\s+(?:(?:also|always|never|just|still|ja|tambem|nunca|sempre)\s+)?(?:can|could|should|will|would|must|may|might|possa|possam|deva|devam|pode|podem)\b[^.!?;:,]*$/
 const PURPOSE_TAIL = /\b(?:that|which|who|whose|to|que|para|onde)\s+\w[^.!?;:,]*$/
 const TOPIC_HEAD = /^\s*(?:how|what|why|when|where|which|whether|como|o que|por que|quando|onde|qual|quais)\b/
 // "and fix the login bug": the order verb opens right after the coordinator, at most behind please/then/an adverb.
@@ -311,7 +313,9 @@ function createDetector(profile = {}) {
       const topic = TOPIC_TAIL.exec(before)
       // "why we first configure nginx and then build the app": a sequence done by the explained agent stays the topic.
       const sequence = /\b(?:then|depois|entao)\b/.test(m[0]) && !(topic && TOPIC_AGENT.test(topic[0]))
-      if (TOPIC_HEAD.test(rest) || (!sequence && (topic || (purpose && PURPOSE_TAIL.test(before) && !ORDER_ADDRESS.test(rest))))) continue
+      const addressed = purpose && ORDER_ADDRESS.test(rest)
+      const inPurpose = purpose && !addressed && (PURPOSE_MODAL.test(before) || (!sequence && PURPOSE_TAIL.test(before)))
+      if (TOPIC_HEAD.test(rest) || inPurpose || (!sequence && !addressed && topic)) continue
       const next = firstSignal(rest)
       // The offset of the order verb itself, so the rest starts a sentence ("review it?") and is read as an order.
       if (next.verb && ORDER_LEAD.test(rest.slice(0, next.at))) return m.index + m[0].length + next.at
