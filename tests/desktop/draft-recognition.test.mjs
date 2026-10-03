@@ -865,7 +865,7 @@ const TABLE = [
   ['Show me a script for a YouTube video', 'answer', '#74 show me a video script'],
   ['Me mostre um script para meu vídeo', 'answer', '#74 pt a video script'],
   ['Tell me a Python module for parsing ISO dates', 'answer', '#74 tell me a module'],
-  ['I have a CSV. Give me a script that extracts the data', 'answer', '#74 a request after a context sentence'],
+  ['I have a log file. Show me a script to extract the errors', 'answer', '#74 a request after a context sentence'],
   ['Do not install anything. Show me a script to extract the data', 'answer', '#74 after a prohibition'],
   ['As a Python expert, can you show me a function that parses dates?', 'answer', '#74 after an intro clause'],
   // the uncovered phrasings of #74: a source with any preposition, an explanation introduced by any word, which library

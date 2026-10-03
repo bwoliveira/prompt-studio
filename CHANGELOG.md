@@ -22,13 +22,17 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
   mounted empty and filled afterwards, so a screen reader reads them (before, a region that appeared together with its
   text stayed silent; the preview's note and which version it shows are now announced when it opens). A test walks every
   tabbable element of each studio screen and requires an accessible name.
-- Fix: three drafts were read as the wrong deliverable. "Can you show me a script that extracts data?" (and the same
-  request without the question mark) now asks for the code, as "Show me a script that extracts data" does; "Me diga um
-  plano para configurar o nginx" is a plan, as "Tell me a plan to configure nginx" is; and "Do a code review of the API"
-  is a review on Astra too, not an implementation (Opus and Sonnet already said review).
-  Asking about an existing module or API ("Can you tell me an existing Python module for parsing ISO dates?") stays a
-  question, in English and Portuguese. So does a request to be shown a script that also asks to understand it ("Can you
-  show me a script? Why does it fail?", "... and tell me how it works"): the three engines agree it is a question.
+- Fix: two drafts were read as the wrong deliverable. "Me diga um plano para configurar o nginx" is a plan, as "Tell me a
+  plan to configure nginx" is; and "Do a code review of the API" is a review on Astra too, not an implementation (Opus
+  and Sonnet already said review).
+- Change: a "show me" request is read as a request for an answer. "Show me a script that extracts data", "Give me a
+  function that parses dates", "Can you tell me a Python module for ISO dates?", "Me mostre um script" and "Você pode me
+  mostrar uma função?" ask for information whatever the artifact is (one that exists, one of yours, one from a package or
+  a new one), and a question or an explanation after it ("Why does it fail?", "Break down how it works") changes
+  nothing. The draft becomes a code task only with an order to the assistant: a build verb ("Write ...", "Crie ..."),
+  also in a later sentence or after "and" ("... and then write unit tests", "Can you make it faster?", "Help me add
+  unit tests", "Você pode adicionar testes unitários?"). This replaces the rules that told an existing, owned or
+  looked-up artifact from a new one and missed a new phrasing in every review; the three engines read it the same way.
 - Feature: a provider failure now says what happened. A wrong or expired API key (401) is `auth_failed`, a model or plan
   the provider refuses (403) stays `provider_refused` (its text no longer mentions the key), a rate limit (429) is
   `rate_limited` and a provider call that timed out on its own (client timeout, 408, 504) is `provider_timeout`; each has its own
