@@ -16,7 +16,8 @@ node scripts/build.mjs            # inline desktop/src/* into desktop/plugin.js,
 node scripts/build.mjs --check    # fails if plugin.js, studio-core.mjs or the README shortcut table is out of date
 ```
 
-The build parses the sources with `acorn`, a pinned dev dependency, so run `npm ci` once before the first build.
+The build parses the sources with `acorn`, a pinned dev dependency, so run `npm ci` once before the first build (Node 22.13 or
+later, as `engines` in `package.json` says; CI uses Node 24).
 
 The keyboard table in `README.md` sits between the `shortcut-table` marker comments and is generated from the
 `SHORTCUTS` map and the `shortcuts.*` labels of `desktop/src/i18n-ui.js`. Never edit it by hand: change the map or the
@@ -27,7 +28,7 @@ label and rebuild. The file that holds the map is named once, as `SHORTCUTS_SOUR
 ```bash
 npm ci                            # once: the pinned dev dependencies (package.json, package-lock.json)
 npm test                          # UI and engine tests; fails, never skips, when a dependency is missing
-npm run test:bin                  # tests of bin/review and bin/pr
+npm run test:bin                  # tests of bin/review and bin/pr (bin/lib/local-review.test.mjs)
 uvx --with-requirements requirements-dev.txt pytest -q tests
 hermes plugins validate .
 python3 scripts/docs_sources.py check --docs-dir <snapshot dir>   # every doc quote in PROMPT-DOCS-REVIEW.md
@@ -43,6 +44,11 @@ python3 scripts/docs_sources.py check --docs-dir <snapshot dir>   # every doc qu
   Hermes install is needed. `npm test` sets `PROMPT_STUDIO_REQUIRE_DEPS=1`: a missing dependency fails the run
   instead of skipping the UI tests (as `CI=1` does). A plain `node --test tests/desktop/*.test.mjs` also looks in
   `PROMPT_STUDIO_NODE_MODULES` and the Hermes install, and skips, with the reason printed, when none has them.
+- `tests/desktop/prompt-snapshots.test.mjs` compares each target's prompt for one fixed brief with
+  `tests/desktop/fixtures/prompt-snapshots/<target>.txt`. After an intended change of a rule line, run
+  `UPDATE_SNAPSHOTS=1 node --test tests/desktop/prompt-snapshots.test.mjs` and read the git diff before committing.
+- `tests/desktop/clean-room.test.mjs` needs the official doc snapshots and the third-party builders' checkouts next to this
+  repository; it is skipped, with the reason printed, when they are missing.
 - To change a pinned version: `npm install --save-exact --save-dev <pkg>@<version>` and commit both `package.json` and
   `package-lock.json`.
 - The Python test dependencies are in `requirements-dev.txt` (the plugin itself needs none), for the `uvx` command above
@@ -72,13 +78,21 @@ redaction tests of one early commit; later test fixtures are marked inline with 
 
 `AGENTS.md` has the flow. Work on a branch (`<type>/<subject>`), one subject per pull request, tests first: each fix
 starts with a failing test, and the commit message names it (`Failing first: <test file> "<test name>"`). Every
-user-visible change gets a line in `CHANGELOG.md` under `## Unreleased`; versions are bumped only when a release is cut.
+user-visible change gets a line in `CHANGELOG.md` under `## Unreleased`; versions are bumped only when a release is cut (next section).
 
 Both reviews run locally, before the first `bin/pr` of a branch: the Hermes `/review`, then the Codex review
 (`bin/review`, run by `bin/pr` with the Codex CLI). With no P0, P1 or P2, `bin/pr` pushes, opens the pull request and
 merges it once CI is green. The scripts read the base branch from the repository (`BASE_BRANCH` overrides it), put the
 review verdict into the pull request body and stop a Codex run after `CODEX_TIMEOUT_SECONDS` (default 900; a timeout
 never approves). Their tests: `node --test bin/lib/local-review.test.mjs`.
+
+## Cutting a release
+
+Only the maintainer decides when. On its own branch (`docs/release-X.Y.Z`): set `version` in `plugin.yaml` and in
+`dashboard/manifest.json` (`tests/test_manifest.py` requires them to match; `package.json` carries no version), rename
+`## Unreleased` in `CHANGELOG.md` to `## X.Y.Z` and put a fresh empty `## Unreleased` above it, run every suite, and send it
+through `bin/pr` like any change. The squashed commit's subject starts `Prompt Studio X.Y.Z:` (the CHANGELOG takes its
+versions from commit subjects) and the git tag `vX.Y.Z` goes on that commit once it is merged.
 
 ## Hermes plugin guidelines
 
@@ -113,10 +127,12 @@ dashboard/                 backend REST routes, LLM adapter and session-context 
 desktop/                   Desktop half: src/ sources and the generated plugin.js
 docs/                      contract, developer notes, ADRs (adr/), remote install, configuration, model notes,
                            step and doc-quote reviews, doc sources
-scripts/                   build, install validation, doc-quote check, push-desktop.sh (remote install)
+scripts/                   build, install validation, doc-quote check, SDK export lister, push-desktop.sh (remote install)
 tests/                     Python tests and tests/desktop/ Node tests
 install.sh                 installer for a Hermes home or profile
 bin/                       pr and review: local Codex review before each pull request
+.github/workflows/ci.yml   CI: build check, Node and Python tests, gitleaks
+package.json, requirements-dev.txt   pinned dev dependencies (Node, Python)
 AGENTS.md                  rules for coding agents, including the review flow
 CONTEXT.md                 glossary of the project's vocabulary
 ```

@@ -7,7 +7,8 @@ The three models need different prompts, and the engines follow each vendor's gu
   - Autonomy is stated plainly, and "explore first" is added when the request gives little context.
   - Scope stays to what was asked.
   - No "double-check your work" lines: Opus verifies on its own, so the prompt asks for evidence instead,
-    such as the commands run and what they returned.
+    such as the commands run and what they returned. After a done-criterion you wrote, only that evidence line follows,
+    not a generic "done when the behavior works".
 - **GPT-6 Astra** (OpenAI, *Using GPT-6* and *Rethinking skills and prompts for GPT-6 Astra*):
   - The request is stated to take precedence over skills and `AGENTS.md`.
   - An action request is framed as work to finish, not a plan to propose.
@@ -16,6 +17,9 @@ The three models need different prompts, and the engines follow each vendor's gu
     `DONE WHEN` line, so a trivial question stays as short as the Opus prompt.
   - Pasted material goes last, inside `<document>` tags.
 - **Claude Sonnet 5.5** (Anthropic, *Prompting Claude Sonnet 5.5*):
+  - Pasted material goes in `<document>` tags (not `<pasted_content>`); long material goes above the task.
+  - A done-criterion is followed by the doc's check-before-done paragraph for code work: a real check that exercises the
+    change, never a syntax-only one.
   - Autonomy wording keeps it working through a long task: at low and medium effort it can stop to check in
     before the work is done.
   - Scope stays to what was asked: it tends to add tests, documentation and small supporting files on its own.

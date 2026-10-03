@@ -121,8 +121,9 @@ in the composer, go with the prompt on Alt+E and are not sent by F9 (the preview
 
 ## Try it in Hermes Desktop
 
-1. `node scripts/build.mjs`, then copy `desktop/plugin.js` to `desktop-plugins/prompt-studio/plugin.js` under your
-   Hermes home (`$HERMES_HOME`, usually `~/.hermes`) and reopen Hermes Desktop. The dashboard backend is installed
+1. `npm ci` once, then `node scripts/build.mjs`, then copy `desktop/plugin.js` to `desktop-plugins/prompt-studio/plugin.js`
+   under your Hermes home (`$HERMES_HOME`, usually `~/.hermes`; on another machine, `scripts/push-desktop.sh`, see
+   `docs/REMOTE-INSTALL.md`) and reopen Hermes Desktop. The dashboard backend is installed
    with the plugin (`./install.sh` from this checkout); its REST base is `/api/plugins/prompt-studio`.
 2. Type a draft and press F4 (or click **Prompt Studio**): the draft moves into the studio and the composer empties.
 3. Each step shows the AI suggestion on its own in automatic mode; confirm, pick an option or skip. **Back**

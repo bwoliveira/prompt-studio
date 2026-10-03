@@ -1,6 +1,6 @@
 # Configuration details
 
-Moved from the README, which keeps the Settings (F3) summary and the minimal `auxiliary.prompt_studio` block.
+The details behind the README's Configuration section (the Settings (F3) summary and the minimal `auxiliary.prompt_studio` block).
 
 ## Auxiliary task `auxiliary.prompt_studio`
 
@@ -22,10 +22,13 @@ like any other side model:
 - `timeout` applies to each step's suggestion (it can lower the 20 s step limit); the final polish always
   gets its own 45 s budget. A fast model keeps each step at a few seconds.
 - If `prompt_studio` pins no provider or model, the task follows the main model.
-- If suggestions fail with "API key not accepted" (401), "provider refused" (403: model not in your plan), a billing
-  note (402: no credits or quota), "rejected the request" (400), "limiting requests" (429) or "did not answer in
-  time" (the provider call timed out), the provider, key, plan or route is the cause, not the Studio. The prompt can
-  still be built without AI (Off mode).
+- If suggestions fail with "API key not accepted" (401), "provider refused" (403: model not in your plan), "model not
+  found" (404), a billing note (402: no credits or quota), "rejected the request" (400), "limiting requests" (429) or
+  "did not answer in time" (the provider call timed out), the provider, key, plan or route is the cause, not the
+  Studio. The prompt can still be built without AI (Off mode).
+- If the Studio says "Hermes changed in a way this Prompt Studio version does not support", an update of Hermes
+  changed something the backend relies on: update the plugin (`hermes plugins update prompt-studio`). Nothing is
+  sent to the model meanwhile (`host_incompatible`, see `CONTRACT.md`).
 - **Command Code:**
   - For Claude models use the provider `commandcode-anthropic` (alias `commandcode-claude`), not `commandcode`.
     Hermes sends `commandcode` through chat completions, and a tester saw Command Code answer 400 for Claude
