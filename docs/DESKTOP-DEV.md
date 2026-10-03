@@ -81,7 +81,7 @@ other keyword regexes (`UI_*`, `*_NOUN`, `ASK_FIRST`, subagent and format hints 
 first (`fold()`), so the Portuguese words are written without accents. The dashboard's
 `REQUIRED_LINES` proof words and `_AUTONOMY_HEADERS` in `dashboard/suggest_engine.py` are also
 English + Portuguese. Each pattern carries a `Languages:` comment; other languages fall back to defaults.
-The first verb in the draft decides the deliverable. `tests/desktop/draft-recognition.test.mjs` holds the draft table
+The first verb in the draft decides the deliverable. A "show me / give me / tell me" request for code ("Can you show me a script that extracts data?", "Me mostre uma função") is read as a question: it asks for an answer, and only a build verb in a later sentence or after "and" makes it an implementation. `tests/desktop/draft-recognition.test.mjs` holds the draft table
 all three engines must agree on; `tests/desktop/detection-core.test.mjs` fails when an engine declares a detection
 rule of its own, and the build allows an engine no import but the core (`node scripts/build.mjs`).
 

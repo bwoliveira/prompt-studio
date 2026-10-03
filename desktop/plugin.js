@@ -45,8 +45,8 @@ const ID = 'prompt-studio'
 const DETECTION = (() => {
 // Draft detection for Prompt Studio, shared by the three engines. Pure ESM: no imports, no DOM, no clock, no randomness.
 // What the draft asks for (implementation, analysis, review, plan, text, data, workflow or answer) is decided here, once:
-// the first verb in the text decides, a question stays an answer, and the artifact named after the verb says whether it
-// is code or text. A recognition fix lands in this file and reaches every target.
+// the first verb in the text decides, a question stays an answer (so does a "show me" request for code: only a build
+// verb makes it a task), and the artifact named after the verb says whether it is code or text. A recognition fix lands in this file and reaches every target.
 //
 // The rules are data. `createDetector(profile)` reads a profile of rule lines and returns a detector:
 //   verbs       [id, pattern] pairs that follow the shared object rules; on a tie in the text the earlier pair wins
@@ -93,7 +93,7 @@ const DEFAULT_VERBS = [
   ['review', /\b(revise|revisar|revisao|review|reviews|audite|auditar|audit)\b/],
   ['workflow', /\b(automati[sz]\w*|automate\w*|agende|schedule|workflows?|pipelines?|configure|configurar|instale|instalar)\b/],
   ['data', /\b(planilhas?|csv|datasets?|spreadsheets?|limpe os dados|clean the data|extraia|extract)\b/],
-  ['implementation', /\b(crie|criar|implemente|implementar|implement|build|construa|desenvolva|develop|corrija|corrigir|fix|refatore|refactor|programe|create|make|adicione|add|gere|gerar|monte|montar)\b/],
+  ['implementation', /\b(crie|criar|implemente|implementar|implement|build|construa|desenvolva|develop|corrija|corrigir|fix|refatore|refactor|programe|create|make|adicione|adicionar|add|gere|gerar|monte|montar)\b/],
   ['text', /\b(escreva|escrever|redija|write|draft|reescreva|rewrite|traduza|translate)\b/],
   ['analysis', /\b(pesquise|pesquisar|research|compare|comparar|analise|analisar|analyze|analyse|investigue|investigate|avalie|evaluate|resuma|resumir)\b/],
   ['plan', /\b(plano|planeje|planejar|plan|roadmap|cronograma|estrategia|strategy)\b/],
@@ -176,41 +176,21 @@ const QUESTION_HEAD = /\b(?:do|does|did|can|could|should|would|will|may|might|is
 // Only this many characters around a match are inspected, so the scan stays linear on long drafts; the prefixes
 // NEGATED and SENTENCE_START look for are far shorter than this.
 const CONTEXT_WINDOW = 120
-// "Can you show me a script that extracts data?": a polite request to be shown (given, sent, told) an artifact asks for
-// the artifact, with or without the mark, as "Show me a script that extracts data" does; no verb in it decides otherwise.
+// "Can you show me a script that extracts data?", "Give me a function that parses dates", "Me mostre um script que leia
+// datas": a request to be shown, given, sent or told a code artifact asks for information. The request is read as a
+// question: the verbs inside it are what the artifact does, not an order, and only a build order after it ("... and then
+// write unit tests", "Can you make it faster?", "Help me add unit tests") makes the draft a task. This replaces any
+// reading of what the artifact is (existing, owned, found in a source, a recommendation): all of them are answers.
 // Languages: Portuguese (unaccented) + English.
-const ARTIFACT_REQUEST = /^(?:(?:please|pls|por favor),?\s+)?(?:(?:can|could|would|will)\s+you\s+(?:(?:please|kindly)\s+)?(?:show|give|send|tell|pass)\s+(?:me|us)|(?:(?:voce|voces)\s+)?(?:pode|poderia|podem|poderiam)\s+(?:por favor\s+)?me\s+(?:mostrar|dizer|passar|enviar|mandar|dar))\s+(?:(?:please\s+)?(?:a|an|the|some|another|my|our|your|um|uma|o|os|as|algum|alguma|alguns|algumas|outro|outra|meu|minha|nosso|nossa|seu|sua)\s+)/
-// "Can you tell me an existing Python module for parsing ISO dates?": a word that picks among things that already exist
-// (existing, available, good, best, recommended ...) asks about an artifact, not for one to be made.
-// Languages: Portuguese (unaccented) + English.
-// "Can you show me my function?", "... o nosso script": an artifact the writer already owns is looked up, not made.
-// Languages: Portuguese (unaccented) + English.
-const OWNED_ARTIFACT = /\b(?:my|our|meu|minha|meus|minhas|nosso|nossa|nossos|nossas)\s+$/
-const OWNED_HEAD = /^\s*(?:my|our|meu|minha|meus|minhas|nosso|nossa|nossos|nossas)\b/
-const LOOKUP_MODIFIER = /\b(?:existing|available|good|better|best|recommended|popular|common|standard|built-in|well-known|open-source|free|existente|existentes|disponivel|disponiveis|bom|boa|melhor|melhores|recomendado|recomendada|populares|conhecido|conhecida|padrao|nativo|nativa)\b/
-// "Can you show me a module for parsing dates?", "Voce pode me mostrar uma API para clima?": a module, library, package or
-// API named for a purpose is a thing to be found, not written.
-const REFERENCE_NOUN_END = /\b(?:modul[oe]s?|apis?|librar(?:y|ies)|packages?|frameworks?|sdks?|bibliotecas?|pacotes?)\s*$/
-const FOR_PURPOSE = /^\s+(?:for|para)\b/
-// "Can you show me the function in utils.py?", "a Python module from the standard library": an artifact identified by
-// the file, repository or library it lives in is one that exists; a language ("a function in Python") is not a source.
-// Languages: Portuguese (unaccented) + English.
-const LOOKUP_SOURCE = /^\s+(?:(?:from|do|da|dos|das)\s+(?!(?:scratch|zero|nothing|nada|inicio|python|bash|shell|zsh|node|nodejs|javascript|typescript|ruby|perl|php|powershell|lua|sql)\b)\S|(?:in|inside|within|at|on|de|do|da|dos|das|em|no|na|nos|nas|dentro)\s+(?:(?:the|our|my|this|that|your|a|an|o|a|os|as|nosso|nossa|meu|minha|este|esta|esse|essa|um|uma)\s+)?(?:[\w-]+(?:[./][\w-]+)+|(?:standard|stdlib|std|core|built-?in|padrao)\s+librar\w*|biblioteca\s+padrao|(?:(?!(?:for|to|that|which|who|and|or|of|with|para|que|e|ou|de|com)\b)[\w-]+\s+){0,2}(?:files?|repos?|repositor(?:y|ies)|codebase|projects?|librar(?:y|ies)|stdlib|packages?|modules?|classes|class|namespace|directory|folder|dir|src|arquivos?|repositorio|projetos?|bibliotecas?|pasta|diretorio|codigo|pacotes?)\b))/
-// "Could you tell me an API that already exists for weather data?": the same qualifiers, said after the noun.
-const LOOKUP_AFTER = /^\s+(?:that|which|que)\s+(?:(?:already|ja)\s+)?(?:exists?|existe|existem|(?:is|are|esta|estao)\s+(?:already\s+|ja\s+)?(?:the\s+)?(?:available|existing|recommended|popular|best|good|better|disponivel|disponiveis|recomendad[ao]s?|existentes?)(?=\s+(?:for|para|on|from|in|at|via|through|no|na|em|de|pelo|pela)\b|\s*[.,;:!?]|\s*$))\b/
-// "Can you show me a script? Why does it fail?", "... and tell me how it works": a clause or sentence after the artifact
-// that asks to understand it makes the draft a question, whatever the artifact. It opens a clause (the start, a
-// sentence or comma mark, or a coordinator), so "a script that explains how it works" still asks for the script.
-// Languages: Portuguese (unaccented) + English.
-// "Can you show me a script? What does it do?", "... Can I run it on Windows?": a later sentence that opens as a question
-// about the artifact (a question word, or an auxiliary with its own subject) asks to understand it as well; an order in
-// question form ("Can you make it faster?") is addressed to the reader and stays a task. A question about what was already done
-// ("Have you tested it?", "Did you test it?", "Voce testou ele?") or how sure the reader is asks about the artifact too.
-// Languages: Portuguese (unaccented) + English.
-const QUESTION_TAIL = /(?:[.!?]\s+|\n\s*)(?:(?:and|also|but|e|mas)\s+)?(?:(?:what|which|who|whom|whose|where|when|why|how|qual|quais|quem|onde|quando|por que|porque|o que|quanto|quantos|quantas)\b|como\b(?!\s+(?:um\s+|uma\s+)?(?:especialista|expert|engenheir|desenvolvedor|analista|consultor|revisor|professor|designer|arquitet))|(?:does|do|did|is|are|was|were|can|could|will|would|should|has|have|may|might)\s+(?:i|we|it|this|that|these|those|they|there|the|a|an|my|our)\b|(?:can|could|would|will|do|does)\s+you\s+(?:(?:please|also|kindly)\s+)?(?:tell|know|say|explain|describe|clarify|think|believe)\b|(?:have|has|had|did)\s+you\b|(?:are|were)\s+you\s+(?:sure|certain|confident|positive)\b|voces?\s+(?:ja\s+)?\w+(?:ou|eu|iu|aram|eram|iram)\b|(?:voce\s+)?(?:sabe|acha|pode\s+(?:me\s+)?(?:dizer|explicar|contar|descrever)|consegue\s+(?:me\s+)?(?:dizer|explicar))\b|(?:posso|podemos|devo|devemos|existe|existem|funciona|funcionam)\b)/
-const EXPLAIN_TAIL = /\b(?:with|plus|including|along\s+with|com|mais)\s+(?:an?\s+|uma?\s+)?(?:explanation|walkthrough|breakdown|explicacao|explicacoes)\b|(?:[.!?;:\n,]|\b(?:and|then|also|but|plus|e|tambem|depois|mas)\b)\s*(?:(?:please|por favor|also|tambem|e|me|nos)\s+)*(?:(?:(?:can|could|would|will|do|does)\s+you|voces?\s+(?:pode|podem|poderia|poderiam|consegue|conseguem))\s+(?:(?:please|also)\s+)?)?(?:(?:explain|describe|clarify|walk\s+(?:me|us)\s+through|tell\s+(?:(?:me|us)\s+)?(?:how|why|what|when|where|which|whether|if)|(?:know|say)\s+(?:how|why|what|when|where|which|whether|if)|show\s+(?:me|us)\s+how|let\s+(?:me|us)\s+know\s+(?:how|why|whether|if)|tell\s+(?:me|us)\s+about|help\s+(?:me|us)\s+(?:to\s+)?(?:understand|figure\s+out|learn|know|see|grasp)|(?:(?:me|nos)\s+)?ajud(?:ar|e|em)\s+a\s+(?:entender|compreender|saber)|ajud(?:e|em)-(?:me|nos)\s+a\s+(?:entender|compreender|saber)|(?:i|we)(?:\s+(?:want|need|wish|would\s+like|would\s+love)|'d\s+like)\s+to\s+(?:know|understand|learn|find\s+out|see\s+(?:how|why))|(?:i|we)(?:\s+(?:want|need|would\s+like)|'d\s+like)\s+(?:an?\s+)?(?:explanation|walkthrough|breakdown)|(?:i|we)(?:'m|\s+am|\s+are|'re)\s+(?:curious|wondering|trying\s+to\s+understand)|quero\s+(?:saber|entender)|queria\s+(?:saber|entender)|preciso\s+(?:saber|entender)|gostaria\s+de\s+(?:saber|entender)|(?:quero|preciso\s+d[ea]|gostaria\s+d[ea])\s+uma?\s+explicacao|explique|expliquem|explicar|descreva|descrever|esclareca|esclarecer|diga\s+(?:como|por que|porque|se)|dizer\s+(?:como|por que|porque|se)|mostre\s+como|mostrar\s+como|conte\s+como)\b|(?:why|how|por que|porque|como)\s+(?:does|do|did|is|are|can|could|would|will|it|this|that|they|these|those|funciona|funcionam|isso|ele|ela|eles|elas|falha|falhou)\b)/
-// The phrase ends with a code artifact: the artifact is the head noun, not a modifier ("the API key").
-const CODE_ARTIFACT_END = new RegExp(`(?:${CODE_ARTIFACT.source})\\s*$`)
+const SHOW_OPEN = /^(?:(?:please|pls|por favor),?\s+)?(?:(?:(?:can|could|would|will)\s+you|(?:(?:voce|voces)\s+)?(?:pode|poderia|podem|poderiam)(?:\s+por favor)?)\s+(?:(?:please|kindly)\s+)?)?(?:(?:show|give|send|tell|pass)\s+(?:me|us)|(?:me|nos)\s+(?:mostrar|mostre|dar|de|dizer|diga|passar|passe|enviar|envie|mandar|mande)|(?:mostre|de|diga|passe|envie|mande)-(?:me|nos))\b/
+const PT_SHOW = /\b(?:mostr\w+|dar|de|dizer|diga|passar|passe|enviar|envie|mandar|mande|pode\w*|voces?)\b/
+const SHOW_FORM = new RegExp(`${SHOW_OPEN.source}(?:[^.?!;:\\n]|\\.(?=\\S))*(?:[?!;:\\n]|\\.(?!\\S)|$)`)
+// The head of the phrase asked for ends at a preposition, a clause word, a courtesy word or a mark ("the name of the function", "a review of
+// the code" and "the API key" ask for something else than code).
+const SHOW_HEAD = /[.!?,\n]|\s+(?:please|pls|thanks|thank|obrigado|obrigada|of|to|for|from|in|on|at|about|between|with|without|by|through|via|inside|using|that|which|who|whose|where|when|and|or|but|de|do|da|dos|das|para|em|no|na|nos|nas|sobre|entre|com|sem|por|que|e|ou|mas)\b/
+// The phrase asked for ends with code: a code artifact, or anything the code category knows ("a dashboard", "the login
+// page"). The last word is the head noun, not a modifier, as in "the API key" or "a code review".
+const CODE_HEAD = new RegExp(`(?:${CODE_ARTIFACT.source}|${CATEGORY_RULES.find(([id]) => id === 'code')[1].source})\\s*$`)
 // "I need a script to write log files": the artifact asked for sits before the verb that tells its purpose; with the
 // request opener ("I need", "preciso de") it also decides the deliverable ("I need a script to configure nginx").
 // "I need a React app. Write it in TypeScript": the thing asked in the sentence before is what the order writes.
@@ -222,14 +202,41 @@ const REQUESTED_ARTIFACT = /((?:(?:i|we) (?:need|want|would like)|i'd like|we'd 
 // "how to configure nginx and deploy the app", "the architecture and how to configure nginx": a topic, not an order.
 const TOPIC_TAIL = /\b(?:how to|how|why|when|where|what|which|whether|como|por que|porque|quando|onde|o que|qual|quais|se)\s+\w+[^.!?,;]*$/
 const TOPIC_AGENT = /\b(?:we|you|i|they|nos|voce|voces|eles|elas|a gente|first|primeiro)\b/
+// "a script to read and write files": a coordinator inside an infinitive purpose of the artifact (no comma, no "then")
+// extends what the artifact does, it does not order anything. After a finite verb ("that extracts data and fix ...") a bare
+// verb is an order.
+// How an order is wrapped when it is addressed to the assistant ("can you", "help me", "I need you to", "voce pode", "me ajude a").
+const ADDRESS_WRAP = '(?:(?:can|could|would|will)\\s+you|(?:voce|voces)\\s+(?:pode|poderia)|(?:i|we)\\s+(?:need|want)\\s+you\\s+to|(?:preciso|quero)\\s+que\\s+voce|help\\s+(?:me|us)(?:\\s+to)?|(?:me|nos)\\s+ajude\\s+a|ajude(?:-|\\s)(?:me|nos)\\s+a)'
+// ... unless the coordinated clause opens by addressing the assistant ("and please add", "and can you add").
+// An adverb in front ("and also can you add", "e tambem por favor adicione") does not hide it.
+const ORDER_ADDRESS = new RegExp(`^(?:(?:also|then|now|just|tambem|depois|agora|so|\\w+ly|\\w+mente)\\s*,?\\s+){0,2}(?:(?:please|por favor)\\b|${ADDRESS_WRAP}\\b)`)
+// "a script that can install and then configure nginx": after a modal the coordinated verb is part of what the script can do.
+const PURPOSE_MODAL = /\b(?:that|which|who|whose|que)\s+(?:(?:also|always|never|just|still|ja|tambem|nunca|sempre)\s+)?(?:can|could|should|will|would|must|may|might|possa|possam|deva|devam|pode|podem)\b[^.!?;:]*$/
+// "a script that helps users read and write files", "que ajuda a ler e escrever": what the script helps or lets someone do
+// (a help verb, a pronoun or people-noun object, a bare verb) is part of the script, so the coordinated verb is not a second order. A coordinator
+// or a comma after the complement ends it ("helps users read and write files and fix the bug").
+const NOT_BARE_OBJECT = 'the|an?|our|your|their|my|his|her|its|all|some|new|and|or|with|for|on|in|of|to|from|at|by|about|through|via|into|as|than|between'
+const PURPOSE_COMPLEMENT = new RegExp(`\\b(?:help|helps|let|lets|allow|allows|enable|enables|permit|permits)\\s+(?:(?:me|us|you|them|him|her|users|people|everyone|someone|anyone|developers|customers)\\s+(?!(?:${NOT_BARE_OBJECT})\\b)(?:\\w+ly\\s+)?(?!\\w*[^\\Wsui]s\\b)[\\w-]+|(?:the|an?|our|your|their|my|his|her|its|all|some|new)\\s+(?:[\\w-]+\\s+){1,2}(?:\\w+ly\\s+)?${MAKE_VERB.source})(?:\\s+(?!(?:and|or)\\b)[\\w-]+){0,3}\\s*$|\\b(?:ajuda|ajudam)\\s+(?:(?!(?:e|ou)\\b)[\\w-]+\\s+){0,2}a\\s+\\w+(?:ar|er|ir)\\b(?:\\s+(?!(?:e|ou)\\b)[\\w-]+){0,3}\\s*$`)
+// "to" opens a purpose only before a verb: "to users", "to the team", "to them" and "para os usuarios" name a recipient.
+// A plural noun ends in s (not ss, us, is); a Portuguese infinitive ends in ar, er or ir ("para ler", "para instala-lo").
+const PURPOSE_TAIL = /\bto\s+(?!(?:the|an?|my|our|your|their|his|her|its|this|that|these|those|all|each|every|some|any|no|me|us|you|them|him|it)\b)(?!\d)(?!\w*[^\Wsui]s\b)\w/g
+const PURPOSE_PARA = /\bpara\s+(?:\w+(?:ar|er|ir)|\w+-(?:lo|la|los|las))\b/
+// After a relative pronoun (a finite verb and its object come first: "that sends data to Redis"), "to" is an infinitive only
+// behind a word that takes one ("used to", "needs to", "helps users to", "in order to").
+const RELATIVE_PRONOUN = /\b(?:that|which|who|whose)\b/
+const PURPOSE_CUE = /\b(?:use|uses|used|using|designed|built|made|meant|intended|supposed|able|ready|going|need|needs|needed|want|wants|wanted|try|tries|trying|help|helps|let|lets|allow|allows|enable|enables|order|written|wrote)\s+(?:[\w-]+\s+){0,2}$/
+// "which" and "where" after a noun ("a function which parses dates", "a script where the bug occurs") open a relative clause;
+// after a verb of asking or knowing, a conjunction or "me" ("show me which", "and where") they ask a question: a topic.
+const QUESTION_CONTEXT = /(?:^|\s)(?:show|tell|explain|ask|know|see|learn|understand|decide|choose|about|whether|if|and|or|me|us)\s+$/
 const TOPIC_HEAD = /^\s*(?:how|what|why|when|where|which|whether|como|o que|por que|quando|onde|qual|quais)\b/
 // "and fix the login bug": the order verb opens right after the coordinator, at most behind please/then/an adverb.
 // "Can you recommend a design and build a React dashboard?": a yes/no question addressed to the assistant may carry an order.
 const ADDRESSED = /^(?:(?:can|could|would|will|should|may|might|do|does|did)\s+you\b|(?:voce|voces)\b|(?:pode|podem|poderia|poderiam|consegue|conseguem|da|daria)\s+(?:para\s+)?(?:voce|voces|me|nos)?\b)/
 // "How do I build a React app? Add examples.": after a question, an instruction about the answer is not a task.
 const RESPONSE_NOTE = /^(?:add|include|give|provide|use|keep|make|show|cite|list|format|mention|cover|avoid|skip|omit|limit|be|adicione|inclua|de|forneca|mantenha|faca|mostre|cite|liste|formate|mencione|cubra|evite|pule|omita|limite|seja)\s+(?:(?:the|a|an|some|more|any|your|o|os|as|um|uma|mais|alguns|algumas|sua|seu)\s+)?(?:\w+\s+){0,2}?(?:examples?|exemplos?|sources?|fontes?|references?|referencias?|links?|citations?|citacoes|bullet\s*points?|bullets|topicos|tables?|tabelas?|code\s+samples?|snippets?|trechos|answer|resposta|response|explanation|explicacao|details?|detalhes|context|contexto|summary|resumo|steps?|passos|numbers?|numeros|comparison|comparacao|short|brief|concise|breve|curto|conciso|simple|simples|jargon|jargao|markdown|headings?|titulos?|emojis?|words?|palavras|sentences?|frases|paragraphs?|paragrafos|portuguese|english|ingles|portugues)\b/
-const ORDER_LEAD = /^\s*(?:(?:please|por favor|then|depois|also|tambem|now|agora|\w+ly|\w+mente)\s+){0,2}$/
-const ORDER_JOIN = /\b(?:and|then|e|depois|entao)\s+(?:then\s+|depois\s+)?/g
+const ORDER_LEAD = new RegExp(`^\\s*(?:(?:please|por favor|then|depois|also|tambem|now|agora|\\w+ly|\\w+mente|${ADDRESS_WRAP})\\s*,?\\s+){0,2}$`)
+// A comma joins an order only when the clause after it addresses the assistant ("..., please write tests", "..., can you add").
+const ORDER_JOIN = new RegExp(`\\b(?:and|then|e|depois|entao)\\s+(?:then\\s+|depois\\s+)?|,\\s*(?=${ORDER_ADDRESS.source.slice(1)})`, 'g')
 const INTRO_CLAUSE = /^([^.!?,:;\n]{1,60}),\s+/
 // "The configure script is broken", "I tried to configure nginx yesterday": the verb names a thing or tells the past.
 // "Ajude-me a revisar codigo": before a Portuguese infinitive, "a" is the preposition, not an article.
@@ -261,6 +268,15 @@ function pickArtifact(request) {
   }
   if (code && txt) return code.index < txt.index ? 'code' : 'text'
   return code ? 'code' : txt ? 'text' : null
+}
+// The clause before a coordinator ends in an infinitive purpose ("a script to read and write files", "para ler e escrever").
+function purposeTail(before) {
+  const clause = before.slice(before.search(/[^.!?;:,]*$/))
+  for (const m of clause.matchAll(PURPOSE_TAIL)) {
+    const lead = clause.slice(0, m.index)
+    if (!RELATIVE_PRONOUN.test(lead) || PURPOSE_CUE.test(lead)) return true
+  }
+  return PURPOSE_PARA.test(clause)
 }
 function contextBefore(text, at) {
   // The sentinel keeps ^ from matching where the window was cut.
@@ -312,16 +328,31 @@ function createDetector(profile = {}) {
   const verbRules = [...OBJECT_RULES, ...verbs]
   const foldDraft = text => fold(text, foldLimit)
 
-  function coordinatedOrder(text) {
+  // The phrase after "show me" asks for code: code heads the phrase asked for.
+  // In Portuguese an adjective follows the noun ("uma funcao simples", "um script novo"): up to two words after the code noun.
+  function asksCode(phrase, pt) {
+    const head = phrase.slice(0, 300).split(SHOW_HEAD, 1)[0]
+    if (CODE_HEAD.test(head)) return true
+    // Not behind the English modifier "code" ("um code review") nor a determiner or a review/plan/data noun.
+    const cut = text => text.replace(/\s+[\w-]+\s*$/, '')
+    return pt && [cut(head), cut(cut(head))].some(stem => CODE_HEAD.test(stem) && !/\bcode\s*$/.test(stem)
+      && !/^\s*(?:an?|the|um|uma|uns|umas|o|os|as)\s/.test(head.slice(stem.length)) && !head.slice(stem.length).split(/\s+/).some(word => NOUN_SIGNAL.test(word)))
+  }
+  function coordinatedOrder(text, purpose = false) {
     ORDER_JOIN.lastIndex = 0
     for (let n = 0, m; n < 8 && (m = ORDER_JOIN.exec(text)); n++) {
+      // A comma is a join in a show request only; elsewhere it continues the sentence.
+      if (!purpose && m[0][0] === ',') continue
       const before = text.slice(Math.max(0, m.index - CONTEXT_WINDOW), m.index)
       const rest = text.slice(m.index + m[0].length, m.index + m[0].length + CONTEXT_WINDOW)
       // "how to configure nginx and deploy the app": the coordinator extends the topic, not the request; "and then" orders.
-      const topic = TOPIC_TAIL.exec(before)
+      let topic = TOPIC_TAIL.exec(before)
+      if (purpose && topic && /^(?:which|where)\s/.test(topic[0]) && !QUESTION_CONTEXT.test(before.slice(0, topic.index))) topic = TOPIC_TAIL.exec(before.slice(topic.index + topic[0].search(/\s/)))
       // "why we first configure nginx and then build the app": a sequence done by the explained agent stays the topic.
       const sequence = /\b(?:then|depois|entao)\b/.test(m[0]) && !(topic && TOPIC_AGENT.test(topic[0]))
-      if (TOPIC_HEAD.test(rest) || (!sequence && topic)) continue
+      const addressed = purpose && ORDER_ADDRESS.test(rest)
+      const inPurpose = purpose && !addressed && (PURPOSE_MODAL.test(before) || PURPOSE_COMPLEMENT.test(before) || (!sequence && purposeTail(before)))
+      if (TOPIC_HEAD.test(rest) || inPurpose || (!sequence && !addressed && topic)) continue
       const next = firstSignal(rest)
       // The offset of the order verb itself, so the rest starts a sentence ("review it?") and is read as an order.
       if (next.verb && ORDER_LEAD.test(rest.slice(0, next.at))) return m.index + m[0].length + next.at
@@ -355,6 +386,13 @@ function createDetector(profile = {}) {
     if (explain) {
       const order = coordinatedOrder(explain[0])
       return order < 0 ? explain : [explain[0].slice(0, order)]
+    }
+    // "Can you show me a script that extracts data and then write unit tests?": the request carries an order after it.
+    const show = SHOW_FORM.exec(goal)
+    const open = show && SHOW_OPEN.exec(show[0])[0]
+    if (show && asksCode(show[0].slice(open.length), PT_SHOW.test(open))) {
+      const order = coordinatedOrder(show[0], true)
+      return order < 0 ? show : [show[0].slice(0, order)]
     }
     const yesNo = YESNO_FORM.exec(goal)
     if (yesNo && (yesNo[0].includes('?') || UNMARKED_YESNO.test(yesNo[0]))) {
@@ -464,21 +502,6 @@ function createDetector(profile = {}) {
     else if ((signal === 'data' || signal === 'text') && MAKE_VERB.test(verbWord) && codeWins) { signal = 'implementation'; category = 'code' }
     // "Gere um e-mail", "Monte uma mensagem": the verb does not say what is made, the first artifact named does.
     if (signal === 'implementation' && GENERATE_VERB.test(request) && textWins) { signal = 'text'; category = 'writing' }
-    // A request to be shown a code artifact, when no verb and no question form decided anything.
-    const shown = signal === null && !question && ARTIFACT_REQUEST.exec(goal)
-    // The artifact must head the phrase asked for ("the name of the function", "the API key" ask for something else),
-    // while the whole sentence still tells which kind of artifact it is ("a script for a YouTube video" is text).
-    if (shown) {
-      const tail = goal.slice(shown[0].length, shown[0].length + 1000)
-      const rest = goal.slice(shown[0].length, shown[0].length + 300)
-      const head = rest.split(/[.!?\n]|\s+(?:of|to|for|from|in|on|at|about|between|with|without|by|that|which|who|whose|where|when|and|or|but|de|do|da|dos|das|para|em|no|na|nos|nas|sobre|entre|com|sem|por|que|e|ou|mas)\b/, 1)[0]
-      if (EXPLAIN_TAIL.test(tail) || QUESTION_TAIL.test(tail)) signal = 'answer'
-      else if (CODE_ARTIFACT_END.test(head) && pickArtifact(rest.split(/[.!?\n]/, 1)[0]) === 'code') {
-        // Asking about an existing artifact, or for a recommendation, is a question; asking for one to be made is a task.
-        if (OWNED_ARTIFACT.test(shown[0]) || OWNED_HEAD.test(head) || LOOKUP_MODIFIER.test(head) || LOOKUP_AFTER.test(rest.slice(head.length)) || LOOKUP_SOURCE.test(rest.slice(head.length)) || (REFERENCE_NOUN_END.test(head) && FOR_PURPOSE.test(rest.slice(head.length)))) signal = 'answer'
-        else { signal = 'implementation'; category = 'code' }
-      }
-    }
     return { category, signal, text, goal, asksQuestion: goal.endsWith('?') || QUESTION_START.test(goal) }
   }
 
@@ -1052,7 +1075,7 @@ const DETECTOR = DETECTION.createDetector({
     ['workflow', /\b(automatize|automatizar|automate|agende|agendar|schedule|execute|executar|rode|rodar|deploy|publique|migre|migrate|configure|configurar|instale|instalar)\b/],
     ['data', /\b(planilhas?|csv|datasets?|spreadsheets?|limpe os dados|clean the data|extraia|extract)\b/],
     // "code review" and "code audit" name a review, not the verb "code" (Opus and Sonnet have no such verb).
-    ['implementation', /\b(build|create|implement|develop|fix|make|add|refactor|code(?!\s+(?:reviews?|audits?|critiques?)\b)|programe|implemente|implementar|crie|criar|desenvolva|desenvolver|construa|construir|corrija|corrigir|conserte|adicione|refatore|gere|gerar|monte|montar)\b/],
+    ['implementation', /\b(build|create|implement|develop|fix|make|add|refactor|code(?!\s+(?:reviews?|audits?|critiques?)\b)|programe|implemente|implementar|crie|criar|desenvolva|desenvolver|construa|construir|corrija|corrigir|conserte|adicione|adicionar|refatore|gere|gerar|monte|montar)\b/],
     ['answer', /(^|\s)(explique|explain)\b|\s(o que|qual|quais|como|por que|porque|what|which|how|why|who|quem)\b/]
   ],
   // Languages: Portuguese (unaccented) + English.
