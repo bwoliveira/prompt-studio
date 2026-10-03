@@ -173,7 +173,7 @@ function enumRecommendation(current, mode, mine) {
     const value = mine.value || current.recommended
     if (value) return { value: all.find(o => same(o, value)) || value, byAi: true, all, same }
   }
-  if (mode === 'auto' && mine?.status === 'loading') return { value: '', byAi: false, all, same }
+  if (mode === 'auto' && isWaiting(mine)) return { value: '', byAi: false, all, same }
   return { value: current.recommended || '', byAi: false, all, same }
 }
 
@@ -185,7 +185,7 @@ function EnumAnswer({ state }) {
   const mine = mySuggestion(state, suggestion)
   const rec = enumRecommendation(current, mode, mine)
   // Auto: the AI's pick changes the cards, so they wait until it arrives, fails or is stopped.
-  if (mode === 'auto' && mine?.status === 'loading') return null
+  if (mode === 'auto' && isWaiting(mine)) return null
   const options = rec.all.filter(option => !rec.value || !rec.same(option, rec.value))
   return jsxs('div', {
     'aria-labelledby': QUESTION_TEXT_ID,
@@ -234,7 +234,7 @@ function TextAnswer({ state, placeholder }) {
   // One primary action per step (textStepPrimary): Confirm once something is typed, otherwise Recommended / Skip.
   const typed = Boolean(String(state.answer || '').trim())
   // Auto: the recommended button may become the AI text, so it waits for the suggestion.
-  const waiting = mode === 'auto' && hasDefault && mine?.status === 'loading' && mine.mode === 'suggest'
+  const waiting = mode === 'auto' && hasDefault && isWaiting(mine) && mine.mode === 'suggest'
   const primary = textStepPrimary({ typed, hasDefault, aiText: Boolean(aiText), waiting })
   return jsxs('div', {
     style: { marginTop: '8px' },
@@ -513,7 +513,8 @@ function focusTarget(root, state) {
   if (state.status === 'preview') return pick('[data-studio-send-prompt]', '[data-studio-use-prompt]')
   if (state.status === 'done') return pick('[data-studio-generate]')
   if (state.status === 'active' && state.current) {
-    if (state.current.kind === 'enum') return pick('[data-studio-recommend]', '[data-studio-option]')
+    // While the AI is asked the cards are hidden: the focus waits on the studio itself and moves to the cards when they arrive.
+    if (state.current.kind === 'enum') return pick('[data-studio-recommend]', '[data-studio-option]') || root
     return pick('[data-studio-answer-input]', '[data-studio-paste-open]')
   }
   return root
@@ -528,10 +529,11 @@ function useStudioFocus(state) {
     if (root) focusTarget(root, state)?.focus({ preventScroll: true })
   }, [stepKey])
   // A clicked AI button can unmount (Stop, Discard, Use): if the focus fell out of the studio,
-  // bring it back to the same first target instead of leaving it on <body>.
+  // bring it back to the same first target instead of leaving it on <body>. The same when it waits on the studio
+  // itself (cards hidden while the AI is asked) and the cards arrive.
   useEffect(() => {
     const root = document.querySelector('[data-studio-strip]')
-    if (root && !root.contains(document.activeElement)) focusTarget(root, state)?.focus({ preventScroll: true })
+    if (root && (!root.contains(document.activeElement) || document.activeElement === root)) focusTarget(root, state)?.focus({ preventScroll: true })
   }, [suggestion?.status, suggestion?.key])
 }
 

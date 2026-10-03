@@ -2560,6 +2560,244 @@ test('LOAD-2: Auto, while the step suggestion loads the choices it changes are h
   }
 })
 
+// #75: the debounce before Auto asks the AI used to leave a gap with no suggestion at all, so the cards of the step
+// (or the "Ask the AI" button) showed for a moment and then vanished when the request started.
+// Watches the strip for the whole opening: `seen` collects the first frame at which a forbidden control was in the DOM.
+function watchStepFlash(forbidden) {
+  const seen = []
+  const status = []
+  let paused = false
+  const check = () => {
+    if (paused) return
+    for (const sel of forbidden) if ($(sel) && !seen.includes(sel)) seen.push(sel)
+    const text = $('[data-studio-ai-status]')?.textContent ?? ''
+    if (text !== status.at(-1)) status.push(text)
+  }
+  const observer = new MutationObserver(check)
+  observer.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true })
+  return { seen, status, pause() { paused = true }, resume() { paused = false }, stop() { observer.disconnect() } }
+}
+const SLOW_DELAY = 150
+const EARLY_CARDS = ['[data-studio-options]', '[data-studio-recommend]', '[data-studio-option]', '[data-studio-ai-suggest]']
+
+test('#75: Auto, new session: the first choice step never shows its cards before the AI answers (no flash during the debounce)', { skip }, async () => {
+  globalThis.__promptStudioTest.autoSuggestDelayMs = SLOW_DELAY
+  const pending = holdSuggest()
+  const watch = watchStepFlash(EARLY_CARDS)
+  try {
+    await freshSettings(null)
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    await click('[data-studio-open]')
+    assert.equal(aiMode(), 'auto')
+    assert.equal(field(), 'deliverable', 'the first step is the choice step')
+    assert.equal(pending.length, 0, 'the debounce still holds the backend request back')
+    assert.ok($('[data-studio-ai-loading]'), 'the waiting state is there from the first frame')
+    assert.ok($('[data-studio-ai-stop]'), 'Stop is there while waiting')
+    for (const sel of EARLY_CARDS) assert.ok($(sel) === null, `${sel} not shown while the AI is about to be asked`)
+    assertEverythingHasAKey()
+    await waitFor(() => pending.length > 0)
+    assert.ok($('[data-studio-ai-loading]'))
+    assert.ok($('[data-studio-options]') === null, 'still no cards once the request is in flight')
+    assert.deepEqual(watch.seen, [], 'no card or Ask button was ever in the DOM before the answer')
+    pending.at(-1).resolve({ ok: true, value: pending.at(-1).body.field.recommended, reason: 'x' })
+    await waitFor(() => $('[data-studio-options]'))
+    assert.ok($('[data-studio-ai-loading]') === null)
+    assert.ok($('[data-studio-ai-pick]') || $('[data-studio-recommend]'), 'the cards appear once the answer is in')
+  } finally {
+    watch.stop()
+    globalThis.__promptStudioTest.autoSuggestDelayMs = 0
+  }
+})
+
+test('#75: the AI status live region says "asking" once through the debounce and the request, and nothing spurious', { skip }, async () => {
+  globalThis.__promptStudioTest.autoSuggestDelayMs = SLOW_DELAY
+  const pending = holdSuggest()
+  const watch = watchStepFlash([])
+  try {
+    await freshSettings(null)
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    await click('[data-studio-open]')
+    await waitFor(() => pending.length > 0)
+    await settle()
+    pending.at(-1).resolve({ ok: true, value: pending.at(-1).body.field.recommended, reason: 'x' })
+    await waitFor(() => $('[data-studio-options]'))
+    await settle()
+    const bundle = ui.i18n.bundles.en.ai.status
+    assert.deepEqual(watch.status.filter(Boolean), [bundle.loading, bundle.ready], 'asking, then ready: each said once')
+  } finally {
+    watch.stop()
+    globalThis.__promptStudioTest.autoSuggestDelayMs = 0
+  }
+})
+
+test('#75: Auto walk: every step (choice and text, going back too) is in the waiting state from its first frame', { skip }, async () => {
+  globalThis.__promptStudioTest.autoSuggestDelayMs = SLOW_DELAY
+  const pending = holdSuggest()
+  // Text steps keep their fixed option buttons while the AI is asked (nothing flashes there), so only the cards, the default button and Ask are watched.
+  const watch = watchStepFlash(['[data-studio-options]', '[data-studio-recommend]', '[data-studio-ai-suggest]'])
+  const answerHeld = async () => {
+    await waitFor(() => pending.length > 0 && pending.at(-1).body.field.id === field())
+    const last = pending.at(-1)
+    watch.pause() // the cards of the answered step are meant to appear now
+    last.resolve({ ok: true, value: last.body.field.kind === 'enum' ? last.body.field.recommended : '', reason: 'x' })
+    await waitFor(notLoading)
+    await settle()
+    watch.resume()
+  }
+  try {
+    await freshSettings(null)
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    await click('[data-studio-open]')
+    let sawText = false
+    for (let i = 0; i < 12 && field() !== ''; i += 1) {
+      const id = field()
+      if (id === 'thirdPartyText') { await click('[data-studio-skip]'); continue }
+      assert.ok($('[data-studio-ai-loading]'), `${id}: waiting from the first frame`)
+      assert.ok($('[data-studio-options]') === null && $('[data-studio-recommend]') === null && $('[data-studio-ai-suggest]') === null, `${id}: no cards or Ask button yet`)
+      if ($('[data-studio-answer-input]')) sawText = true
+      await answerHeld()
+      if (i === 2) {
+        // Back to the step before and forward again: same behavior (the first answer was cached, so it shows at once).
+        watch.pause() // a cached step legitimately shows its cards at once
+        await click('[data-studio-back]')
+        assert.ok($('[data-studio-ai-loading]') === null, 'a cached suggestion shows at once, no waiting state')
+        await answerStep()
+        watch.resume()
+        continue
+      }
+      await click($('[data-studio-ai-use]') ? '[data-studio-ai-use]' : $('[data-studio-recommend]') ? '[data-studio-recommend]' : '[data-studio-skip]')
+      if ($('[data-studio-confirm]') && $('[data-studio-answer-input]')?.value) await click('[data-studio-confirm]')
+    }
+    assert.ok(sawText, 'the walk met a text step')
+    assert.deepEqual(watch.seen, [], 'no early cards on any step')
+  } finally {
+    watch.stop()
+    globalThis.__promptStudioTest.autoSuggestDelayMs = 0
+  }
+})
+
+test('#75: the waiting state never sticks: Stop, a mode switch, closing and an unreachable AI all release the step', { skip }, async () => {
+  globalThis.__promptStudioTest.autoSuggestDelayMs = 400
+  const pending = holdSuggest()
+  try {
+    await freshSettings(null)
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    await click('[data-studio-open]')
+    assert.ok($('[data-studio-ai-loading]') && pending.length === 0, 'waiting, nothing sent yet')
+    // Stop while waiting: cards appear, the timer is cancelled, nothing is sent.
+    await click('[data-studio-ai-stop]')
+    assert.ok($('[data-studio-options]'), 'Stop brings the cards back')
+    await new Promise(resolve => setTimeout(resolve, 450))
+    assert.equal(pending.length, 0, 'the cancelled ask never goes out')
+    assert.ok($('[data-studio-ai-loading]') === null)
+    // Switching to On request while waiting: cards, no request.
+    await click('[data-studio-cancel]')
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    await click('[data-studio-open]')
+    assert.ok($('[data-studio-ai-loading]'))
+    await setMode('manual')
+    assert.ok($('[data-studio-ai-loading]') === null && $('[data-studio-options]'), 'On request releases the step')
+    assert.ok($('[data-studio-ai-suggest]'), 'and offers the Ask button')
+    await new Promise(resolve => setTimeout(resolve, 450))
+    assert.equal(pending.length, 0)
+    // Switching AI off while waiting.
+    await setMode('auto')
+    assert.ok($('[data-studio-ai-loading]'))
+    await setMode('off')
+    assert.ok($('[data-studio-ai-loading]') === null && $('[data-studio-options]'))
+    await new Promise(resolve => setTimeout(resolve, 450))
+    assert.equal(pending.length, 0)
+    // Closing while waiting: nothing is sent after.
+    await setMode('auto')
+    await click('[data-studio-cancel]')
+    await new Promise(resolve => setTimeout(resolve, 450))
+    assert.equal(pending.length, 0)
+    // Unreachable AI (the backend call fails): the cards come back with the failure.
+    backend.suggest = () => Promise.reject(new Error('boom'))
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    await click('[data-studio-open]')
+    assert.ok($('[data-studio-ai-loading]'))
+    await waitFor(() => $('[data-studio-ai-error]'))
+    assert.ok($('[data-studio-options]'), 'cards after the failure')
+  } finally {
+    globalThis.__promptStudioTest.autoSuggestDelayMs = 0
+  }
+})
+
+test('#75: Auto with a pending context read: the waiting state starts when the step shows, not before', { skip }, async () => {
+  globalThis.__promptStudioTest.autoSuggestDelayMs = SLOW_DELAY
+  const pending = holdSuggest()
+  let release
+  backend.context = () => new Promise(resolve => { release = () => resolve({ ok: true, summary: 'RESUMO', model: 'm', ms: 10 }) })
+  const watch = watchStepFlash(EARLY_CARDS)
+  try {
+    await freshSettings('sess-1')
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    await click('[data-studio-open]')
+    assert.ok($('[data-studio-context-loading]'))
+    release()
+    await waitFor(() => $('[data-studio-ai-loading]'))
+    assert.ok($('[data-studio-options]') === null)
+    await waitFor(() => pending.length > 0)
+    assert.deepEqual(watch.seen, [], 'no early cards while the context is read or the request is out')
+    pending.at(-1).resolve({ ok: true, value: pending.at(-1).body.field.recommended, reason: 'x' })
+    await waitFor(() => $('[data-studio-options]'))
+  } finally {
+    watch.stop()
+    globalThis.__promptStudioTest.autoSuggestDelayMs = 0
+  }
+})
+
+test('#75 (Codex): while the cards wait for the AI the focus is inside the Studio, and moves to the recommended button when they arrive', { skip }, async () => {
+  globalThis.__promptStudioTest.autoSuggestDelayMs = SLOW_DELAY
+  const pending = holdSuggest()
+  try {
+    await freshSettings(null)
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    $('[data-slot="composer-rich-input"]').focus()
+    await click('[data-studio-open]')
+    assert.ok($('[data-studio-ai-loading]') && $('[data-studio-options]') === null)
+    const strip = $('[data-studio-strip]')
+    assert.ok(strip.contains(document.activeElement), 'the focus is in the Studio, not left in the composer, during the delay')
+    await waitFor(() => pending.length > 0)
+    assert.ok(strip.contains(document.activeElement), 'and while the request is out')
+    pending.at(-1).resolve({ ok: true, value: pending.at(-1).body.field.recommended, reason: 'x' })
+    await waitFor(() => $('[data-studio-options]'))
+    await settle()
+    assert.ok(document.activeElement === $('[data-studio-recommend]'), 'the cards arrive and the focus lands on the recommended button')
+  } finally {
+    globalThis.__promptStudioTest.autoSuggestDelayMs = 0
+  }
+})
+
+test('#75 (Codex): a timer left over from a closed opening does not clear the waiting state of the new one', { skip }, async () => {
+  const pending = holdSuggest()
+  let releaseOld
+  backend.context = () => new Promise(resolve => { releaseOld = () => resolve({ ok: true, summary: 'OLD', model: 'm', ms: 1 }) })
+  try {
+    await freshSettings('sess-1')
+    globalThis.__promptStudioTest.autoSuggestDelayMs = 20
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    await click('[data-studio-open]')
+    await new Promise(resolve => setTimeout(resolve, 80)) // the first timer fired and waits for the old context read
+    await click('[data-studio-cancel]')
+    globalThis.__promptStudioTest.autoSuggestDelayMs = 600
+    backend.context = () => ({ ok: true, summary: 'NEW', model: 'm', ms: 1 })
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    await click('[data-studio-open]')
+    await waitFor(() => $('[data-studio-ai-loading]'))
+    releaseOld()
+    await settle()
+    assert.ok($('[data-studio-ai-loading]'), 'the new opening is still waiting for its own delay')
+    assert.ok($('[data-studio-options]') === null, 'no cards flash up')
+    assert.equal(pending.length, 0)
+    await waitFor(() => pending.length > 0, { timeout: 2000 })
+    assert.ok($('[data-studio-ai-loading]') && $('[data-studio-options]') === null)
+  } finally {
+    globalThis.__promptStudioTest.autoSuggestDelayMs = 0
+  }
+})
+
 test('LOAD-3: while the AI writes the prompt, only Cancel and the mode switch remain', { skip }, async () => {
   await freshSettings(null)
   let release

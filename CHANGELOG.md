@@ -4,6 +4,12 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
 
 ## Unreleased
 
+- Fix: in Auto mode on a new session (no session context) the option buttons of the first step showed for an instant after F4
+  and then vanished when the AI started thinking. The step now shows the "asking the AI" state from its first frame (the
+  same row, with Stop), during the short pause before the request too, so the options appear once, when the AI has
+  answered, failed or been stopped. The pause itself is unchanged (no request per step while clicking through quickly),
+  and the screen reader still says "Asking the AI…" once. The same goes for text steps: the "Ask the AI" button and the
+  default button no longer flash before the AI row. On request and Off are unchanged.
 - Feature: the generated prompts read better on every target. Opus and Sonnet put each rule of the subagent team on
   its own line, as Astra does. On Opus, a done-criterion you wrote is followed only by the line asking for evidence
   (the commands run and what they returned), no longer by a generic "done when the behavior works". Astra leaves out the plain-language and
