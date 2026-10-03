@@ -47,7 +47,7 @@ The GPT-6 page states its guidance covers the whole family and targets Astra's b
 - No tool lists, no reasoning-effort lines, no personas, no "think step by step" lines. Tools and effort are Hermes session settings; declaring them in the prompt can contradict the real session.
 - Pasted text is capped at 12,000 characters (local limit) and `&` / `<` are escaped so it cannot close its tags.
 - The studio uses the engine's prompt as built; the core does not rewrite engine output.
-- Sonnet reuses the Opus detection and normalization code (category, deliverable, interface, conflicts) verbatim; only the rule lines differ (section 5).
+- Opus and Sonnet read the same detection profile (the shared `desktop/src/detection-core.js`) and the same interface pattern; only the rule lines differ (section 5).
 
 ## 1. Claude Opus 5.5 (`engine-opus.js`)
 
@@ -184,7 +184,7 @@ depends on them. `latest-model` is a byte-identical copy of `gpt6-using`, and `a
 
 ## 5. Claude Sonnet 5.5 (`engine-sonnet.js`)
 
-Same section order, options and detection code as Opus (section 1): TASK, CONTEXT, THIRD-PARTY MATERIAL, REQUIREMENTS,
+Same section order, options and detection profile as Opus (section 1): TASK, CONTEXT, THIRD-PARTY MATERIAL, REQUIREMENTS,
 AUTONOMY, SUBAGENTS, EXAMPLE/EXAMPLES, OUTPUT, DONE WHEN. A pasted block of 2,000 characters or more moves
 THIRD-PARTY MATERIAL to the top. Only the rule lines change. Source policy: a line cites a Sonnet page
 (`sonnet55-prompting`, then `sonnet5-prompting`) where one says something; where neither does, the row cites a vendor-wide page

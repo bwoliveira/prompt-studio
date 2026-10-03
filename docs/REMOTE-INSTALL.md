@@ -1,6 +1,6 @@
 # Remote backend: put the desktop half on the app machine
 
-Moved from the README, which keeps the short version in its *Install* section.
+The details behind the *Remote backend* part of the README's *Install* section.
 
 **Remote backend** (Desktop connected over SSH or a URL): run the install on the backend host as in the README's Install section. Hermes
 Desktop copies the desktop half only from the plugins folder of the Hermes home on the machine where the app runs;

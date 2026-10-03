@@ -4,247 +4,167 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
 
 ## Unreleased
 
-- Fix: in Auto mode on a new session (no session context) the option buttons of the first step showed for an instant after F4
-  and then vanished when the AI started thinking. The step now shows the "asking the AI" state from its first frame (the
-  same row, with Stop), during the short pause before the request too, so the options appear once, when the AI has
-  answered, failed or been stopped. The pause itself is unchanged (no request per step while clicking through quickly),
-  and the screen reader still says "Asking the AI…" once. The same goes for text steps: the "Ask the AI" button and the
-  default button no longer flash before the AI row. On request and Off are unchanged.
-- Feature: the generated prompts read better on every target. Opus and Sonnet put each rule of the subagent team on
-  its own line, as Astra does. On Opus, a done-criterion you wrote is followed only by the line asking for evidence
-  (the commands run and what they returned), no longer by a generic "done when the behavior works". Astra leaves out the plain-language and
-  style lines and the `DONE WHEN` line for a plain answer, so a trivial question gives the same short prompt as on
-  Opus. Pasted text that contains `<` or `&` carries one line saying that `&lt;` and `&amp;` stand for them, so
-  quotes come back unescaped. Astra wraps examples in `<example>` tags like the other targets. The subagents
-  recommendation is now the same everywhere: the AI suggestion, the guide behind it and the docs all recommend "The
-  model decides", the default of every engine (a team only when you pick it or the draft asks for one). One prompt
-  snapshot per target (`tests/desktop/fixtures/prompt-snapshots/`) locks the wording.
-- Accessibility: the target and AI-mode switches are named groups of pressed/not-pressed buttons (`aria-pressed`), not
-  radio groups: every option stays in the tab order and changes only on Enter, Space or a click, so an arrow key never
-  re-asks the steps or starts model calls by accident (and the studio's key listener still takes no arrow, Enter, Tab,
-  Esc or Ctrl/Super key). A ladder edit button is now named with its question and its current answer ("Edit answer 3:
-  … (current answer: …)", also in Portuguese). The preview is a named region ("Prompt preview") and its scrollable
-  text has a name. The step, AI-status, session-context and preview announcements go through live regions that are
-  mounted empty and filled afterwards, so a screen reader reads them (before, a region that appeared together with its
-  text stayed silent; the preview's note and which version it shows are now announced when it opens). A test walks every
-  tabbable element of each studio screen and requires an accessible name.
-- Fix: two drafts were read as the wrong deliverable. "Me diga um plano para configurar o nginx" is a plan, as "Tell me a
-  plan to configure nginx" is; and "Do a code review of the API" is a review on Astra too, not an implementation (Opus
-  and Sonnet already said review).
-- Change: a "show me" request is read as a request for an answer. "Show me a script that extracts data", "Give me a
-  function that parses dates", "Can you tell me a Python module for ISO dates?", "Me mostre um script" and "Você pode me
-  mostrar uma função?" ask for information whatever the artifact is (one that exists, one of yours, one from a package or
-  a new one), and a question or an explanation after it ("Why does it fail?", "Break down how it works") changes
-  nothing. The draft becomes a code task only with an order to the assistant: a build verb ("Write ...", "Crie ..."),
-  also in a later sentence or after "and" ("... and then write unit tests", "Can you make it faster?", "Help me add
-  unit tests", "Você pode adicionar testes unitários?"). This replaces the rules that told an existing, owned or
-  looked-up artifact from a new one and missed a new phrasing in every review; the three engines read it the same way.
-  An explicit order is not lost behind the description of the artifact: "Show me a script that sends data to users and
-  fix the login bug" and "Show me a function which parses dates and fix the login bug" are tasks ("to users" is a
-  recipient, not a purpose; "which" opens a relative clause), and so is an order addressed to the assistant after a
-  comma ("..., please write unit tests for it", "..., por favor escreva testes"). What the script helps someone do
-  ("a script that helps users read and write files", "que ajuda a ler e escrever arquivos") stays part of the answer.
-  Known limit: a verb joined by "and" after a purpose ("Give me a script to configure nginx and write tests") is read
-  as part of the purpose, so the draft stays an answer; pick "Working implementation" in the Deliverable step.
-  The same holds for a second "and" after what a script helps someone do ("a script that helps users read files and
-  write logs and create reports" is read as a task).
-- Feature: a provider failure now says what happened. A wrong or expired API key (401) is `auth_failed`, a model or plan
-  the provider refuses (403) stays `provider_refused` (its text no longer mentions the key), a rate limit (429) is
-  `rate_limited` and a provider call that timed out on its own (client timeout, 408, 504) is `provider_timeout`; each has its own
-  English and Portuguese text in the suggestion and prompt tooltips and in the session-context note, instead of "the
-  model could not be reached". One classifier decides the code for /suggest, /compose and /context (the context reader
-  had its own copy); a 429 that names billing is still `provider_payment`. See docs/CONTRACT.md.
-- Docs: the README is now for users (about 200 lines), with the keyboard table per platform generated from the shortcut map
-  (`node scripts/build.mjs` writes it, `--check` fails when it is stale); contributor material moved to `CONTRIBUTING.md`
-  and `docs/DESKTOP-DEV.md`, configuration, model and remote-install details to `docs/CONFIGURATION.md`, `docs/MODELS.md`
-  and `docs/REMOTE-INSTALL.md`; six ADRs in `docs/adr/` record the standing decisions and `CONTEXT.md` is the glossary.
+## 1.9.0
 
-- Fix: Cancel, Put in composer to edit and Send now left the studio's Settings dialog open when it was open at the
-  time, so it came back over the next opening. Cancel, placing, sending and a plugin reload now all close the studio
-  through one function that closes Settings with it.
-- Feature: Prompt Studio opens without an F-key. It adds a binding to Hermes Desktop's keybinds area, **Ctrl+Shift+E**
-  (**⌘⇧E** on a Mac), which you can reassign in Desktop's settings; its default is a chord none of Desktop's own
-  actions uses, and it runs the same opening as F4 (an empty or short draft and a missing message field are reported
-  the same way, and like F4 it does nothing behind an open dialog, menu, palette or the Studio's Settings). F4 and the ⌘K command keep working. Each of F5 to F10 also has an Alt+letter twin so a Mac user
-  never needs fn: Alt+Y accept, Alt+K skip, Alt+L use the AI suggestion, Alt+B back, Alt+G generate, Alt+X close
-  (never E, I, N or U, the Option dead keys). The control prints both keys, the F1 list shows both, and both are
-  announced to screen readers. The studio still never takes Enter, Alt+Enter, Tab, Esc or any Ctrl/Super chord.
-  Behind a dialog, menu or palette (or the Studio's Settings) the Alt twins are left to that overlay, so a Mac still
-  types ⌥Y, ⌥K, ⌥L, ⌥B, ⌥G and ⌥X there; F5 to F10 themselves stay swallowed while the Studio is open.
-- Fix: on a Mac, ⌥E (Put in composer), ⌥N (Another suggestion) and ⌥I (AI mode) did nothing: macOS reports them as
-  dead keys (key `Dead`, keyCode 229 or `isComposing`) and the key listener dropped every such event. An Alt chord on
-  a letter or digit key is now read by its physical key even then; a real input-method composition without an Alt
-  chord is still ignored. The listener still never handles Enter, Tab, Esc or Ctrl/Super chords (now covered by a test).
-- Mac key caps: on a Mac the key caps, tooltips, notices and the F1 list show ⌥E and ⇧ instead of Alt+E and Shift;
-  F-keys read as plain F4, F9 and so on (whether a Mac needs fn for them is its own keyboard setting) (the modifier glyphs come from the Desktop SDK's `formatModifierToken` when it has one, a local table
-  otherwise). Other platforms are unchanged, and `aria-keyshortcuts` keeps the canonical combo. The F1 help gains a Mac
-  note (Alt is Option) and no longer says "use the left Alt": either Alt works, only an AltGr (right Alt on some
-  layouts) does not.
-- Fix: with the Settings dialog, a model menu, the command palette or any other open dialog/menu/listbox in front, the
-  Studio's keys no longer reach the controls behind it: F9 does not generate, F10 does not cancel, F4 does not open
-  the Studio and the Alt chords do nothing. F5-F10 are still swallowed while the Studio is open (no page reload).
-  Behind a dialog, menu or palette that is not the Studio's own Settings, F1 and F3 do nothing either (no second
-  Settings dialog, no help toggled); with the Studio's own Settings open, F1 (help) still works and F3 closes Settings. A model or language menu opened
-  inside Settings counts as an overlay in front (F1 and F3 do nothing behind it), and a dialog, menu or listbox hidden
-  through CSS (`display:none`, `visibility:hidden`) does not block the keys. The key listener now reads which dialogs,
-  menus and listboxes are open (ARIA roles and visibility; it changes nothing in the app's DOM); README and
-  DESKTOP-DEV say so.
+### Keyboard and Mac
+
+- Feature: Prompt Studio opens without an F-key. **Ctrl+Shift+E** (**⌘⇧E** on a Mac) is a binding in Hermes Desktop's
+  keybinds area, which you can reassign in Desktop's settings; it does what F4 does (and, like F4, nothing behind an open
+  dialog, menu, palette or the Studio's Settings). F4 and the command palette entry keep working. Each of F5 to F10 also
+  has an Alt+letter twin: Alt+Y accept, Alt+K skip, Alt+L use the AI suggestion, Alt+B back, Alt+G generate, Alt+X close
+  (never E, I, N or U, the Option dead keys). Every control prints both keys, the F1 list shows both and screen readers
+  announce both. The Studio still never takes Enter, Alt+Enter, Tab, Esc or any Ctrl/Super chord.
+- Mac: key caps, tooltips, notices and the F1 list show ⌥ and ⇧ (⌥E, ⌥⇧3) and F-keys as plain F4, F9 and so on;
+  `aria-keyshortcuts` keeps the canonical combo (`Alt+E`). The F1 help gains a Mac note and no longer says "use the left
+  Alt": either Alt works, only an AltGr does not.
+- Fix: on a Mac, ⌥E (put in composer), ⌥N (another suggestion) and ⌥I (AI mode) did nothing, because macOS reports them as
+  dead keys and the key listener dropped those events. An Alt chord on a letter or digit is now read by its physical key; a
+  real input-method composition is still ignored.
+- Fix: behind the Settings dialog, a model menu, the command palette or any other open dialog, menu or listbox, the
+  Studio's keys no longer reach the controls behind it: F9 does not generate, F10 does not cancel, F4 does not open,
+  the Alt chords do nothing. F5 to F10 are still swallowed while the Studio is open (no page reload). F1 and F3 do nothing
+  either behind a foreign overlay; with the Studio's own Settings open, F1 still works and F3 closes Settings. A dialog
+  hidden with CSS does not block the keys.
+- Fix: Cancel, Put in composer to edit and Send now left the Settings dialog open when it was open, so it came back over
+  the next opening. All of them, and a plugin reload, now close it with the Studio.
+
+### Accessibility
+
+- Feature: the target and AI-mode switches are named groups of pressed/not-pressed buttons (`aria-pressed`), not radio
+  groups: every option stays in the tab order and changes only on Enter, Space or a click, so an arrow key never re-asks the
+  steps or starts model calls. A ladder edit button is named with its question and current answer ("Edit answer 3: …
+  (current answer: …)", also in Portuguese). The preview is a named region and its text has a name. Step, AI-status,
+  session-context and preview announcements go through live regions mounted empty and filled afterwards, so a screen reader
+  reads them (before, a region that appeared with its text stayed silent). A test requires an accessible name on every
+  tabbable element of each Studio screen.
+
+- Fix: in Auto mode on a new session, the option buttons of the first step no longer show for an instant after F4 and
+  then vanish when the AI starts thinking. The step shows the "asking the AI" row (with Stop) from its first frame, so the
+  options appear once, when the AI has answered, failed or been stopped. Text steps no longer flash their buttons either;
+  On request and Off are unchanged.
+
+### Prompts and draft recognition
+
+- New target: **Claude Sonnet 5.5** (Alt+T, or pick **Sonnet**), next to Opus and Astra, with its own prompt engine,
+  question help and AI writer rules from Anthropic's Sonnet 5.5 prompting guide. It is the default when the session's model
+  is a Sonnet. Opus and Astra prompts did not change.
+- Feature: the generated prompts read better on every target. Opus and Sonnet put each rule of the subagent team on its own
+  line, as Astra does. On Opus, a done-criterion you wrote is followed only by the line asking for evidence, no longer by
+  a generic "done when the behavior works". Astra leaves out the plain-language and style lines and the `DONE WHEN` line
+  for a plain answer, so a trivial question gives the same short prompt as on Opus, and wraps examples in `<example>` tags
+  like the other targets. Pasted text that contains `<` or `&` carries one line saying that `&lt;` and `&amp;` stand for
+  them. The subagents recommendation is now "The model decides" everywhere (the engines, the AI suggestion, the docs); a
+  team only when you pick it or the draft asks for one. One prompt snapshot per target locks the wording.
+- Fix: the "What do you want to get at the end?" step is always asked and always lists all nine deliverables. Before, a
+  draft the engine had misread (a how-it-works question as an executed workflow, "Create a plan for the product launch" as
+  an implementation) hid the right option, so the guess could not be corrected. A choice that contradicts the draft's
+  verb is kept: the prompt is built for it and the preview says so, in the Studio's language, on both versions.
+- Fix: the three engines now read the same draft the same way, and common drafts are read as the deliverable they ask for.
+  Unit tests, SQL queries, regexes, READMEs and Dockerfiles are code; "Create a plan" is a plan and "Crie uma planilha" is
+  data; the first verb in the draft decides ("Build a review dashboard" is a build); Portuguese *gerar, montar, resumir,
+  configurar, instalar* are recognised; `cron` and `rest` no longer force workflow or code; marketing copy is text (the Studio
+  asks for examples, not design patterns); reports, summaries and emails stay text even when they mention tests; a question
+  ("Como instalar o Docker?", "How do I configure nginx. Be brief.") stays a question; a negated verb ("Do not execute any
+  commands") is a prohibition, not the order; and a very long draft no longer freezes the Studio. Astra also reads the
+  requirements, trims and lower-cases the deliverable and accepts Windows line endings.
+- Fix: "Me diga um plano para configurar o nginx" is a plan, as "Tell me a plan to configure nginx" is, and "Do a code
+  review of the API" is a review on Astra too.
+- Change: a "show me" request is read as a request for an answer. "Show me a script that extracts data", "Give me a
+  function that parses dates", "Me mostre um script" and "Você pode me mostrar uma função?" ask for information whatever
+  the artifact is, and a question or an explanation after it changes nothing. The draft becomes a code task only with an
+  order to the assistant: a build verb ("Write ...", "Crie ..."), also in a later sentence, after "and" ("... and fix the
+  login bug") or addressed after a comma ("..., please write unit tests"). What the script helps someone do ("helps users
+  read and write files") stays part of the answer. Known limits: a verb joined by "and" after a purpose ("Give me a script
+  to configure nginx and write tests") stays an answer, and a second "and" after what a script helps someone do ("helps
+  users read files and write logs and create reports") is read as a task; the Deliverable step changes either with one
+  click.
+- Fix: the Sonnet 5.5 rule that asks for a real check before reporting code changes as done no longer contains the word
+  "sudo" (it says "never with elevated privileges or the system package manager"), so `hermes plugins validate` shows no
+  `sudo_usage` caution.
+
+### AI calls and errors
+
+- Feature: a provider failure says what happened. A wrong or expired API key (401) is `auth_failed`, a model or plan the
+  provider refuses (403) stays `provider_refused` (its text no longer mentions the key), a rate limit (429) is
+  `rate_limited` and a provider call that timed out on its own (client timeout, 408, 504) is `provider_timeout`; a 429 that
+  names billing is still `provider_payment`. Each has its own English and Portuguese text in the suggestion and prompt
+  tooltips and in the session-context note. One classifier decides the code for /suggest, /compose and /context. See
+  docs/CONTRACT.md.
+- Fix: when a Hermes update changes something the backend relies on, /suggest, /compose and /context answer the new code
+  `host_incompatible` (the Studio tells you, in English or Portuguese, to update the plugin) and /health reports it, instead
+  of a generic "unavailable" or a `TypeError` in the log. Every Hermes call now goes through one module,
+  `dashboard/hermes_host.py`, which checks the signature it is about to use; a test checks the same signatures against the
+  installed Hermes, and a scan test keeps every other file off Hermes.
+- Fix: **Improve my text** no longer sends only the first 1,200 characters of a longer answer and replaces your text with
+  a rewrite of that fragment: an answer over the limit shows "Your text is too long to improve" (`code: too_long`). Any
+  other cut the backend makes to your text is reported with `truncated: true` in the /suggest and /compose response;
+  docs/CONTRACT.md lists the effective limit of each field.
+- Fix: a reply with no answer text and JSON only inside the model's thinking, or a thinking block cut off by the token limit,
+  no longer becomes the suggestion: it is an empty reply (retried once, unless it ended on the token limit). A reply made of
+  several parts keeps only the text parts. On choice steps an AI value that is not exactly one of the options ("Not
+  applicable here" with Yes/No) is reported as an unlisted option instead of being mapped onto "No".
+- Fix: "Could not use the AI this time" on every step when Hermes hosts more than one profile (`UnscopedSecretError` in
+  `agent.log`). Each model call now keeps the profile of the request that asked for it.
+- Fix: questions and suggestions stopped loading after picking, in Settings, a model whose route refuses JSON mode (for
+  example the Claude subscription provider). The Studio now retries that call once without JSON mode.
+- Fix: the session summary for the optional session context now goes through the same secret redactor as the transcript
+  before it is returned. Answers and field texts on single lines of the suggestion prompt have their line breaks
+  collapsed, so an answer cannot pose as a new section.
+- Fix: the backend loaded its engine, adapter and context modules again on every request, so the worker caps of
+  suggest (6), compose (3) and context (2) never held. They now load once per process (reloaded when a file's mtime changes,
+  or on every request with `PROMPT_STUDIO_DEV_RELOAD=1`).
+
+### Install and remote
+
 - New: `scripts/push-desktop.sh user@app-machine` copies `desktop/plugin.js` to the app machine's
   `desktop-plugins/prompt-studio/plugin.js` over one `ssh` call, for a Hermes backend that runs on another machine
-  (`--dir` for another desktop-plugins folder, `--dry-run` to see the plan). A target folder that Hermes Desktop
-  manages for a local plugin install (it holds `.hermes-package.json`; Desktop would overwrite the pushed file with
-  the local copy, or delete it, on its next rescan) is refused with the way out; `--replace-managed` removes the
-  marker and makes it a standalone plugin. A local install whose `desktop/plugin.js` is byte-identical to the pushed file is refused even with
-  `--replace-managed` (Desktop would adopt the folder again and delete it with the install); remove that install first. `--replace-managed` puts the new file in place before it removes the marker, so a Desktop rescan in
-  between cannot stamp the marker back onto the old file. It re-checks one second later and reports (not `[OK]`) a folder Desktop deleted or re-marked meanwhile;
-  README and `--help` say to close Hermes Desktop for the conversion. The script says `[OK]` only after the app machine's `cksum` of the installed `plugin.js` equals the
-  source's, and refuses a target where `plugin.js` is a directory. README and `install.sh` now say the same,
-  checked against Hermes Desktop's sources: Desktop copies the desktop half only from the plugins folder of the
-  Hermes home on the machine where the app runs and never fetches it from a remote backend. The old wording
-  ("Desktop copies the desktop half out") held only when app and backend share a machine; the installer's final
-  message and the README remote section now give the push step and the per-OS `desktop-plugins` folder.
-- Internal/fix: every Hermes call of the backend (model call, task resolution, reasoning effort, secret redactor, session
-  store) now goes through one module, `dashboard/hermes_host.py`, which checks the signature it relies on right before
-  using it. When a Hermes update changes one, /suggest, /compose and /context answer the new code `host_incompatible`
-  (the Studio shows a short sentence, in English or Portuguese, telling you to update the plugin) and /health reports it, instead of failing with a generic
-  "unavailable" or a `TypeError` in the log. That includes a Hermes module that no longer imports (moved, removed, a
-  missing dependency) and a session store whose `close` now needs an argument. No Hermes installed at all keeps its old behavior. A test module checks
-  the same signatures against the installed Hermes (skipped only where there is none; an installed Hermes that fails to import fails it), and a scan test keeps every other
-  file off Hermes. `docs/CONTRACT.md` lists the code and the contract.
-- Development: the dev dependencies are declared. `package.json` pins react, react-dom, jsdom, nanostores,
-  @nanostores/react and esbuild to the versions the Hermes install provides (`package-lock.json` is committed), so
-  `npm ci && npm test` runs the UI tests without a Hermes install; under `npm test` a missing dependency fails the run
-  instead of skipping the UI tests. The Python test dependencies are in `requirements-dev.txt`. A GitHub Actions
-  workflow (`.github/workflows/ci.yml`) runs the build check, the Node tests, the Python tests and gitleaks (the pinned binary over the explicit commit range of the pull request, merges, their conflict resolutions and side branches included) on every
-  pull request and push to `main`, and `bin/pr` now waits for those checks and merges only when each of the three jobs
-  succeeded on the reviewed commit (not while one is pending past a timeout, missing, failed, cancelled, skipped or
-  neutral). gitleaks scans the commits of the pull request, not the whole history. No change to the plugin itself.
-- Fix: a reply with no answer text and JSON only inside the model's thinking no longer becomes the suggestion; it is
-  treated as an empty reply (retried once, unless it ended on the token limit). On choice steps an AI value that is
-  not exactly one of the options (for example "Not applicable here" with options Yes/No) is now reported as an
-  unlisted option instead of being mapped onto "No". Exact matches (any case) and a value that is the start of one
-  option ("Y" for "Yes") are still accepted.
-- Fix: a thinking block the model never closed (cut off by the token limit) no longer leaks its JSON into the
-  suggestion, and a reply made of several parts keeps only the text parts, never the thinking parts. Both are
-  treated as an empty reply.
-- Fix: `./install.sh` run from inside the installed plugin folder (the layout `hermes plugins install` leaves) deleted
-  the plugin it was installing. It now sees that source and destination are the same, skips the copy with a message
-  and keeps every file. Any other install is staged in a sibling folder and swapped in with `mv`, so a copy that
-  fails leaves the previous install intact.
-  If an earlier run was killed between the two `mv`, the next run restores the previous install from
-  `plugins/prompt-studio.old` before doing anything else, so a retry that fails no longer loses it.
-- Fix: the session summary the model writes for the optional chat-session context now goes through the same secret
-  redactor as the transcript before it is returned (and so before it reaches the suggestions). Answers and field texts
-  placed on single lines of the suggestion prompt have their line breaks collapsed, so an answer cannot pose as a new
-  section such as `Field to fill:`.
-- Fix: **Improve my text** no longer sends only the first 1,200 characters of a longer answer to the AI and then
-  replaces your text with a rewrite of that fragment. An answer over the limit now shows "Your text is too long to
-  improve" (backend `code: too_long`, en/pt). Any other cut the backend makes to your text (a draft over 6,000
-  characters, an answer over 3,000, an earlier answer or default text over 600, a baseline over 30,000, or a model
-  reply cut to its limit) is reported with `truncated: true` in the /suggest and /compose response, and `docs/CONTRACT.md` lists the effective limit of each field.
-- Internal/perf: the backend now loads the engine, adapter and context modules once per process (reloaded only when a
-  file's mtime changes, or on every request with `PROMPT_STUDIO_DEV_RELOAD=1`). Before, the dashboard's by-path load
-  re-ran them on every request, creating new thread pools each time, so the suggest (6), compose (3) and context (2)
-  worker caps and the suggest/compose separation did not hold. A reload also skips the cached bytecode, so an edit
-  of the same size within the same second runs the new code.
-- Fix: the "What do you want to get at the end?" step is now always asked and always lists all nine deliverables
-  for Opus, Sonnet and Astra. Before, a draft the engine had misread (for example "Como funciona o cron do Linux?"
-  as an executed workflow, or "Create a plan for the product launch" as an implementation) hid the right option,
-  so the guess could not be corrected. A choice that contradicts the draft's verb is kept: the prompt is built for
-  it (the prompt's TASK names the chosen deliverable, so a custom success criterion cannot erase the choice) and
-  the preview says so in the Studio's language (following a language switch), on both versions (with or without
-  AI). The visual-design step and rules follow the chosen deliverable: an answer or plan about an app no longer
-  gets them, in the prompt or in what the AI writer receives.
-- Fix: common drafts are read the same way on Opus, Sonnet and Astra. Unit tests, SQL queries, regexes, READMEs and
-  Dockerfiles are code; "Create a plan" is a plan and "Crie uma planilha" is data (Astra now has the data
-  deliverable); the first verb in the draft decides ("Build a review dashboard" is a build); `cron` and `rest` no
-  longer force workflow or code; "email me" is a verb, not a text; Portuguese *gerar, montar, resumir,
-  configurar, instalar* are recognised. Astra also reads the requirements, trims and lower-cases the deliverable
-  and accepts Windows line endings. Marketing copy ("Write the copy for the landing page", "Redija a descrição do
-  app") is text: the Studio asks for examples, not design patterns. "Write a review of the API" is a review, not
-  code; "Write a plan summary" or "a strategy memo" is text, since the summary or memo is what is asked for.
-  Context before the verb does not name its object ("For our app, write a blog post" is text), and a question
-  closed by a period ("How to create an app.") stays an answer. A code word that only modifies the text asked for
-  ("Write an API announcement email") is not the artifact; a noun before the order ("Our plan is ready. Build a
-  dashboard") is context, while "Plan the steps ..." or "Please plan ..." opening a sentence is the order; a context noun no longer
-  hides a later verb of the same kind ("The CSV is attached. Extract the totals" is data); an order after an
-  opening question ("How does it work? Fix the login bug.") is the task. "Write an email announcing the app" is
-  text (a participle opens a clause, not a modifier), and "Como instalar o Node.js?" or "nginx 1.26?" stays a question.
-  "Can you plan the steps ..." and "so plan the rollout" keep the planning verb; a negated verb ("Do not execute
-  any commands") is a prohibition, not the order; and only the verb that fired can make a request code
-  ("Analyze this script, then write a post" stays an analysis). A second question is still a question, a reminder
-  ("Don't forget to review the API") still asks for the review, and a very long draft no longer freezes the Studio
-  while it is read. "Explain how to configure nginx" is an answer on every engine, "We need to plan before we
-  configure" keeps the plan, and a question that wraps onto the next line or carries a comma is still a question.
-  "Do not build or deploy anything" forbids both verbs, and the Astra prompt states the chosen deliverable from
-  the same reading of goal and requirements as the analysis. Documentation about code ("Write instructions for
-  running the unit tests") is text, and a yes/no question ("Can I configure nginx?") is a question, while "Can you
-  configure nginx?" stays a request. A question closed by a period and followed by a note ("How do I configure
-  nginx. Be brief.") is still a question, and a draft with a long run of spaces no longer freezes the Studio. "A plan
-  to configure nginx" (or "a migration plan", "outline a plan") asks for the plan, "Do not access production. Can
-  you build the app?" is a request, not a question, an indirect prohibition ("I do not want you to configure") is
-  still one, "Can you tell me how to configure nginx?" asks for an explanation, and "Include a code example" after
-  a question is not an order. A blank line ends a question ("How do I configure nginx\n\nBe brief."), "Write an API
-  documentation generator script" is code, and "What I need: build a React dashboard" is the order it states. "The
-  API is not ready, review the code" is a review, "Can you please tell me how to configure nginx?" is a question,
-  and "Plan is ready. Build a React dashboard." is the build. "Can you help me fix the login bug?" is the fix,
-  "help me understand" is a question, and a video or podcast script is writing, while a Python script for a video
-  is code. "Do you configure nginx by default?" is a question, and "Do not build the app or configure nginx"
-  forbids both. "Please carefully plan before you configure nginx" asks for the plan, "Can you tell me how to
-  configure nginx" is a question even without its mark, and a school test is writing while a test for the API is code.
-  "Tell me how to configure nginx" and "Me diga como instalar o Docker" are questions, and "Escreva uma revisão
-  detalhada da API" is a review. "Do not write a review. Build a React app." is the build, and "Write a biology
-  test with ten questions" is writing while a load test or a test suite is code. "Before we begin, can I configure
-  nginx without downtime?" is a question, and "The configure script is broken. Review it." is a review. "Help me
-  plan deployment before we configure nginx" asks for the plan, and "I need a script to write log files" is code,
-  as is "I need a script to configure nginx". "Do not deploy, review the code instead" is the review, "Can you help me
-  plan deployment before we configure nginx?" is the plan, and "Review failed deployments" is the review. "Can you walk
-  through the repository and fix the login bug?" is the fix, and "What I need is for you to build a React dashboard, can
-  you do that?" is the build, while "Can you tell me how to configure nginx and deploy the app?" stays a question. "I
-  need a script that will configure nginx" is code. "Can you explain cron and the steps to configure nginx?" stays a
-  question, and "Do not configure nginx, review the API and report findings." is the review. "Ajude-me a revisar código"
-  is a review, "Crie uma planilha detalhada com as vendas" is data, and "Como especialista em segurança, você pode
-  revisar esta API?" is the review it asks for, as are "The build is broken. Review the dashboard code." and "The goal
-  is to write a Python script. Review the existing code."; "Do not install anything. How do I configure nginx?" and "Do I need to
-  configure nginx" stay questions, "We have a plan to build the app. Review it." is the review, and "As a security
-  expert, review API authentication before we configure nginx" is too, as are "Write a review highlighting security
-  flaws in the API." and "Revisão e auditoria da API antes de configurar nginx". "Can you recommend a design and build
-  a React dashboard?" is the build and "Can you explain cron and then review it?" is the review, while "Can you explain
-  why we first configure nginx and then build the app?" stays a question. "I need a script. Write it in Python" and
-  "Write a script for video processing in Python" are code, as is "I need a React app. Write it in TypeScript with
-  documentation."; "Tell me how to configure nginx!" stays a question, "Have a look at the repository and fix the login
-  bug." is the fix, and "Create a spreadsheet containing the sales data." is data. "Can you give me a plan to configure
-  nginx?" is the plan, a requirement such as "Include documentation" no longer turns a requested script into text, and
-  "I need a blog post explaining how to configure nginx." stays text. "I need instructions to configure nginx" is a
-  question and "I need a script. Please write it in Python with documentation." is code, as is "Write a Python script
-  without documentation"; "How do I build a React app? Add examples." stays a question and "Write a strategy memo about
-  optimizing SQL queries" stays text. "How do I build a React app? Add examples; then fix the login bug." is the fix
-  and "Write a review without modifying the API." is the review. "Write a Python script but not documentation." is
-  code, "Please show me a script that extracts data." is code and "Can you show me a plan to configure nginx?" is a
-  plan, and "Create a workflow using GitHub Actions." is a workflow. "Escreva uma revisão desta API" is the review, and a
-  draft that repeats a stated goal thousands of times is analysed in milliseconds.
-- Fix: *Gere um e-mail*, *Monte uma mensagem* and the like stay text, reports and summaries are text even when they
-  mention tests ("Write a summary of the test results", "Escreva um relatório dos testes"), and a question such as
-  "Como instalar o Docker?" or "Como resumir um livro?" stays an answer on Opus, Sonnet and Astra.
-- Fix: the Sonnet 5.5 rule that asks for a real check before reporting code changes as done no longer contains the word "sudo" (it now says "never with elevated privileges or the system package manager"), so `hermes plugins validate` no longer shows a `sudo_usage` caution.
-- Repository housekeeping: the CHANGELOG no longer carries internal audit codes, `.gitignore` covers only this project, generated files are marked `linguist-generated`, and the build script fails clearly on a missing output, checks name collisions across all UI files and has tests. Its syntax check runs in-process, writing nothing and starting no process (so `--check` also runs in a read-only sandbox), and text that only looks like an export inside a template literal, string or comment is left untouched, including after a regex literal that follows `return` (even with a comment between them) or an `if (…)` condition, a division after `count++`, or an emoji in a comment.
-- New target: **Claude Sonnet 5.5** (Alt+T, or pick **Sonnet**), next to Opus and Astra. It has its own prompt engine,
-  question help and AI writer rules from Anthropic's Sonnet 5.5 prompting guide, and is the default when the
-  session's model is a Sonnet. Opus and Astra prompts do not change.
-- Fix: "Não foi possível usar a IA agora" / "Could not use the AI this time" on every step when Hermes hosts more
-  than one profile (the dashboard then refuses credential reads with no profile bound, `UnscopedSecretError` in
-  `agent.log`). Each model call now keeps the profile of the request that asked for it.
-- Fix: questions and suggestions stopped loading after picking, in Settings, a model whose route refuses JSON mode
-  (for example the Claude subscription provider, `Only json_schema structured output is supported` in `agent.log`).
-  The Studio now retries that call once without JSON mode and reads the JSON from the reply text.
-- Internal: `bin/pr` and `bin/review` work outside the maintainer's machine: no personal name, the base branch comes
-  from the repository (`BASE_BRANCH` overrides it), the local review verdict goes into the PR body, a hung Codex run
-  stops after `CODEX_TIMEOUT_SECONDS` (default 900) and never approves, and the base is fetched once.
-  An interrupted review (Ctrl+C, hangup) also stops the detached Codex process group and never approves, and the base
-  branch is fetched into `origin/<base>` with an explicit refspec, so `BASE_BRANCH` works in a single-branch clone. The default branch is asked of origin, so a default changed
-  on GitHub (main to trunk) is followed even when the clone's cached `origin/HEAD` is stale; when origin cannot be reached or does not answer in
-  time, the cached `origin/HEAD` is used. Updating the review section of a PR description never deletes handwritten
-  text, even after a stray review marker.
+  (`--dir` for another desktop-plugins folder, `--dry-run` to see the plan). It says `[OK]` only after the app machine's
+  `cksum` of the installed file equals the source's, and refuses a target where `plugin.js` is a directory. A folder that
+  Hermes Desktop manages for a local install (it holds `.hermes-package.json`; Desktop would overwrite or delete the pushed
+  file on its next rescan) is refused with the way out: `--replace-managed` removes the marker and makes it a standalone
+  plugin, after you close Hermes Desktop; it is still refused when the local install's `desktop/plugin.js` is
+  byte-identical (Desktop would adopt the folder again), and it reports (not `[OK]`) a folder Desktop deleted or re-marked a
+  second later. README, `install.sh` and docs/REMOTE-INSTALL.md now agree, checked against Hermes Desktop's sources:
+  Desktop copies the desktop half only from the plugins folder of the Hermes home on the machine where the app runs and
+  never fetches it from a remote backend.
+- Fix: `./install.sh` run from inside the installed plugin folder (the layout `hermes plugins install` leaves) deleted the
+  plugin it was installing. It now sees that source and destination are the same, skips the copy and keeps every file.
+  Any other install is staged in a sibling folder and swapped in with `mv`, so a failed copy leaves the previous install
+  intact; if an earlier run was killed between the two `mv`, the next run restores `plugins/prompt-studio.old` first.
+
+### Documentation
+
+- Docs: the README is now for users (200 lines at most), with the keyboard table per platform generated from the shortcut
+  map (`node scripts/build.mjs` writes it, `--check` fails when it is stale). Contributor material moved to
+  `CONTRIBUTING.md` and `docs/DESKTOP-DEV.md`; configuration, model and remote-install details to `docs/CONFIGURATION.md`,
+  `docs/MODELS.md` and `docs/REMOTE-INSTALL.md`; six ADRs in `docs/adr/` record the standing decisions and `CONTEXT.md`
+  is the glossary. For 1.9.0 the README, docs and CONTRIBUTING were checked line by line against the code.
+
+### Internal
+
+- Development: the dev dependencies are declared and pinned (`package.json`, `package-lock.json`, `requirements-dev.txt`), so
+  `npm ci && npm test` runs the UI tests without a Hermes install, and a missing dependency fails the run instead of
+  skipping. A GitHub Actions workflow runs the build check, the Node tests, the Python tests and gitleaks on every pull
+  request and push to `main`, and `bin/pr` merges only when all three jobs succeeded on the reviewed commit. The build
+  reads the sources with `acorn` (a pinned dev dependency: run `npm ci` before the first build) instead of a hand-written
+  reader, so a `/` is never guessed to be a division or a regex; it also fails clearly on a missing output and checks name
+  collisions across all UI files.
+- Internal: `bin/pr` and `bin/review` work outside the maintainer's machine: the base branch comes from the repository
+  (`BASE_BRANCH` overrides it), the local review verdict goes into the PR body, a hung Codex run stops after
+  `CODEX_TIMEOUT_SECONDS` (default 900) and never approves, an interrupted review stops its Codex process group and never
+  approves, and updating the review section of a PR description never deletes handwritten text. The review copy links the
+  checkout's `node_modules`, so the build check runs there.
+- Internal: the Desktop code is easier to change. One target registry (`TARGETS` in `studio-core.js`) feeds the core, the UI,
+  the build and the palette; draft detection lives once in `desktop/src/detection-core.js` as data, and the engines pass
+  only the rule lines in which they differ; the UI is split into modules named after their content, with one `lifecycle`
+  state object and one `closeStudio`; the shortcut map is one object that also generates the README table; the three timing
+  seams of the UI tests are fields of one documented `globalThis.__promptStudioTest`.
+- Internal: dead code removed (the Hermes < 0.20 branch of `register()`, the local `ListRow`/`ToggleRow` fallbacks, an
+  unreachable context state, unused i18n keys); two action functions renamed so they no longer look like hooks;
+  docs/CONTRACT.md and the code agree field by field (a test checks it), and Python functions stay at McCabe complexity 10 or
+  less.
+- Internal: the CHANGELOG no longer carries internal audit codes, `.gitignore` covers only this project, and generated files
+  are marked `linguist-generated`.
 
 ## 1.8.0
 

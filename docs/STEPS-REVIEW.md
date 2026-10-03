@@ -8,7 +8,7 @@ already decides, is not asked. The prompt lines each answer produces, with their
 Every step has a recommended answer (the engine's default or the AI suggestion) and can be skipped; a skipped
 step uses the recommendation.
 
-## Steps asked (v1 order)
+## Steps asked (in order)
 
 | # | Step | Targets | Why it is asked | What it changes |
 |---|---|---|---|---|
@@ -39,7 +39,7 @@ step uses the recommendation.
 
 ## Where the AI helps
 
-- **Per-step suggestion** (automatic mode): for each step the AI proposes an option or draft text and says
+- **Per-step suggestion** (asked for by itself in Auto mode, on request in On request mode, never in Off): for each step the AI proposes an option or draft text and says
   whether it agrees with the recommendation. It never invents examples or the origin of pasted text.
 - **Improve my text** on free-text steps.
 - **Generate with AI**: an AI writer turns the engine's prompt and the answers into the final prompt. It may
