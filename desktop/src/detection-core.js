@@ -158,6 +158,8 @@ const TOPIC_TAIL = /\b(?:how to|how|why|when|where|what|which|whether|como|por q
 const TOPIC_AGENT = /\b(?:we|you|i|they|nos|voce|voces|eles|elas|a gente|first|primeiro)\b/
 // "a script that can build and deploy an app": a coordinator inside the purpose of the artifact (no comma, no "then") extends
 // what the artifact does, it does not order anything.
+// ... unless the coordinated clause opens by addressing the assistant ("and please add", "and also add", "and can you add").
+const ORDER_ADDRESS = /^(?:(?:please|por favor|also|tambem|now|agora)\b|(?:can|could|would|will)\s+you\b|(?:voce|voces)\s+(?:pode|poderia)\b)/
 const PURPOSE_TAIL = /\b(?:that|which|who|whose|to|que|para|onde)\s+\w[^.!?;:,]*$/
 const TOPIC_HEAD = /^\s*(?:how|what|why|when|where|which|whether|como|o que|por que|quando|onde|qual|quais)\b/
 // "and fix the login bug": the order verb opens right after the coordinator, at most behind please/then/an adverb.
@@ -165,7 +167,7 @@ const TOPIC_HEAD = /^\s*(?:how|what|why|when|where|which|whether|como|o que|por 
 const ADDRESSED = /^(?:(?:can|could|would|will|should|may|might|do|does|did)\s+you\b|(?:voce|voces)\b|(?:pode|podem|poderia|poderiam|consegue|conseguem|da|daria)\s+(?:para\s+)?(?:voce|voces|me|nos)?\b)/
 // "How do I build a React app? Add examples.": after a question, an instruction about the answer is not a task.
 const RESPONSE_NOTE = /^(?:add|include|give|provide|use|keep|make|show|cite|list|format|mention|cover|avoid|skip|omit|limit|be|adicione|inclua|de|forneca|mantenha|faca|mostre|cite|liste|formate|mencione|cubra|evite|pule|omita|limite|seja)\s+(?:(?:the|a|an|some|more|any|your|o|os|as|um|uma|mais|alguns|algumas|sua|seu)\s+)?(?:\w+\s+){0,2}?(?:examples?|exemplos?|sources?|fontes?|references?|referencias?|links?|citations?|citacoes|bullet\s*points?|bullets|topicos|tables?|tabelas?|code\s+samples?|snippets?|trechos|answer|resposta|response|explanation|explicacao|details?|detalhes|context|contexto|summary|resumo|steps?|passos|numbers?|numeros|comparison|comparacao|short|brief|concise|breve|curto|conciso|simple|simples|jargon|jargao|markdown|headings?|titulos?|emojis?|words?|palavras|sentences?|frases|paragraphs?|paragrafos|portuguese|english|ingles|portugues)\b/
-const ORDER_LEAD = /^\s*(?:(?:please|por favor|then|depois|also|tambem|now|agora|\w+ly|\w+mente)\s+){0,2}$/
+const ORDER_LEAD = /^\s*(?:(?:please|por favor|then|depois|also|tambem|now|agora|\w+ly|\w+mente|(?:can|could|would|will)\s+you|voce\s+(?:pode|poderia))\s+){0,2}$/
 const ORDER_JOIN = /\b(?:and|then|e|depois|entao)\s+(?:then\s+|depois\s+)?/g
 const INTRO_CLAUSE = /^([^.!?,:;\n]{1,60}),\s+/
 // "The configure script is broken", "I tried to configure nginx yesterday": the verb names a thing or tells the past.
@@ -262,7 +264,7 @@ function createDetector(profile = {}) {
       const topic = TOPIC_TAIL.exec(before)
       // "why we first configure nginx and then build the app": a sequence done by the explained agent stays the topic.
       const sequence = /\b(?:then|depois|entao)\b/.test(m[0]) && !(topic && TOPIC_AGENT.test(topic[0]))
-      if (TOPIC_HEAD.test(rest) || (!sequence && (topic || (purpose && PURPOSE_TAIL.test(before))))) continue
+      if (TOPIC_HEAD.test(rest) || (!sequence && (topic || (purpose && PURPOSE_TAIL.test(before) && !ORDER_ADDRESS.test(rest))))) continue
       const next = firstSignal(rest)
       // The offset of the order verb itself, so the rest starts a sentence ("review it?") and is read as an order.
       if (next.verb && ORDER_LEAD.test(rest.slice(0, next.at))) return m.index + m[0].length + next.at
