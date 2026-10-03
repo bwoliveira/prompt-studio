@@ -4179,7 +4179,8 @@ function focusTarget(root, state) {
   if (state.status === 'preview') return pick('[data-studio-send-prompt]', '[data-studio-use-prompt]')
   if (state.status === 'done') return pick('[data-studio-generate]')
   if (state.status === 'active' && state.current) {
-    if (state.current.kind === 'enum') return pick('[data-studio-recommend]', '[data-studio-option]')
+    // While the AI is asked the cards are hidden: the focus waits on the studio itself and moves to the cards when they arrive.
+    if (state.current.kind === 'enum') return pick('[data-studio-recommend]', '[data-studio-option]') || root
     return pick('[data-studio-answer-input]', '[data-studio-paste-open]')
   }
   return root
@@ -4194,10 +4195,11 @@ function useStudioFocus(state) {
     if (root) focusTarget(root, state)?.focus({ preventScroll: true })
   }, [stepKey])
   // A clicked AI button can unmount (Stop, Discard, Use): if the focus fell out of the studio,
-  // bring it back to the same first target instead of leaving it on <body>.
+  // bring it back to the same first target instead of leaving it on <body>. The same when it waits on the studio
+  // itself (cards hidden while the AI is asked) and the cards arrive.
   useEffect(() => {
     const root = document.querySelector('[data-studio-strip]')
-    if (root && !root.contains(document.activeElement)) focusTarget(root, state)?.focus({ preventScroll: true })
+    if (root && (!root.contains(document.activeElement) || document.activeElement === root)) focusTarget(root, state)?.focus({ preventScroll: true })
   }, [suggestion?.status, suggestion?.key])
 }
 

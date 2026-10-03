@@ -2748,6 +2748,28 @@ test('#75: Auto with a pending context read: the waiting state starts when the s
   }
 })
 
+test('#75 (Codex): while the cards wait for the AI the focus is inside the Studio, and moves to the recommended button when they arrive', { skip }, async () => {
+  globalThis.__promptStudioTest.autoSuggestDelayMs = SLOW_DELAY
+  const pending = holdSuggest()
+  try {
+    await freshSettings(null)
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    $('[data-slot="composer-rich-input"]').focus()
+    await click('[data-studio-open]')
+    assert.ok($('[data-studio-ai-loading]') && $('[data-studio-options]') === null)
+    const strip = $('[data-studio-strip]')
+    assert.ok(strip.contains(document.activeElement), 'the focus is in the Studio, not left in the composer, during the delay')
+    await waitFor(() => pending.length > 0)
+    assert.ok(strip.contains(document.activeElement), 'and while the request is out')
+    pending.at(-1).resolve({ ok: true, value: pending.at(-1).body.field.recommended, reason: 'x' })
+    await waitFor(() => $('[data-studio-options]'))
+    await settle()
+    assert.ok(document.activeElement === $('[data-studio-recommend]'), 'the cards arrive and the focus lands on the recommended button')
+  } finally {
+    globalThis.__promptStudioTest.autoSuggestDelayMs = 0
+  }
+})
+
 test('LOAD-3: while the AI writes the prompt, only Cancel and the mode switch remain', { skip }, async () => {
   await freshSettings(null)
   let release
