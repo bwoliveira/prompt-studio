@@ -26,8 +26,10 @@ function releasePending(pending) {
   if ($suggestion.get() === pending) $suggestion.set(null)
 }
 
-function clearSuggestion() {
+function clearSuggestion({ keepInFlight = false } = {}) {
   cancelAutoSuggestion()
+  // Leaving a step may still fill its cache. Stop, AI off, retarget and Close invalidate pending writers.
+  if (!keepInFlight) lifecycle.suggestionRequests.clear()
   lifecycle.suggestSerial += 1
   $suggestion.set(null)
 }
@@ -183,6 +185,7 @@ async function requestSuggestion(mode = 'suggest') {
   cancelAutoSuggestion()
   const key = questionKey(state)
   const serial = ++lifecycle.suggestSerial
+  lifecycle.suggestionRequests.set(key, serial)
   $suggestion.set({ key, mode, status: 'loading' })
   let next
   try {
@@ -214,7 +217,10 @@ async function requestSuggestion(mode = 'suggest') {
   } catch (error) {
     next = { key, mode, status: 'error', ...describeFailure(error) }
   }
-  // Keep good suggestions even if the user already moved on: Back will show them instantly.
+  // A cancelled or superseded request may finish, but no longer owns this question's cache.
+  if (lifecycle.suggestionRequests.get(key) !== serial) return
+  lifecycle.suggestionRequests.delete(key)
+  // Keep good suggestions after mere navigation: Back will show them instantly.
   if (next.status === 'ready' && !improving) lifecycle.suggestionCache.set(key, next)
   if (serial !== lifecycle.suggestSerial || questionKey($studio.get()) !== key) return
   $suggestion.set(next)

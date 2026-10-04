@@ -2177,7 +2177,7 @@ test('FIN-1: F9 does not send into another session when the focus moved after op
   try {
     await press(K().generate)
     assert.equal(composer().submits.length, 0, 'not sent to the other session')
-    assert.deepEqual(composer().writes.at(-1), { sessionId: 'sess-live', text: prompt }, 'placed in its own conversation, never lost')
+    assert.deepEqual(composer().inserts.at(-1), { sessionId: 'sess-live', text: prompt, mode: 'block' }, 'placed in its own conversation, never lost')
     assert.notEqual(draft(), prompt, 'the other conversation on screen is not touched')
     assert.ok(ui.notifications.some(n => n.message === ui.i18n.bundles.en.notify.placedNotSent), 'placed-not-sent note')
   } finally {
@@ -2915,7 +2915,7 @@ test('SDK composer: the draft is read and written only through host.composer, ad
   assert.deepEqual(composer().writes.at(-1), { sessionId: 'sess-live', text: '' })
   await click('[data-studio-cancel]')
   await waitFor(() => draft() === INTENT)
-  assert.deepEqual(composer().writes.at(-1), { sessionId: 'sess-live', text: INTENT }, 'Close returns the draft to its own conversation through setDraft')
+  assert.deepEqual(composer().inserts.at(-1), { sessionId: 'sess-live', text: INTENT, mode: 'block' }, 'Close returns the draft to its own conversation without replacing new text')
 })
 
 test('SDK composer: a host without host.composer tells the user to update Hermes and does not open', { skip }, async () => {
@@ -2933,7 +2933,7 @@ test('SDK composer: a host without host.composer tells the user to update Hermes
   }
 })
 
-test('SDK composer: when setDraft is refused the preview stays open with an error and nothing is lost', { skip }, async () => {
+test('SDK composer: when the SDK write is refused the preview stays open with an error and nothing is lost', { skip }, async () => {
   await toPreview()
   globalThis.__promptStudioTest.setDraftFails = true
   try {
@@ -3001,7 +3001,8 @@ test('SDK composer: a second Alt+E or F9, or Close, while the prompt is being pl
   await press(K().generate)
   await release()
   await waitFor(() => $('[data-studio-strip]') === null)
-  assert.deepEqual(composer().writes.map(w => w.text), [prompt], 'one write: the prompt, never the old draft')
+  assert.deepEqual(composer().inserts.map(w => w.text), [prompt], 'one insertion: the prompt, never the old draft')
+  assert.equal(composer().writes.length, 0, 'no destructive replacement')
   assert.equal(draft(), prompt)
   assert.equal(composer().submits.length, 0, 'F9 ignored while placing')
 })
@@ -3040,7 +3041,7 @@ test('SDK composer: switching conversations while the Studio opens returns the d
   try {
     await openWhileSwitching()
     assert.ok($('[data-studio-strip]') === null, 'studio not opened on the other conversation')
-    assert.deepEqual(composer().writes.at(-1), { sessionId: 'sess-live', text: INTENT }, 'draft back to its session')
+    assert.deepEqual(composer().inserts.at(-1), { sessionId: 'sess-live', text: INTENT, mode: 'block' }, 'draft back to its session')
     assert.ok(ui.notifications.some(n => n.message === ui.i18n.bundles.en.notify.sessionChanged))
     assert.equal(backend.calls.length, 0, 'no context read of the other conversation')
   } finally {
@@ -3131,7 +3132,8 @@ test('SDK composer: while the prompt is being placed, Alt+V and Back to steps do
   await release()
   await waitFor(() => $('[data-studio-strip]') === null)
   assert.equal(draft(), prompt, 'the prompt shown when Alt+E was pressed is placed and the studio closed')
-  assert.deepEqual(composer().writes.map(w => w.text), [prompt])
+  assert.deepEqual(composer().inserts.map(w => w.text), [prompt])
+  assert.equal(composer().writes.length, 0, 'no destructive replacement')
 })
 
 // A host dispose (plugin disabled or hot reload): every tracked disposer runs (listeners, timers,
@@ -3159,7 +3161,7 @@ test('SDK composer: a dispose while the Studio is opening gives the draft back t
     await ui.act(async () => { await new Promise(resolve => setTimeout(resolve, 120)) })
     await settle()
     assert.ok($('[data-studio-strip]') === null, 'the cut-short opening never continues')
-    assert.deepEqual(composer().writes.at(-1), { sessionId: 'sess-live', text: INTENT }, 'draft back in its composer')
+    assert.deepEqual(composer().inserts.at(-1), { sessionId: 'sess-live', text: INTENT, mode: 'block' }, 'draft back in its composer')
   } finally {
     globalThis.__promptStudioTest.focusSettleMs = 0
   }
@@ -3174,7 +3176,7 @@ test('SDK composer: a dispose while the Studio is open gives the draft back to t
   assert.equal(draft(), '')
   await hostReload()
   assert.ok($('[data-studio-strip]') === null, 'studio closed by the dispose')
-  assert.deepEqual(composer().writes.at(-1), { sessionId: 'sess-live', text: INTENT }, 'draft back in its composer')
+  assert.deepEqual(composer().inserts.at(-1), { sessionId: 'sess-live', text: INTENT, mode: 'block' }, 'draft back in its composer')
 })
 
 test('SDK composer: a dispose after switching conversations never writes the fresh-chat draft into the other one', { skip }, async () => {
@@ -3187,7 +3189,7 @@ test('SDK composer: a dispose after switching conversations never writes the fre
     await hostReload()
     await settle()
     assert.equal(draft(), 'rascunho da conversa B', "B's draft untouched")
-    assert.deepEqual(composer().writes.at(-1), { sessionId: 'new', text: INTENT }, "addressed to the fresh chat ('new'), never null")
+    assert.deepEqual(composer().inserts.at(-1), { sessionId: 'new', text: INTENT, mode: 'block' }, "addressed to the fresh chat ('new'), never null")
   } finally {
     ui.host.state.focusedSessionId.set('sess-live')
   }
@@ -3236,7 +3238,7 @@ test('SDK composer: a saved conversation with no runtime id yet is addressed by 
     await click('[data-studio-use-prompt]')
     await waitFor(() => $('[data-studio-strip]') === null)
     assert.equal(draft(), prompt, 'prompt placed in that conversation')
-    assert.deepEqual(composer().writes.at(-1), { sessionId: 'stored-1', text: prompt }, 'addressed by its stored id')
+    assert.deepEqual(composer().inserts.at(-1), { sessionId: 'stored-1', text: prompt, mode: 'block' }, 'addressed by its stored id')
   } finally {
     ui.host.state.focusedStoredSessionId.set(null)
     ui.host.state.focusedSessionId.set('sess-live')
@@ -3279,17 +3281,17 @@ test('SDK composer: a dispose while a placement that fails is pending brings the
   await press(K().editPrompt)
   // The placement is refused (its conversation left the screen); the restore that follows is accepted.
   let refused = 0
-  const setDraft = composer().setDraft
-  composer().setDraft = async function (sessionId, text) {
+  const insertText = composer().insertText
+  composer().insertText = async function (sessionId, text, options) {
     if (text !== INTENT && refused === 0) { refused += 1; await globalThis.__promptStudioTest.composerGate; return false }
-    return setDraft.call(this, sessionId, text)
+    return insertText.call(this, sessionId, text, options)
   }
   try {
     await hostReload()
     await release()
     await settle()
   } finally {
-    composer().setDraft = setDraft
+    composer().insertText = insertText
   }
   assert.equal(refused, 1, 'the placement ran first and was refused')
   assert.equal(draft(), INTENT, 'then the request came back, not lost')
@@ -3716,7 +3718,7 @@ test('CLOSE-1: a dispose with Settings open closes both, and the reloaded plugin
   await hostReload()
   assert.ok($('[data-studio-strip]') === null, 'studio closed by the dispose')
   assert.ok($('[data-studio-settings-dialog]') === null, 'Settings closed with it')
-  assert.deepEqual(composer().writes.at(-1), { sessionId: 'sess-live', text: INTENT }, 'the draft is back in its composer')
+  assert.deepEqual(composer().inserts.at(-1), { sessionId: 'sess-live', text: INTENT, mode: 'block' }, 'the draft is back in its composer')
   await reopenAndExpectNoSettings('the reloaded plugin starts without Settings')
 })
 
@@ -4048,3 +4050,951 @@ test('i18n: every key the UI asked ctx.i18n.t for in this file exists in en and 
   assert.ok(asked.length > 0, 'the UI translated nothing')
   assert.deepEqual(asked.flatMap(key => ['en', 'pt'].filter(locale => !has(locale, key)).map(locale => `${locale}: ${key}`)), [])
 })
+
+// ---------------------------------------------------------------- REG-MODELS: per-request Settings isolation
+// The REST transport is the existing scripted backend; all choices, UI transitions and request bodies are real.
+async function regModelsCleanup() {
+  await closeSettings()
+  await freshSettings(null)
+  await settle()
+}
+
+test('REG-MODELS: changing provider and then effort during /suggest affects only subsequent requests', { skip }, async () => {
+  await freshSettings(null)
+  await openStudio(INTENT, 'manual')
+  await pasteStep('')
+  await pickModel('helper', 'helper-a', 'anthropic', 'low')
+  await pickModel('context', 'context-only', 'gemini', 'none')
+  await closeSettings()
+  const priorSuggest = backend.suggest
+  const pending = holdSuggest()
+  const firstChoice = { provider: 'anthropic', model: 'helper-a', effort: 'low' }
+  const secondChoice = { provider: 'openai', model: 'helper-b', effort: 'none' }
+  try {
+    await click('[data-studio-ai-suggest]')
+    assert.equal(pending.length, 1)
+    await pickModel('helper', secondChoice.model, secondChoice.provider, secondChoice.effort)
+    await closeSettings()
+    assert.deepEqual(pending[0].body.model_choice, firstChoice, 'already-sent body is not mutated by Settings')
+    await ui.act(async () => { pending[0].resolve({ ok: true, value: 'first model answer', model: 'anthropic/helper-a' }) })
+    await waitFor(notLoading)
+    await click('[data-studio-ai-retry]')
+    assert.equal(pending.length, 2)
+    assert.deepEqual(pending[1].body.model_choice, secondChoice)
+    await pickModel('helper', secondChoice.model, secondChoice.provider, 'high')
+    await closeSettings()
+    assert.deepEqual(pending[1].body.model_choice, secondChoice, 'an effort-only change does not rewrite a pending request')
+    await ui.act(async () => { pending[1].resolve({ ok: true, value: 'second model answer', model: 'openai/helper-b' }) })
+    await waitFor(notLoading)
+    await click('[data-studio-ai-retry]')
+    assert.equal(pending.length, 3)
+    assert.deepEqual(pending[2].body.model_choice, { ...secondChoice, effort: 'high' })
+    assert.deepEqual(ui.storage.get('contextModel'), { provider: 'gemini', model: 'context-only', effort: 'none' })
+    assert.equal(contextCalls().length, 0, 'changing a context pick does not start a session read')
+  } finally {
+    await ui.act(async () => { for (const request of pending) request.resolve({ ok: false, error: 'test cleanup' }) })
+    backend.suggest = priorSuggest
+    await regModelsCleanup()
+  }
+})
+
+test('REG-MODELS: /compose snapshots its helper; regenerate uses the new choice and clearing omits it', { skip }, async () => {
+  await freshSettings(null)
+  await openStudio(INTENT, 'manual')
+  await pickModel('helper', 'writer-a', 'anthropic', 'low')
+  await pickModel('context', 'reader-only', 'gemini', 'none')
+  await closeSettings()
+  const priorCompose = backend.compose
+  const pending = []
+  backend.compose = body => new Promise(resolve => { pending.push({ body, resolve }) })
+  try {
+    await click('[data-studio-generate]')
+    assert.equal(pending.length, 1)
+    await pickModel('helper', 'writer-b', 'openai', 'high')
+    await closeSettings()
+    assert.deepEqual(pending[0].body.model_choice, { provider: 'anthropic', model: 'writer-a', effort: 'low' })
+    await ui.act(async () => { pending[0].resolve({ ok: true, prompt: 'REG-MODELS prompt from writer A', model: 'anthropic/writer-a' }) })
+    await waitFor(() => $('[data-studio-preview]'))
+    await click('[data-studio-back-to-steps]')
+    await click('[data-studio-generate]')
+    assert.equal(pending.length, 2)
+    assert.deepEqual(pending[1].body.model_choice, { provider: 'openai', model: 'writer-b', effort: 'high' })
+    await ui.act(async () => { pending[1].resolve({ ok: true, prompt: 'REG-MODELS prompt from writer B', model: 'openai/writer-b' }) })
+    await waitFor(() => $('[data-studio-preview]'))
+    assert.equal($('[data-studio-preview-text]').textContent, 'REG-MODELS prompt from writer B')
+    await openSettings()
+    await click('[data-studio-model-picker="helper"] [data-studio-model-clear]')
+    await closeSettings()
+    await click('[data-studio-back-to-steps]')
+    await click('[data-studio-generate]')
+    assert.equal(pending.length, 3)
+    assert.equal('model_choice' in pending[2].body, false, 'cleared helper means config, never the context model')
+    for (const { body } of pending) assert.equal('session_context' in body, false)
+    assert.deepEqual(ui.storage.get('contextModel'), { provider: 'gemini', model: 'reader-only', effort: 'none' })
+  } finally {
+    await ui.act(async () => { for (const request of pending) request.resolve({ ok: false, error: 'test cleanup' }) })
+    backend.compose = priorCompose
+    await regModelsCleanup()
+  }
+})
+
+test('REG-MODELS: inherited context choice is snapshotted while reading; a later opening uses its new explicit choice', { skip }, async () => {
+  await freshSettings(null)
+  await openStudio(INTENT, 'manual')
+  await pickModel('helper', 'inherited-a', 'anthropic', 'low')
+  await closeSettings()
+  await click('[data-studio-cancel]')
+  ui.host.state.focusedStoredSessionId.set('reg-models-context')
+  const priorContext = backend.context
+  const pending = []
+  backend.context = body => new Promise(resolve => { pending.push({ body, resolve }) })
+  try {
+    // openStudio inspects the AI selector, which is intentionally hidden during a context read.
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    await click('[data-studio-open]')
+    assert.equal(pending.length, 1)
+    await pickModel('helper', 'helper-b', 'openai', 'high')
+    await pickModel('context', 'reader-c', 'gemini', 'none')
+    await closeSettings()
+    assert.deepEqual(pending[0].body.model_choice, { provider: 'anthropic', model: 'inherited-a', effort: 'low' })
+    await ui.act(async () => { pending[0].resolve({ ok: true, summary: 'REG-MODELS inherited summary', model: 'anthropic/inherited-a', turns: 1, ms: 1 }) })
+    await waitFor(() => field() === 'deliverable')
+    await pasteStep('')
+    await click('[data-studio-ai-suggest]')
+    assert.deepEqual(suggestCalls().at(-1).body.model_choice, { provider: 'openai', model: 'helper-b', effort: 'high' })
+    assert.equal(suggestCalls().at(-1).body.session_context, 'REG-MODELS inherited summary')
+    assert.equal(pending.length, 1, 'context is read once per opening, not on every picker change')
+    await click('[data-studio-cancel]')
+    $('[data-slot="composer-rich-input"]').textContent = INTENT
+    await click('[data-studio-open]')
+    assert.equal(pending.length, 2)
+    assert.deepEqual(pending[1].body.model_choice, { provider: 'gemini', model: 'reader-c', effort: 'none' })
+    assert.equal(pending[1].body.session_id, 'reg-models-context')
+  } finally {
+    await ui.act(async () => { for (const request of pending) request.resolve({ ok: false, code: 'unavailable' }) })
+    backend.context = priorContext
+    await regModelsCleanup()
+  }
+})
+
+test('REG-MODELS: malformed stored choices and whitespace model names fall back without stale overrides', { skip }, async () => {
+  await freshSettings(null)
+  await openStudio(INTENT, 'manual')
+  await pickModel('helper', 'old-helper', 'openai', 'high')
+  await pickModel('context', 'old-reader', 'gemini', 'none')
+  await closeSettings()
+  try {
+    for (const stored of [17, 'not-an-object', { provider: 'anthropic', model: ' \t\n ', effort: 'ultra' }]) {
+      await click('[data-studio-cancel]')
+      ui.storage.set('helperModel', stored)
+      ui.storage.set('contextModel', stored)
+      ui.host.state.focusedStoredSessionId.set('reg-models-empty')
+      backend.calls.length = 0
+      await openStudio(INTENT, 'manual')
+      assert.equal(contextCalls().length, 1)
+      assert.equal('model_choice' in contextCalls()[0].body, false)
+      await pasteStep('')
+      await click('[data-studio-ai-suggest]')
+      assert.equal('model_choice' in suggestCalls().at(-1).body, false)
+      await click('[data-studio-generate]')
+      await waitFor(() => $('[data-studio-preview]'))
+      assert.equal('model_choice' in backend.calls.find(call => call.path === '/compose').body, false)
+      await openSettings()
+      assert.match($('[data-studio-model-picker="helper"]').textContent, /Hermes default/)
+      assert.match($('[data-studio-model-picker="context"]').textContent, /Hermes default/)
+      await closeSettings()
+    }
+  } finally {
+    await regModelsCleanup()
+  }
+})
+
+test('REG-MODELS: a preset with no effort clears a previous effort without changing the context picker', { skip }, async () => {
+  await freshSettings(null)
+  await openStudio(INTENT, 'manual')
+  try {
+    await pickModel('helper', 'old-helper', 'anthropic', 'ultra')
+    await pickModel('context', 'unchanged-reader', 'gemini', 'none')
+    const row = { model: 'preset-helper', provider: 'openai' }
+    await ui.act(async () => {
+      $('[data-studio-model-picker="helper"] [data-model-menu]').__controller.applyPreset({}, row)
+    })
+    const expected = { ...row, effort: '' }
+    assert.deepEqual(ui.storage.get('helperModel'), expected, 'absent preset effort means inherit config, not old ultra')
+    const writes = ui.storage.sets.length
+    await ui.act(async () => {
+      $('[data-studio-model-picker="helper"] [data-model-menu]').__controller.setOptions({ fast: true }, row)
+    })
+    assert.equal(ui.storage.sets.length, writes, 'unrelated host options do not overwrite a model choice')
+    assert.deepEqual(ui.storage.get('contextModel'), { provider: 'gemini', model: 'unchanged-reader', effort: 'none' })
+    await closeSettings()
+    await pasteStep('')
+    await click('[data-studio-ai-suggest]')
+    assert.deepEqual(suggestCalls().at(-1).body.model_choice, expected)
+    await click('[data-studio-generate]')
+    await waitFor(() => $('[data-studio-preview]'))
+    assert.deepEqual(backend.calls.find(call => call.path === '/compose').body.model_choice, expected)
+  } finally {
+    await regModelsCleanup()
+  }
+})
+
+// ---------------------------------------------------------------- REG-PROVIDER: late replies, cancellation and recovery
+async function regProviderDrain(pending) {
+  if ($('[data-studio-cancel]')) await click('[data-studio-cancel]')
+  await ui.act(async () => {
+    for (const request of pending) request.resolve({ ok: false, code: 'unavailable', error: 'test cleanup' })
+  })
+  await settle()
+}
+
+// Control only the SDK's transport deadline, not React's scheduler or the plugin's state machine.
+function regProviderDeadlines(ms) {
+  const original = ui.pluginContext.setTimeout
+  const deadlines = []
+  ui.pluginContext.setTimeout = function (fn, delay) {
+    if (delay !== ms) return original.call(this, fn, delay)
+    const deadline = {
+      cleared: false,
+      fired: false,
+      fire() {
+        assert.ok(!this.cleared && !this.fired, 'only a pending transport deadline may fire')
+        this.fired = true
+        fn()
+      }
+    }
+    deadlines.push(deadline)
+    return () => { deadline.cleared = true }
+  }
+  return { deadlines, restore() { ui.pluginContext.setTimeout = original } }
+}
+
+test('REG-PROVIDER: Stop then retry keeps the newest suggestion in Back even when the stopped request finishes last', { skip }, async () => {
+  await freshSettings(null)
+  await openStudio(INTENT, 'manual')
+  await pasteStep('')
+  const originalSuggest = backend.suggest
+  const pending = holdSuggest()
+  try {
+    const originalField = field()
+    await click('[data-studio-ai-suggest]')
+    await click('[data-studio-ai-stop]')
+    await click('[data-studio-ai-suggest]')
+    assert.equal(pending.length, 2, 'one original request and one explicitly requested retry')
+    pending[1].resolve({ ok: true, value: 'NEWEST REG-PROVIDER suggestion', reason: 'second request' })
+    await waitFor(() => $('[data-studio-ai-text]')?.textContent === 'NEWEST REG-PROVIDER suggestion')
+    pending[0].resolve({ ok: true, value: 'STOPPED REG-PROVIDER suggestion', reason: 'late first request' })
+    await settle()
+    assert.equal($('[data-studio-ai-text]').textContent, 'NEWEST REG-PROVIDER suggestion', 'late response does not replace the current card')
+    await click('[data-studio-skip]')
+    await click('[data-studio-back]')
+    assert.equal(field(), originalField)
+    assert.equal(pending.length, 2, 'Back reuses the accepted cache without another provider call')
+    assert.equal($('[data-studio-ai-text]')?.textContent, 'NEWEST REG-PROVIDER suggestion', 'Stop must invalidate the old result in the cache too')
+  } finally {
+    await regProviderDrain(pending)
+    backend.suggest = originalSuggest
+  }
+})
+
+test('REG-PROVIDER: a late suggestion from a closed draft cannot seed the cache of a reopened different draft', { skip }, async () => {
+  await freshSettings(null)
+  await openStudio(INTENT, 'manual')
+  await pasteStep('')
+  const originalSuggest = backend.suggest
+  const pending = holdSuggest()
+  const nextIntent = INTENT.replace('gastos', 'livros')
+  assert.equal(nextIntent.length, INTENT.length, 'distinct drafts also exercise an equal-length cache-key collision')
+  try {
+    await click('[data-studio-ai-suggest]')
+    assert.equal(pending.length, 1)
+    await click('[data-studio-cancel]')
+    assert.equal(draft(), INTENT, 'Close restores the original request while transport is still pending')
+    await openStudio(nextIntent, 'manual')
+    pending[0].resolve({ ok: true, value: 'GASTOS: OLD REG-PROVIDER draft', reason: 'old opening' })
+    await settle()
+    await pasteStep('')
+    assert.equal(pending.length, 1, 'opening another draft in manual mode does not send a hidden request')
+    assert.equal($('[data-studio-answer-input]').value, '')
+    assert.ok($('[data-studio-ai-text]') === null, 'the different draft must not inherit any suggestion from the closed opening')
+    await click('[data-studio-ai-suggest]')
+    assert.equal(pending[1].body.intent, nextIntent)
+    pending[1].resolve({ ok: true, value: 'LIVROS: NEW REG-PROVIDER draft', reason: 'new opening' })
+    await waitFor(() => $('[data-studio-ai-text]')?.textContent === 'LIVROS: NEW REG-PROVIDER draft')
+    await click('[data-studio-cancel]')
+    assert.equal(draft(), nextIntent)
+  } finally {
+    await regProviderDrain(pending)
+    backend.suggest = originalSuggest
+  }
+})
+
+test('REG-PROVIDER: a stopped Improve rejection cannot finish the newer Improve or erase edits made while waiting', { skip }, async () => {
+  await freshSettings(null)
+  await openStudio(INTENT, 'manual')
+  await pasteStep('')
+  const originalSuggest = backend.suggest
+  const pending = holdSuggest()
+  try {
+    await typeAnswer('Equipe com duas pessoas.')
+    await click('[data-studio-ai-improve]')
+    await click('[data-studio-ai-stop]')
+    await typeAnswer('Equipe com três pessoas e sem backend.')
+    await click('[data-studio-ai-improve]')
+    assert.deepEqual(pending.map(p => [p.body.mode, p.body.answer]), [
+      ['improve', 'Equipe com duas pessoas.'],
+      ['improve', 'Equipe com três pessoas e sem backend.']
+    ])
+    pending[0].reject(new Error('HTTP 502 from stopped Improve'))
+    await settle()
+    assert.ok($('[data-studio-ai-loading]'), 'the newer operation remains pending after the old rejection')
+    assert.ok($('[data-studio-ai-error]') === null)
+    await typeAnswer('Rascunho editado enquanto a segunda chamada aguarda.')
+    pending[1].resolve({ ok: true, value: 'Resposta melhorada, ainda não aceita.', reason: 'second Improve' })
+    await waitFor(() => $('[data-studio-ai-use]'))
+    assert.equal($('[data-studio-answer-input]').value, 'Rascunho editado enquanto a segunda chamada aguarda.', 'the response cannot replace user edits without acceptance')
+    assert.equal(pending.length, 2, 'no automatic retry after a cancelled provider failure')
+    await click('[data-studio-ai-discard]')
+    assert.equal($('[data-studio-answer-input]').value, 'Rascunho editado enquanto a segunda chamada aguarda.')
+    await click('[data-studio-cancel]')
+    assert.equal(draft(), INTENT)
+  } finally {
+    await regProviderDrain(pending)
+    backend.suggest = originalSuggest
+  }
+})
+
+for (const oldOutcome of ['resolve', 'reject']) {
+  test(`REG-PROVIDER: a cancelled compose may ${oldOutcome} after reopen without ending or replacing the new compose`, { skip }, async () => {
+    await freshSettings(null)
+    await openStudio(INTENT, 'manual')
+    const originalCompose = backend.compose
+    const pending = []
+    backend.compose = body => new Promise((resolve, reject) => { pending.push({ body, resolve, reject }) })
+    const nextIntent = 'Crie um app web para organizar os livros da biblioteca da escola.'
+    try {
+      await click('[data-studio-generate]')
+      assert.equal(pending.length, 1)
+      await click('[data-studio-cancel]')
+      assert.equal(draft(), INTENT)
+      await openStudio(nextIntent, 'manual')
+      await click('[data-studio-generate]')
+      assert.equal(pending.length, 2)
+      assert.equal(pending[1].body.intent, nextIntent)
+      if (oldOutcome === 'resolve') pending[0].resolve({ ok: true, prompt: 'OLD REG-PROVIDER compose from closed draft' })
+      else pending[0].reject(new Error('HTTP 502 after the old compose was cancelled'))
+      await settle()
+      assert.ok($('[data-studio-preview]') === null, 'the old completion must not finish the new request')
+      assert.ok($('[data-studio-generate]') === null, 'no second Generate action while this request is pending')
+      assert.equal(draft(), '', 'the new draft is held by the Studio, not replaced by the old result')
+      pending[1].resolve({ ok: true, prompt: 'NEW REG-PROVIDER compose for the library', notes: 'current opening' })
+      await waitFor(() => $('[data-studio-preview-text]'))
+      assert.equal($('[data-studio-preview-text]').textContent, 'NEW REG-PROVIDER compose for the library')
+      await click('[data-studio-use-prompt]')
+      assert.equal(draft(), 'NEW REG-PROVIDER compose for the library')
+      assert.equal(pending.length, 2, 'one call per explicit generation, no retries after Close')
+    } finally {
+      await regProviderDrain(pending)
+      backend.compose = originalCompose
+    }
+  })
+}
+
+test('REG-PROVIDER: compose client timeout uses the exact baseline and a new generation ignores the timed-out reply', { skip }, async () => {
+  await freshSettings(null)
+  await openStudio(INTENT, 'manual')
+  await pasteStep('')
+  await typeAnswer('Preservar esta resposta ainda não confirmada.')
+  const originalCompose = backend.compose
+  const pending = []
+  backend.compose = body => new Promise((resolve, reject) => { pending.push({ body, resolve, reject }) })
+  const clock = regProviderDeadlines(50_000)
+  try {
+    await click('[data-studio-generate]')
+    assert.equal(pending.length, 1)
+    assert.ok(pending[0].body.answers.some(answer => answer.answer === 'Preservar esta resposta ainda não confirmada.'))
+    await ui.act(async () => { clock.deadlines[0].fire() })
+    await waitFor(() => $('[data-studio-preview-text]'))
+    assert.equal($('[data-studio-preview-text]').textContent, pending[0].body.baseline, 'timeout falls back to the actual submitted baseline, including the unconfirmed answer')
+    assert.equal($('[data-studio-preview-note]').getAttribute('title'), 'client timeout')
+    assert.ok($('[data-studio-switch-version]') === null)
+    await click('[data-studio-back-to-steps]')
+    await click('[data-studio-generate]')
+    assert.equal(pending.length, 2, 'retry requires this second explicit generation')
+    pending[0].resolve({ ok: true, prompt: 'STALE REG-PROVIDER compose after deadline' })
+    await settle()
+    assert.ok($('[data-studio-preview]') === null, 'a timed-out success cannot finish the retry')
+    pending[1].resolve({ ok: true, prompt: 'RECOVERED REG-PROVIDER compose after timeout' })
+    await waitFor(() => $('[data-studio-preview-text]'))
+    assert.equal($('[data-studio-preview-text]').textContent, 'RECOVERED REG-PROVIDER compose after timeout')
+    assert.equal(clock.deadlines.length, 2)
+    assert.ok(clock.deadlines.every(deadline => deadline.cleared), 'both transport deadline disposers ran')
+    await click('[data-studio-use-prompt]')
+    assert.equal(draft(), 'RECOVERED REG-PROVIDER compose after timeout')
+  } finally {
+    await regProviderDrain(pending)
+    clock.restore()
+    backend.compose = originalCompose
+  }
+})
+
+test('REG-PROVIDER: local suggestion timeout differs from provider timeout and explicit retries keep typed text and ignore late success', { skip }, async () => {
+  await freshSettings(null)
+  await openStudio(INTENT, 'manual')
+  await pasteStep('')
+  await typeAnswer('Texto do usuário que deve sobreviver às falhas.')
+  const originalSuggest = backend.suggest
+  const pending = holdSuggest()
+  const clock = regProviderDeadlines(25_000)
+  try {
+    await click('[data-studio-ai-suggest]')
+    await ui.act(async () => { clock.deadlines[0].fire() })
+    await waitFor(() => $('[data-studio-ai-error]'))
+    assert.equal($('[data-studio-ai-error]').textContent, ui.translate('ai.tooSlow'))
+    assert.equal($('[data-studio-ai-error]').getAttribute('title'), 'client timeout')
+    assert.equal(pending.length, 1, 'no hidden retry on the local deadline')
+    await click('[data-studio-ai-retry-error]')
+    pending[1].resolve({ ok: false, code: 'provider_timeout', error: 'provider timeout: APITimeoutError' })
+    await waitFor(() => $('[data-studio-ai-error]'))
+    assert.equal($('[data-studio-ai-error]').getAttribute('title'), errorText('provider_timeout', ui.i18n.locale))
+    assert.notEqual($('[data-studio-ai-error]').textContent, ui.translate('ai.tooSlow'), 'a provider timeout is not misreported as the local timer')
+    await click('[data-studio-ai-retry-error]')
+    pending[0].resolve({ ok: true, value: 'EXPIRED REG-PROVIDER suggestion' })
+    await settle()
+    assert.ok($('[data-studio-ai-loading]'), 'expired success cannot end the third request')
+    pending[2].resolve({ ok: true, value: 'RECOVERED REG-PROVIDER suggestion', reason: 'third request' })
+    await waitFor(() => $('[data-studio-ai-text]')?.textContent === 'RECOVERED REG-PROVIDER suggestion')
+    assert.equal($('[data-studio-answer-input]').value, 'Texto do usuário que deve sobreviver às falhas.')
+    assert.equal(pending.length, 3, 'each retry was requested exactly once by the user')
+    assert.ok(clock.deadlines.every(deadline => deadline.cleared))
+    await click('[data-studio-ai-use]')
+    assert.equal($('[data-studio-answer-input]').value, 'RECOVERED REG-PROVIDER suggestion')
+  } finally {
+    await regProviderDrain(pending)
+    clock.restore()
+    backend.suggest = originalSuggest
+  }
+})
+
+// ---------------------------------------------------------------- adversarial keyboard / focus crossings (REG-UI)
+// These tests use the mounted plugin and the shared host doubles above, never a second UI harness.
+test('REG-UI: a suggestion completing behind a newly opened menu must not steal the menu input focus', { skip }, async () => {
+  await freshSettings()
+  await openStudio(INTENT, 'manual')
+  await pasteStep('')
+  const originalSuggest = backend.suggest
+  const pending = holdSuggest()
+  const overlay = document.createElement('div')
+  overlay.setAttribute('role', 'menu')
+  const input = document.createElement('input')
+  overlay.appendChild(input)
+  try {
+    await press(K().ask)
+    await waitFor(() => pending.length === 1 && $('[data-studio-ai-loading]'))
+    document.body.appendChild(overlay)
+    input.focus()
+    assert.ok(document.activeElement === input, 'the newly opened host menu owns focus')
+    assert.equal((await press(K().generate, input)).defaultPrevented, true, 'bare F9 is swallowed behind the menu')
+    assert.equal((await press(K().alt.generate, input)).defaultPrevented, false, 'Alt+G belongs to the menu')
+    assert.equal(backend.calls.filter(c => c.path === '/compose').length, 0, 'nothing generated behind the menu')
+
+    await ui.act(async () => { pending[0].resolve({ ok: true, value: 'Contexto sugerido sem tomar o foco', reason: 'teste' }) })
+    await waitFor(() => $('[data-studio-ai-use]'))
+    assert.ok(document.activeElement === input, 'a late suggestion must not take focus away from a visible host menu')
+    overlay.remove()
+    await press(K().useAi, document.body)
+    assert.equal($('[data-studio-answer-input]').value, 'Contexto sugerido sem tomar o foco', 'the key works once the menu is removed')
+  } finally {
+    overlay.remove()
+    await ui.act(async () => { for (const call of pending) call.resolve({ ok: false, code: 'unavailable', error: 'cleanup' }) })
+    backend.suggest = originalSuggest
+    await settle()
+    if ($('[data-studio-cancel]')) await click('[data-studio-cancel]')
+  }
+})
+
+test('REG-UI: a compose reply arriving with Settings open must keep focus in Settings until it is closed', { skip }, async () => {
+  await freshSettings()
+  await openStudio(INTENT, 'manual')
+  resetComposer()
+  const originalCompose = backend.compose
+  let release
+  const gate = new Promise(resolve => { release = resolve })
+  backend.compose = () => gate
+  try {
+    await press(K().generate)
+    await waitFor(() => backend.calls.some(c => c.path === '/compose'))
+    await press(K().settings)
+    const settingsControl = $('[data-studio-settings-close]')
+    assert.ok(settingsControl, 'Settings opened while generation waits')
+    settingsControl.focus()
+    assert.ok(document.activeElement === settingsControl)
+    await ui.act(async () => { release({ ok: true, prompt: 'PROMPT REG-UI COM SETTINGS ABERTO', notes: 'ok' }) })
+    await waitFor(() => $('[data-studio-preview]'))
+    assert.ok(document.activeElement === settingsControl, 'the preview must not focus Send now behind Settings')
+    await press(K().generate, settingsControl)
+    assert.equal(composer().submits.length, 0, 'the preview cannot send through Settings')
+    await press(K().settings, settingsControl)
+    assert.ok($('[data-studio-settings-dialog]') === null)
+    await press(K().back, document.body)
+    assert.ok($('[data-studio-preview]') === null, 'preview shortcuts resume after closing Settings')
+  } finally {
+    await ui.act(async () => { release({ ok: false, code: 'unavailable', error: 'cleanup' }) })
+    backend.compose = originalCompose
+    await settle()
+    await closeSettings()
+    if ($('[data-studio-cancel]')) await click('[data-studio-cancel]')
+  }
+})
+
+test('REG-UI: IME and modified shortcuts stay local to a typed answer while its suggestion is pending', { skip }, async () => {
+  await freshSettings()
+  await openStudio(INTENT, 'manual')
+  await pasteStep('')
+  await typeAnswer('Resposta em composição: 日本語')
+  const input = $('[data-studio-answer-input]')
+  const originalSuggest = backend.suggest
+  const pending = holdSuggest()
+  const bubbled = []
+  const listener = event => bubbled.push(event.code)
+  document.body.addEventListener('keydown', listener)
+  try {
+    await press(K().ask, input)
+    await waitFor(() => pending.length === 1)
+    input.focus()
+    const beforeRungs = rungCount()
+    const ignored = [
+      [K().accept, { isComposing: true }],
+      [K().skip, { keyCode: 229 }],
+      [K().generate, { key: 'Process', isComposing: true, keyCode: 229 }],
+      [K().close, { shiftKey: true }],
+      [K().generate, { altKey: true }],
+      [K().alt.close, { ctrlKey: true, key: 'Dead', isComposing: true, keyCode: 229 }],
+      [K().alt.generate, { metaKey: true }],
+      ['Enter', {}], ['Tab', {}], ['Escape', {}]
+    ]
+    for (const [combo, extra] of ignored) {
+      assert.equal((await press(combo, input, extra)).defaultPrevented, false, `${combo} ${JSON.stringify(extra)} left to typing / IME`)
+    }
+    assert.deepEqual(bubbled, [], 'the answer field does not leak ignored keys to host composer bubble handlers')
+    assert.equal(rungCount(), beforeRungs, 'no answer confirmed or skipped')
+    assert.equal(pending.length, 1, 'no duplicate suggestion')
+    assert.equal(backend.calls.filter(c => c.path === '/compose').length, 0)
+    assert.equal($('[data-studio-answer-input]').value, 'Resposta em composição: 日本語')
+    assert.ok(document.activeElement === input, 'typing focus survives every ignored event')
+    await ui.act(async () => { pending[0].resolve({ ok: true, value: 'Texto da IA', reason: 'teste' }) })
+    await waitFor(() => $('[data-studio-ai-use]'))
+    assert.ok(document.activeElement === input, 'the reply leaves the partially composed answer focused')
+    assert.equal(input.value, 'Resposta em composição: 日本語', 'a reply is not auto-applied over the user text')
+    await press(K().accept, input)
+    assert.equal(rungCount(), beforeRungs + 1, 'the same unmodified key confirms after composition ends')
+    assert.match([...document.querySelectorAll('[data-studio-rung]')].at(-1).textContent, /日本語/)
+  } finally {
+    document.body.removeEventListener('keydown', listener)
+    await ui.act(async () => { for (const call of pending) call.resolve({ ok: false, code: 'unavailable', error: 'cleanup' }) })
+    backend.suggest = originalSuggest
+    await settle()
+    if ($('[data-studio-cancel]')) await click('[data-studio-cancel]')
+  }
+})
+
+test('REG-UI: holding Generate across a pending compose reply never turns auto-repeat into Send now', { skip }, async () => {
+  await freshSettings()
+  await openStudio(INTENT, 'manual')
+  resetComposer()
+  const originalCompose = backend.compose
+  let release
+  const gate = new Promise(resolve => { release = resolve })
+  backend.compose = () => gate
+  try {
+    await press(K().generate)
+    await waitFor(() => backend.calls.filter(c => c.path === '/compose').length === 1)
+    for (const combo of [K().generate, K().alt.generate]) {
+      assert.equal((await press(combo, document.body, { repeat: true })).defaultPrevented, true)
+      await press(combo, document.body)
+    }
+    assert.equal(backend.calls.filter(c => c.path === '/compose').length, 1, 'pending generation cannot be queued twice')
+    await ui.act(async () => { release({ ok: true, prompt: 'PROMPT REG-UI NÃO ENVIAR AO REPETIR', notes: 'ok' }) })
+    await waitFor(() => $('[data-studio-send-prompt]'))
+    const prompt = $('[data-studio-preview-text]').textContent
+    for (const combo of [K().generate, K().alt.generate]) {
+      assert.equal((await press(combo, document.body, { repeat: true })).defaultPrevented, true)
+    }
+    assert.ok($('[data-studio-preview]'), 'the held key cannot accept the newly arrived preview')
+    assert.equal(composer().submits.length, 0, 'auto-repeat never sends')
+    assert.equal(composer().writes.length + composer().inserts.length, 0, 'auto-repeat never places the prompt either')
+    await press(K().generate, document.body)
+    assert.deepEqual(composer().submits, [{ sessionId: 'sess-live', text: prompt }], 'one fresh key press explicitly sends')
+    assert.ok($('[data-studio-strip]') === null)
+  } finally {
+    await ui.act(async () => { release({ ok: false, code: 'unavailable', error: 'cleanup' }) })
+    backend.compose = originalCompose
+    await settle()
+    if ($('[data-studio-cancel]')) await click('[data-studio-cancel]')
+  }
+})
+
+test('REG-UI: stopping or failing a focused pending suggestion leaves a usable focus target and the typed answer intact', { skip }, async () => {
+  await freshSettings()
+  for (const outcome of ['stop', 'failure']) {
+    await openStudio(INTENT, 'manual')
+    await pasteStep('')
+    await typeAnswer(`Resposta que precisa sobreviver: ${outcome}`)
+    const originalSuggest = backend.suggest
+    const pending = holdSuggest()
+    try {
+      await press(K().ask)
+      await waitFor(() => pending.length === 1 && $('[data-studio-ai-stop]'))
+      const stop = $('[data-studio-ai-stop]')
+      stop.focus()
+      assert.ok(document.activeElement === stop, 'the pending control starts focused')
+      if (outcome === 'stop') {
+        await press(K().discard, stop)
+        assert.ok(document.activeElement === $('[data-studio-answer-input]'), 'removing Stop returns focus to the answer')
+        // A failed response may still arrive after Stop; it cannot revive the removed error / loading controls.
+        await ui.act(async () => { pending[0].reject(new Error('late transport failure after Stop')) })
+      } else {
+        await ui.act(async () => { pending[0].reject(new Error('transport failure while Stop is focused')) })
+        await waitFor(() => $('[data-studio-ai-retry-error]'))
+      }
+      await settle()
+      assert.ok(inStrip(), `${outcome}: focus is not left on body or the composer`)
+      assert.equal(document.activeElement.disabled, false, `${outcome}: the focused control can still be used`)
+      assert.equal($('[data-studio-answer-input]').value, `Resposta que precisa sobreviver: ${outcome}`)
+      assert.ok($('[data-studio-ai-loading]') === null)
+      if (outcome === 'stop') assert.ok($('[data-studio-ai-error]') === null, 'a late failure does not undo Stop')
+      const beforeRungs = rungCount()
+      await press(K().accept, document.activeElement)
+      assert.equal(rungCount(), beforeRungs + 1, `${outcome}: confirming from the recovered focus advances once`)
+      assert.equal(pending.length, 1, `${outcome}: recovering focus never asks again`)
+    } finally {
+      await ui.act(async () => { for (const call of pending) call.resolve({ ok: false, code: 'unavailable', error: 'cleanup' }) })
+      backend.suggest = originalSuggest
+      await settle()
+      if ($('[data-studio-cancel]')) await click('[data-studio-cancel]')
+    }
+  }
+})
+
+test('REG-UI: changing sessions while F4 waits for getDraft neither clears the new session nor leaves opening locked', { skip }, async () => {
+  await freshSettings()
+  resetComposer()
+  const origin = ui.host.state.focusedSessionId.get()
+  const other = 'reg-ui-session-after-read'
+  $('[data-slot="composer-rich-input"]').textContent = INTENT
+  const release = holdComposer()
+  try {
+    await press(K().open)
+    assert.ok($('[data-studio-strip]') === null, 'opening really waits on the SDK read')
+    composer().offscreen.set(origin, INTENT)
+    await ui.act(async () => {
+      ui.host.state.focusedSessionId.set(other)
+      $('[data-slot="composer-rich-input"]').textContent = 'Rascunho próprio da sessão que acabou de entrar'
+    })
+    await press(K().open, document.body, { repeat: true })
+    await release()
+    await settle()
+    assert.ok($('[data-studio-strip]') === null, 'the opening bound to the previous session is abandoned')
+    assert.equal(composer().writes.length, 0, 'not even a clear is addressed to either conversation')
+    assert.equal(composer().offscreen.get(origin), INTENT, 'original draft remains untouched')
+    assert.equal(draft(), 'Rascunho próprio da sessão que acabou de entrar')
+    assert.equal(backend.calls.length, 0, 'no context or suggestion requested for the wrong session')
+
+    await press(K().open, document.body)
+    await waitFor(() => $('[data-studio-strip]'))
+    assert.match($('[data-studio-intent-row]').textContent, /Rascunho próprio da sessão/)
+    assert.deepEqual(composer().writes, [{ sessionId: other, text: '' }], 'a fresh F4 can open the new session normally')
+    await click('[data-studio-cancel]')
+    await waitFor(() => draft() === 'Rascunho próprio da sessão que acabou de entrar')
+  } finally {
+    await release()
+    if ($('[data-studio-cancel]')) await click('[data-studio-cancel]')
+    ui.host.state.focusedSessionId.set(origin)
+  }
+})
+
+test('REG-UI: a refused Send now pending placement stays bound to its session through pane changes and repeated keys', { skip }, async () => {
+  await toPreview()
+  resetComposer()
+  const origin = ui.host.state.focusedSessionId.get()
+  const activePane = globalThis.__promptStudioTest.activeComposer
+  const prompt = $('[data-studio-preview-text]').textContent
+  composer().submitResult = false
+  const release = holdComposer()
+  try {
+    await press(K().generate)
+    assert.deepEqual(composer().submits, [{ sessionId: origin, text: prompt }], 'one synchronous submit was refused')
+    assert.equal($('[data-studio-send-prompt]').disabled, true, 'fallback placement is pending')
+    composer().offscreen.set(origin, 'Texto digitado na conversa original durante a espera')
+    composer().offscreen.set('reg-ui-active-pane', 'Rascunho do outro painel ativo')
+    globalThis.__promptStudioTest.activeComposer = 'reg-ui-active-pane'
+    await ui.act(async () => {
+      ui.host.state.focusedSessionId.set('reg-ui-other-session')
+      $('[data-slot="composer-rich-input"]').textContent = 'Rascunho da nova conversa em foco'
+    })
+    for (const repeat of [true, false]) {
+      for (const combo of [K().generate, K().alt.generate, K().editPrompt, K().close]) {
+        await press(combo, document.body, { repeat })
+      }
+    }
+    assert.equal(composer().submits.length, 1, 'no second submit while the fallback waits')
+    await release()
+    await waitFor(() => $('[data-studio-strip]') === null)
+    assert.equal(draft(), 'Rascunho da nova conversa em foco', 'focused conversation untouched')
+    assert.equal(composer().offscreen.get('reg-ui-active-pane'), 'Rascunho do outro painel ativo', 'last-typed pane untouched')
+    assert.equal(composer().offscreen.get(origin), `Texto digitado na conversa original durante a espera\n${prompt}`)
+    assert.deepEqual(composer().inserts, [{ sessionId: origin, text: prompt, mode: 'block' }], 'one append to the bound session')
+    assert.deepEqual(composer().writes, [], 'existing text is never replaced')
+    assert.equal(composer().submits.length, 1)
+    assert.ok(ui.notifications.some(n => n.message === ui.i18n.bundles.en.notify.placedNotSent))
+  } finally {
+    await release()
+    composer().submitResult = true
+    globalThis.__promptStudioTest.activeComposer = activePane
+    ui.host.state.focusedSessionId.set(origin)
+    if ($('[data-studio-cancel]')) await click('[data-studio-cancel]')
+  }
+})
+
+test('REG-UI: text typed after placement reads an empty composer survives a delayed SDK write', { skip }, async () => {
+  await toPreview()
+  resetComposer()
+  const prompt = $('[data-studio-preview-text]').textContent
+  const setDraft = composer().setDraft
+  const insertText = composer().insertText
+  let release
+  const gate = new Promise(resolve => { release = resolve })
+  const writesStarted = []
+  composer().setDraft = async function (sessionId, text) {
+    writesStarted.push({ sessionId, text })
+    await gate
+    return setDraft.call(this, sessionId, text)
+  }
+  // Gate either SDK mutation: a safe implementation may append directly instead of choosing setDraft
+  // from an earlier empty read. The regression asserts preserved text, not which SDK method is chosen.
+  composer().insertText = async function (sessionId, text, options) {
+    writesStarted.push({ sessionId, text })
+    await gate
+    return insertText.call(this, sessionId, text, options)
+  }
+  try {
+    await press(K().editPrompt)
+    await waitFor(() => writesStarted.length === 1)
+    assert.equal(draft(), '', 'the SDK mutation is pending and the composer is still empty')
+    // Simulate input on the host surface while its asynchronous mutation is pending. The SDK double reads
+    // this same element; no plugin state or production hook is changed to manufacture the race.
+    await ui.act(async () => { $('[data-slot="composer-rich-input"]').textContent = 'Texto novo digitado durante a gravação' })
+    await ui.act(async () => { release() })
+    await waitFor(() => $('[data-studio-strip]') === null)
+    assert.equal(draft(), `Texto novo digitado durante a gravação\n${prompt}`, 'placing the prompt must not erase text typed after the empty read')
+    assert.equal(composer().submits.length, 0, 'editing placement never sends')
+  } finally {
+    await ui.act(async () => { release() })
+    await settle()
+    composer().setDraft = setDraft
+    composer().insertText = insertText
+    if ($('[data-studio-cancel]')) await click('[data-studio-cancel]')
+  }
+})
+
+test('REG-UI: a rejected SDK placement preserves preview focus and only a fresh Option key retries', { skip }, async () => {
+  await toPreview()
+  resetComposer()
+  const previewText = $('[data-studio-preview-text]')
+  const prompt = previewText.textContent
+  const insertText = composer().insertText
+  let release
+  const gate = new Promise(resolve => { release = resolve })
+  let attempts = 0
+  composer().insertText = async function () {
+    attempts += 1
+    await gate
+    throw new Error('SDK transport rejected the write')
+  }
+  try {
+    previewText.focus()
+    await press(K().editPrompt, previewText)
+    await waitFor(() => attempts === 1)
+    assert.equal($('[data-studio-use-prompt]').disabled, true)
+    await press(K().editPrompt, previewText, { key: 'Dead', keyCode: 229, isComposing: true, repeat: true })
+    await press(K().generate, previewText, { repeat: true })
+    assert.equal(attempts, 1)
+    assert.equal(composer().submits.length, 0)
+    await ui.act(async () => { release() })
+    await waitFor(() => $('[data-studio-use-prompt]')?.disabled === false)
+    assert.ok(document.activeElement === previewText, 'reading focus is preserved after the SDK failure')
+    assert.equal(previewText.textContent, prompt, 'preview kept for retry')
+    assert.equal(draft(), '', 'no phantom write reported as success')
+    assert.ok(ui.notifications.some(n => n.kind === 'error' && n.message === ui.i18n.bundles.en.notify.placeFailed))
+
+    composer().insertText = insertText
+    await press(K().editPrompt, previewText, { key: 'Dead', keyCode: 229, isComposing: true, repeat: true })
+    assert.equal(composer().writes.length + composer().inserts.length, 0, 'a held Option key does not automatically retry after failure')
+    await press(K().editPrompt, previewText, { key: 'Dead', keyCode: 229, isComposing: true })
+    await waitFor(() => $('[data-studio-strip]') === null)
+    assert.equal(draft(), prompt, 'one explicit Option+E retry can place the retained prompt')
+    assert.equal(composer().inserts.length, 1)
+    assert.equal(composer().writes.length, 0)
+    assert.equal(composer().submits.length, 0)
+  } finally {
+    await ui.act(async () => { release() })
+    await settle()
+    composer().insertText = insertText
+    if ($('[data-studio-cancel]')) await click('[data-studio-cancel]')
+  }
+})
+
+test('REG-UI: returning the draft on Close preserves text typed during the SDK write', { skip }, async () => {
+  await freshSettings(null)
+  await openStudio(INTENT, 'off')
+  resetComposer()
+  const setDraft = composer().setDraft
+  const insertText = composer().insertText
+  let release
+  const gate = new Promise(resolve => { release = resolve })
+  let started = 0
+  composer().setDraft = async function (...args) { started += 1; await gate; return setDraft.apply(this, args) }
+  composer().insertText = async function (...args) { started += 1; await gate; return insertText.apply(this, args) }
+  try {
+    await press(K().close)
+    await waitFor(() => started === 1)
+    await ui.act(async () => { $('[data-slot="composer-rich-input"]').textContent = 'Texto escrito durante Close' })
+    await ui.act(async () => { release() })
+    await waitFor(() => draft().includes(INTENT))
+    assert.equal(draft(), `Texto escrito durante Close\n${INTENT}`, 'restoring uses the live draft, not an earlier empty read')
+    assert.equal(started, 1)
+  } finally {
+    await ui.act(async () => { release() })
+    await settle()
+    composer().setDraft = setDraft
+    composer().insertText = insertText
+  }
+})
+
+test('REG-UI: placement of text already present is a no-op, not a duplicate or a whitespace rewrite', { skip }, async () => {
+  await toPreview()
+  resetComposer()
+  const prompt = $('[data-studio-preview-text]').textContent
+  const existing = `  ${prompt} \n`
+  await ui.act(async () => { $('[data-slot="composer-rich-input"]').textContent = existing })
+  await press(K().editPrompt)
+  await waitFor(() => $('[data-studio-strip]') === null)
+  assert.equal(draft(), existing, 'the user text is already there and remains byte for byte')
+  assert.equal(composer().writes.length, 0, 'no replace based on a stale read')
+  assert.equal(composer().inserts.length, 0, 'no duplicate append')
+  assert.equal(composer().submits.length, 0)
+})
+
+test('REG-UI: a host without non-destructive insertion keeps the preview rather than replacing a draft', { skip }, async () => {
+  await toPreview()
+  resetComposer()
+  const insertText = composer().insertText
+  composer().insertText = undefined
+  try {
+    await press(K().editPrompt)
+    assert.ok($('[data-studio-preview]'), 'safe placement is unavailable; keep the recoverable prompt')
+    assert.equal(composer().writes.length, 0, 'never fall back to a destructive read-then-replace')
+    assert.ok(ui.notifications.some(n => n.kind === 'error' && n.message === ui.i18n.bundles.en.notify.placeFailed))
+  } finally {
+    composer().insertText = insertText
+    if ($('[data-studio-cancel]')) await click('[data-studio-cancel]')
+  }
+})
+
+// Cache ownership is not the visible step's serial: navigation may still finish useful work.
+test('REG-FIX-UI: a suggestion completed after navigation is cached while another question is pending', { skip }, async () => {
+  await freshSettings(null)
+  await openStudio(INTENT, 'manual')
+  await pasteStep('')
+  const originalSuggest = backend.suggest
+  const pending = holdSuggest()
+  try {
+    const originalField = field()
+    await click('[data-studio-ai-suggest]')
+    await click('[data-studio-skip]')
+    assert.notEqual(field(), originalField)
+    await click('[data-studio-ai-suggest]')
+    await ui.act(async () => { pending[0].resolve({ ok: true, value: 'CACHED AFTER NAVIGATION' }) })
+    await settle()
+    assert.ok($('[data-studio-ai-loading]'), 'the previous answer cannot finish the current question')
+    assert.ok($('[data-studio-ai-text]') === null)
+    await ui.act(async () => { pending[1].resolve({ ok: true, value: pending[1].body.field.recommended || 'CURRENT QUESTION' }) })
+    await waitFor(notLoading)
+    await click('[data-studio-back]')
+    assert.equal(field(), originalField)
+    assert.equal($('[data-studio-ai-text]')?.textContent, 'CACHED AFTER NAVIGATION')
+    assert.equal(pending.length, 2, 'Back uses the late result without another call')
+  } finally {
+    await regProviderDrain(pending)
+    backend.suggest = originalSuggest
+  }
+})
+
+test('REG-FIX-UI: reasking a question after Back supersedes its older pending cache writer', { skip }, async () => {
+  await freshSettings(null)
+  await openStudio(INTENT, 'manual')
+  await pasteStep('')
+  const originalSuggest = backend.suggest
+  const pending = holdSuggest()
+  try {
+    await click('[data-studio-ai-suggest]')
+    await click('[data-studio-skip]')
+    await click('[data-studio-back]')
+    await click('[data-studio-ai-suggest]')
+    assert.equal(pending.length, 2)
+    await ui.act(async () => { pending[1].resolve({ ok: true, value: 'NEW REQUEST AFTER BACK' }) })
+    await waitFor(() => $('[data-studio-ai-text]'))
+    await ui.act(async () => { pending[0].resolve({ ok: true, value: 'SUPERSEDED BEFORE BACK' }) })
+    await settle()
+    await click('[data-studio-skip]')
+    await click('[data-studio-back]')
+    assert.equal($('[data-studio-ai-text]')?.textContent, 'NEW REQUEST AFTER BACK')
+    assert.equal(pending.length, 2)
+  } finally {
+    await regProviderDrain(pending)
+    backend.suggest = originalSuggest
+  }
+})
+
+test('REG-FIX-UI: Close invalidates suggestions left behind by navigation even when the same draft reopens', { skip }, async () => {
+  await freshSettings(null)
+  await openStudio(INTENT, 'manual')
+  await pasteStep('')
+  const originalSuggest = backend.suggest
+  const pending = holdSuggest()
+  try {
+    await click('[data-studio-ai-suggest]')
+    await click('[data-studio-skip]')
+    await click('[data-studio-cancel]')
+    await openStudio(INTENT, 'manual')
+    await ui.act(async () => { pending[0].resolve({ ok: true, value: 'CLOSED OPENING' }) })
+    await settle()
+    await pasteStep('')
+    assert.ok($('[data-studio-ai-text]') === null, 'the same intent does not grant ownership across openings')
+    assert.ok($('[data-studio-ai-suggest]'))
+    assert.equal(pending.length, 1)
+  } finally {
+    await regProviderDrain(pending)
+    backend.suggest = originalSuggest
+  }
+})
+
+for (const restored of [false, true]) {
+  test(`REG-FIX-UI: closing Settings ${restored ? 'preserves a restored trigger' : 'recovers focus lost with its control'}`, { skip }, async () => {
+    await freshSettings(null)
+    await openStudio(INTENT, 'manual')
+    await pasteStep('')
+    try {
+      await openSettings()
+      $('[data-studio-settings-close]').focus()
+      const target = restored ? $('[data-studio-settings]') : $('[data-studio-answer-input]')
+      // The real Dialog may restore its trigger itself; the stub deliberately does not.
+      if (restored) target.focus()
+      await closeSettings()
+      assert.ok(document.activeElement === target, 'recover only lost focus, never replace a restored target')
+    } finally {
+      await closeSettings()
+      if ($('[data-studio-cancel]')) await click('[data-studio-cancel]')
+    }
+  })
+}

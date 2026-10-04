@@ -37,7 +37,7 @@ def _clean_text(value: Any) -> str:
 def _strip_thinking(text: str) -> str:
     if not isinstance(text, str):
         return ""
-    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+    return _without_thinking_blocks(text).strip()
 
 
 # A JSON-mode retry needs at least this much of the budget left; less would only time out.
@@ -76,9 +76,8 @@ def _finish_reason(response: Any) -> str:
 def _answer_content(response: Any) -> Any:
     """``message.content`` of the first choice: the answer, never the thinking.
 
-    The host's ``extract_content_or_reasoning`` falls back to the reasoning fields when the content is empty;
-    handing it a bare ``{"content": ...}`` message keeps that fallback (and its think-block stripping) from
-    turning JSON inside the thinking into the reply.
+    Read only content, never the host's reasoning fallback, and sanitize it here with JSON awareness.
+    Text already cleaned here must not pass through the host's regex-based think-block stripping again.
     """
     choices = response.get("choices") if isinstance(response, Mapping) else getattr(response, "choices", None)
     first = choices[0] if choices else response
@@ -87,15 +86,36 @@ def _answer_content(response: Any) -> Any:
     return _answer_text(content)
 
 
-# A closed thinking block anywhere in the content.
-_CLOSED_THINKING = re.compile(r"<(think|thinking|reasoning)>.*?</\1>", re.DOTALL | re.IGNORECASE)
-# A thinking block cut off by the token limit: it runs to the end of the content, but only counts when the tag
-# opens the content or a line. A tag mentioned mid-line (inside a JSON string, say) is answer data, not a block.
-_UNCLOSED_THINKING = re.compile(r"(?:^|\n)[ \t]*<(think|thinking|reasoning)>.*\Z", re.DOTALL | re.IGNORECASE)
+# A closed thinking block outside a valid JSON value.
+# Include the host's reasoning markers, including CJK, while preserving literal occurrences in JSON.
+_THINKING_TAGS = r"think|thinking|reasoning|thought|reasoning_scratchpad|思考|反思|推理|推敲"
+_CLOSED_THINKING = re.compile(r"<(" + _THINKING_TAGS + r")>.*?</\1>", re.DOTALL | re.IGNORECASE)
+_THINKING_OR_JSON = re.compile(r"[\[{]|<(" + _THINKING_TAGS + r")>", re.IGNORECASE)
 
 
 def _without_thinking_blocks(text: str) -> str:
-    return _UNCLOSED_THINKING.sub("", _CLOSED_THINKING.sub("", text))
+    """Scan left to right: skip valid JSON intact, remove external reasoning before reading any JSON in it."""
+    decoder = json.JSONDecoder()
+    parts = []
+    start = cursor = 0
+    while match := _THINKING_OR_JSON.search(text, cursor):
+        cursor = match.end()
+        if match.group(1) is None:
+            try:
+                _, cursor = decoder.raw_decode(text, match.start())
+            except json.JSONDecodeError:
+                pass
+            continue
+        closed = _CLOSED_THINKING.match(text, match.start())
+        if not closed:
+            # A token-limit cutoff counts as a block only at the start of a line.
+            line_prefix = text[text.rfind("\n", 0, match.start()) + 1:match.start()]
+            if line_prefix.strip(" \t"):
+                continue
+        parts.append(text[start:match.start()])
+        start = cursor = closed.end() if closed else len(text)
+    parts.append(text[start:])
+    return "".join(parts)
 
 
 def _answer_text(content: Any) -> Any:
@@ -152,7 +172,7 @@ def _pick_candidate(candidates: list[dict[str, Any]]) -> dict[str, Any] | None:
 
 
 def _json_object(text: str) -> dict[str, Any] | None:
-    """Find the best valid JSON object in prose, fences, or thinking output."""
+    """Find the best valid JSON object in prose or fences, never in external reasoning."""
     if not isinstance(text, str):
         return None
     cleaned = _strip_thinking(text)
@@ -297,7 +317,10 @@ def _default_llm(
         response = _call(_body_without_json_mode(extra_body, task_config.get("extra_body")), remaining)
     resolved_provider = route.get("provider", provider or "auto")
     resolved_model = route.get("model", model or "default")
-    return Reply(host.extract_content_or_reasoning({"content": _answer_content(response)}), f"{resolved_provider}/{resolved_model}", _finish_reason(response))
+    content = _answer_content(response)
+    # Keep JSON-aware text intact; use the host's normalization only for non-text content, without reasoning.
+    text = content.strip() if isinstance(content, str) else host.extract_content_or_reasoning({"content": content})
+    return Reply(text, f"{resolved_provider}/{resolved_model}", _finish_reason(response))
 
 
 _JSON_MODE_TEXT = ("response_format", "json_object", "structured output", "json_schema", "json mode")
@@ -306,6 +329,9 @@ _JSON_MODE_TEXT = ("response_format", "json_object", "structured output", "json_
 def _rejects_json_mode(exc: BaseException) -> bool:
     """The route refused the JSON-mode request itself (local ValueError or a 400 naming the JSON format)."""
     if not (isinstance(exc, ValueError) or is_provider_bad_request(exc)):
+        return False
+    # A format marker in a terminal error does not authorize another paid call.
+    if provider_error_code(exc) not in ("provider_bad_request", "unavailable"):
         return False
     text = str(exc).lower()
     return any(marker in text for marker in _JSON_MODE_TEXT)

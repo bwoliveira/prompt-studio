@@ -247,7 +247,7 @@ async function generatePrompt() {
     update({ type: 'BRIEF_FAILED' })
     return
   }
-  clearSuggestion()
+  clearSuggestion({ keepInFlight: true })
   let prompt = engineResult.prompt
   // Conflicts between an answer and the draft (e.g. a deliverable picked against the draft's verb) are shown by
   // the preview in the Studio's current language, for both versions: it keeps the target and the ladder and
