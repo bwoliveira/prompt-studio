@@ -43,6 +43,20 @@ test('targets, default target, SKIPPED', () => {
   assert.equal(SKIPPED, '(skipped)')
 })
 
+test('every choice step has a recommendation and no text step has one, on the four targets', () => {
+  for (const { id: target } of TARGETS) {
+    for (const intent of [CODE, WRITE, VAGUE]) {
+      const seen = []
+      walk(target, intent, 'en', q => { seen.push(q); return q.recommended || SKIPPED })
+      for (const q of seen) {
+        if (q.kind === 'text') assert.equal(q.recommended, '', `${target} ${q.category}`)
+        else assert.ok(q.recommended, `${target} ${q.category}`)
+      }
+      assert.ok(seen.some(q => q.kind === 'text') && seen.some(q => q.kind === 'enum'), `${target} asks both kinds`)
+    }
+  }
+})
+
 test('step order and conditions, both targets', () => {
   const pasted = q => (q.paste ? 'Some pasted mail' : q.recommended || SKIPPED)
   assert.deepEqual(walk('opus', CODE, 'en', pasted).order, ['deliverable', 'thirdPartyText', 'thirdPartySource', 'context', 'requirements', 'success', 'designAvoid', 'autonomy', 'subagents', 'format', 'length'])

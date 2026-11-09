@@ -4,7 +4,7 @@
 
 Prompt Studio is a Hermes Desktop plugin that turns a rough request into a well-built prompt for
 **Claude Fable 5.2**, **Claude Opus 5.5**, **Claude Sonnet 5.5** or **GPT-6 Astra**. It asks the few questions that change the result, one step
-at a time, with a recommended answer on each. Then it writes the prompt and places it in the message field for you to
+at a time, with a recommended answer on every choice. Then it writes the prompt and places it in the message field for you to
 review. It never sends anything on its own.
 
 Each step can get a suggestion from an auxiliary AI model, and at the end that model can polish the prompt from your
@@ -13,12 +13,12 @@ engine for the chosen model. The four engines were written for this plugin from 
 documentation ([how each prompt is built](docs/MODELS.md)).
 
 <table><tr>
-<td width="33%" valign="top"><img src="docs/images/card-one-step.jpg" alt="Feature card: One step at a time. The few questions that change the result, each with a recommended answer. Illustration of an engraved staircase climbed one step at a time."><h3>One step at a time</h3><p>It asks the few questions that change the result, one at a time. Every step has a recommended answer, and you can skip, go back or edit an earlier one.</p></td>
+<td width="33%" valign="top"><img src="docs/images/card-one-step.jpg" alt="Feature card: One step at a time. The few questions that change the result, with a recommended answer on every choice. Illustration of an engraved staircase climbed one step at a time."><h3>One step at a time</h3><p>It asks the few questions that change the result, one at a time. Every choice has a recommended answer, and you can skip, go back or edit an earlier one.</p></td>
 <td width="33%" valign="top"><img src="docs/images/card-four-engines.jpg" alt="Feature card: Built for your model. Four engines written from the official prompting docs of each model. Illustration of four different engraved pen nibs."><h3>Built for your model</h3><p>Four prompt engines, for Claude Fable 5.2, Claude Opus 5.5, Claude Sonnet 5.5 and GPT-6 Astra, each written from the vendor's official prompting documentation.</p></td>
 <td width="33%" valign="top"><img src="docs/images/card-ai-off.jpg" alt="Feature card: Works with the AI off. AI suggestions when you want them. A complete prompt even without them. Illustration of a hand-cranked lantern, lit, next to an unplugged cable."><h3>Works with the AI off</h3><p>An auxiliary model can suggest answers and polish the final prompt. When it is off, slow or unavailable, the plugin's own engine still builds a complete prompt.</p></td>
 </tr></table>
 
-<p align="center"><img src="docs/images/how-it-works.jpg" width="100%" alt="How it works. Write: type a rough request and press F4. Answer: a few steps, each with a recommended answer. Generate: preview the prompt, with or without the AI version. Send or edit: F9 sends it, Alt+E puts it in the message field."></p>
+<p align="center"><img src="docs/images/how-it-works.jpg" width="100%" alt="How it works. Write: type a rough request and press F4. Answer: a few steps, with recommended choices. Generate: preview the prompt, with or without the AI version. Send or edit: F9 sends it, Alt+E puts it in the message field."></p>
 
 ## Requirements
 
@@ -77,7 +77,7 @@ close Hermes Desktop on the app machine. Every option, the Windows path and the 
 3. Answer the steps. Depending on the request they cover what you want to receive, reference text to paste (and where
    it came from), context, rules that cannot be broken, how you will know it is done, interface patterns to avoid
    (Opus, Sonnet and Fable, code work), autonomy, subagents, an example of the result, format and length.
-   Every step has a recommended choice. You can skip, go back, or edit any earlier answer.
+   Every choice has a recommended answer; the text steps are optional. You can skip, go back, or edit any earlier answer.
 4. Generate. The preview shows the prompt; switch between the AI version and the version built without AI,
    then **Send now** (F9) to send it at once, or **Put in composer to edit** (Alt+E) to place it in the message field and edit it first.
 
