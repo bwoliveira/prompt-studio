@@ -84,3 +84,21 @@ def test_a_slow_hermes_cli_ends_the_preflight_with_one_error_line_and_no_traceba
 def test_the_preflight_waits_a_minute_for_the_hermes_version():
     # `hermes --version` took more than 40 s on a loaded machine; 15 s cut it off.
     assert vi.VERSION_TIMEOUT_S == 60
+
+
+@SHELL_SCRIPT_CLI
+def test_a_hermes_cli_that_fails_reports_the_reason_the_cli_gave(tmp_path):
+    fake = tmp_path / "hermes"
+    fake.write_text("#!/bin/sh\necho 'starting' >&2\necho 'hermes: no dependency environment; run hermes pm repair' >&2\nexit 1\n", encoding="utf-8")
+    fake.chmod(0o755)
+    with pytest.raises(vi.ValidationError, match=r"^could not determine Hermes version: hermes: no dependency environment; run hermes pm repair$"):
+        vi.host_version(str(fake))
+
+
+@SHELL_SCRIPT_CLI
+def test_a_hermes_cli_that_fails_in_silence_keeps_the_plain_message(tmp_path):
+    fake = tmp_path / "hermes"
+    fake.write_text("#!/bin/sh\nexit 3\n", encoding="utf-8")
+    fake.chmod(0o755)
+    with pytest.raises(vi.ValidationError, match=r"^could not determine Hermes version$"):
+        vi.host_version(str(fake))

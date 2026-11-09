@@ -28,6 +28,7 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
 - Fix: `install.sh` waits up to 60 seconds for `hermes --version` (it was 15) and, when the Hermes CLI still does not
   answer, ends with one error line that says what to check. Before, a slow CLI ended the install with a Python
   traceback.
+- Fix: when `hermes --version` fails, the installer's error now ends with the reason the Hermes CLI itself printed.
 
 ### README art and screenshots
 

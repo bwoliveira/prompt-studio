@@ -107,7 +107,9 @@ def host_version(hermes_bin: str) -> tuple[int, int, int]:
     except OSError as exc:
         raise ValidationError(f"could not run Hermes CLI: {exc}") from exc
     if result.returncode:
-        raise ValidationError("could not determine Hermes version")
+        # The last line the CLI printed is its own reason (for example a missing dependency environment).
+        said = (result.stderr.strip() or result.stdout.strip()).splitlines()
+        raise ValidationError("could not determine Hermes version" + (f": {said[-1].strip()[:200]}" if said else ""))
     return normalized_version((result.stdout + result.stderr).strip())
 
 
