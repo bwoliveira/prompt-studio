@@ -24,6 +24,28 @@ NOT_ON_WINDOWS = unittest.skipIf(os.name == "nt", "push-desktop.sh is a bash scr
 MARKER = ".hermes-package.json"
 DESKTOP_ROOT_TS = Path("/usr/local/lib/hermes-agent/apps/desktop/electron/desktop-plugins-root.ts")
 
+# Desktop's sources import their siblings without a file extension (a bundler resolves them); plain node does not. This
+# resolve hook retries a relative import that was not found with ".ts" added, only when the last path segment has no
+# dot: an import that names any extension (./data.json) is never swapped for another file. It needs
+# module.registerHooks (Node 22.15 or later) and a node that loads .ts files; on an older Node it does nothing and the
+# import fails as before.
+TS_SIBLING_HOOK = (
+    "import * as nodeModule from 'node:module';"
+    "nodeModule.registerHooks?.({resolve(spec, context, next) {"
+    " try { return next(spec, context) } catch (error) {"
+    "  if (error?.code !== 'ERR_MODULE_NOT_FOUND' || !/^\\.{1,2}\\/(?:.*\\/)?[^.\\/]+$/.test(spec)) throw error;"
+    "  return next(spec + '.ts', context) } } });"
+)
+
+
+def node_runs_the_hook() -> bool:
+    """True when node has module.registerHooks and loads .ts files without a flag."""
+    node = shutil.which("node")
+    if not node:
+        return False
+    probe = "import * as m from 'node:module'; process.exit(typeof m.registerHooks === 'function' && process.features.typescript ? 0 : 1)"
+    return subprocess.run([node, "--input-type=module", "-e", probe], capture_output=True, check=False).returncode == 0
+
 # The one statement README.md and install.sh both make about the desktop half.
 STATEMENT = (
     "Hermes Desktop copies the desktop half only from the plugins folder of the Hermes home on the machine "
@@ -395,7 +417,8 @@ class PushDesktopTests(unittest.TestCase):
 
         def rescan(home: Path, app: Path) -> None:
             js = (
-                f"import {{reconcileUnifiedDesktopHalves as r}} from {json.dumps(DESKTOP_ROOT_TS.as_uri())};"
+                TS_SIBLING_HOOK
+                + f"const {{reconcileUnifiedDesktopHalves: r}} = await import({json.dumps(DESKTOP_ROOT_TS.as_uri())});"
                 "await r(process.argv[1], process.argv[2]);"
             )
             done = subprocess.run(
@@ -413,6 +436,62 @@ class PushDesktopTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 rescan(self.fakehome, app)
                 self.assertEqual((target / "plugin.js").read_bytes(), self.source.read_bytes())
+
+
+@unittest.skipUnless(node_runs_the_hook(), "needs a node with module.registerHooks that loads .ts files")
+class TsSiblingHookTests(unittest.TestCase):
+    """The resolve hook of the rescan test adds ".ts" to an extensionless relative import, and to nothing else."""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+
+    def write(self, name: str, text: str) -> Path:
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def run_import(self, entry: Path) -> subprocess.CompletedProcess[str]:
+        js = TS_SIBLING_HOOK + f"await import({json.dumps(entry.as_uri())});"
+        return subprocess.run(["node", "--input-type=module", "-e", js], text=True, capture_output=True, check=False)
+
+    def test_an_extensionless_relative_import_resolves_to_its_ts_sibling_also_from_an_imported_file(self) -> None:
+        self.write("shared/names.ts", "export const NAME: string = 'sibling'\n")
+        self.write("app/middle.ts", "import { NAME } from '../shared/names'\nexport const SEEN = NAME\n")
+        entry = self.write("app/entry.ts", "import { SEEN } from './middle'\nconsole.log('loaded', SEEN)\n")
+        done = self.run_import(entry)
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertEqual(done.stdout.strip(), "loaded sibling")
+
+    def test_an_import_that_names_an_extension_is_never_swapped_for_a_ts_file(self) -> None:
+        # A file "<name>.<ext>.ts" next to the missing one must not be loaded in its place.
+        for spec in ("./data.json", "./style.css", "./old.js", "./typed.ts", "./mod.mjs", "./page.tsx"):
+            with self.subTest(spec=spec):
+                self.write(spec[2:] + ".ts", "console.log('WRONG FILE LOADED')\n")
+                entry = self.write("entry.ts", f"import {json.dumps(spec)}\n")
+                done = self.run_import(entry)
+                self.assertNotEqual(done.returncode, 0, done.stdout + done.stderr)
+                self.assertNotIn("WRONG FILE LOADED", done.stdout)
+                self.assertIn("ERR_MODULE_NOT_FOUND", done.stderr)
+
+    def test_a_missing_module_still_fails_directly_and_from_an_imported_file(self) -> None:
+        self.write("middle.ts", "import './absent'\n")
+        cases = {
+            "direct": "import './absent'\n",
+            "transitive": "import './middle'\n",
+            "bare package": "import 'prompt-studio-no-such-package'\n",
+            "directory": "import './folder/'\n",
+        }
+        (self.root / "folder").mkdir()
+        self.write("folder/.ts", "console.log('WRONG FILE LOADED')\n")
+        for name, source in cases.items():
+            with self.subTest(case=name):
+                done = self.run_import(self.write(f"entry-{name.replace(' ', '-')}.ts", source))
+                self.assertNotEqual(done.returncode, 0, done.stdout + done.stderr)
+                self.assertNotIn("WRONG FILE LOADED", done.stdout)
+                self.assertRegex(done.stderr, r"ERR_MODULE_NOT_FOUND|ERR_UNSUPPORTED_DIR_IMPORT")
 
 
 class RemoteStatementTests(unittest.TestCase):
