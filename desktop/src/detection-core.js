@@ -1,4 +1,4 @@
-// Draft detection for Prompt Studio, shared by the three engines. Pure ESM: no imports, no DOM, no clock, no randomness.
+// Draft detection for Prompt Studio, shared by the engines. Pure ESM: no imports, no DOM, no clock, no randomness.
 // What the draft asks for (implementation, analysis, review, plan, text, data, workflow or answer) is decided here, once:
 // the first verb in the text decides, a question stays an answer (so does a "show me" request for code: only a build
 // verb makes it a task), and the artifact named after the verb says whether it is code or text. A recognition fix lands in this file and reaches every target.
@@ -9,7 +9,7 @@
 //   dataNoun    a data file named in a draft whose verb is an analysis makes the deliverable data ...
 //   dataUnless  ... unless this pattern also matches (null: never)
 //   foldLimit   how many characters of the draft are read (Infinity: all of it)
-// A field an engine leaves out is the default profile, which Opus and Sonnet read as it is; an engine passes only the
+// A field an engine leaves out is the default profile, which Opus, Sonnet and Fable read as it is; an engine passes only the
 // rule lines in which it differs (Astra: its own verbs and data rule, no categories, no cap).
 //
 // Patterns run on fold()ed text (lower-cased, NFD diacritics stripped), so Portuguese words are written without accents.
@@ -41,7 +41,7 @@ const PLAN_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija
 const DATA_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija|redigir|monte|montar|gere|gerar|elabore|elaborar|write|create|build|make|draft|develop)\s+(?:(?:a|an|the|um|uma|o|os|as|our|nosso|nossa|new|novo|nova|detailed|detalhado|detalhada|simple|simples)\s+){0,2}(?:\w+\s+)?(?:planilhas?|spreadsheets?|csv|datasets?)\b(?:\s+(?:\w+(?:ad[ao]s?|id[ao]s?|iv[ao]s?|os[ao]s?|ais|al|eis|el|ente|ante)|simples|nov[ao]s?|complet[ao]s?|detailed|simple|monthly|weekly|annual|complete|new|clean|tidy))?(?=\s*$|\s*[.,;:!?\n]|\s+(?:for|para|of|de|do|da|dos|das|desta|deste|desse|dessa|destes|destas|desses|dessas|daquele|daquela|daqueles|daquelas|neste|nesta|nesse|nessa|naquele|naquela|on|sobre|about|to|that|which|que|with|com|in|em|no|na|nos|nas|by|por|and|e|from|at|before|after|ate|until|covering|explaining|so|\w{3,}ing|\w{3,}ndo)\b)/
 const WORKFLOW_OBJECT = /\b(?:crie|criar|construa|desenvolva|escreva|escrever|redija|redigir|monte|montar|gere|gerar|elabore|elaborar|write|create|build|make|draft|develop)\s+(?:(?:a|an|the|um|uma|o|os|as|our|nosso|nossa|new|novo|nova|detailed|detalhado|detalhada|simple|simples)\s+){0,2}(?:\w+\s+)?(?:workflows?|pipelines?)\b(?=\s*$|\s*[.,;:!?\n]|\s+(?:for|para|of|de|do|da|dos|das|desta|deste|desse|dessa|destes|destas|desses|dessas|daquele|daquela|daqueles|daquelas|neste|nesta|nesse|nessa|naquele|naquela|on|sobre|about|to|that|which|que|with|com|in|em|no|na|nos|nas|by|por|and|e|from|at|before|after|ate|until|covering|explaining|so|without|except|excluding|sem|exceto|excluindo|using|usando|\w{3,}ing|\w{3,}ndo)\b)/
 
-// The default verb rules (Opus and Sonnet), after the object rules. Verb signals: an explicit request in the draft. The first
+// The default verb rules (Opus, Sonnet and Fable), after the object rules. Verb signals: an explicit request in the draft. The first
 // match in the text decides; on a tie the earlier rule wins.
 // Languages: Portuguese (unaccented) + English; tested on fold() output (lower-cased, NFD diacritics stripped).
 const DEFAULT_VERBS = [
@@ -263,7 +263,7 @@ const YESNO_FORM = /^(?:(?:voce|voces)\s+(?:pode|podem|poderia|poderiam|consegue
 // whether or not a question mark closes it; the request ends with its sentence.
 const EXPLAIN_FORM = /^(?:(?:(?:please|por favor),?\s+)?(?:(?:explain to|describe to|walk) (?:me|us)|(?:show|tell) (?:me|us)(?!\s+(?:(?:please\s+)?(?:a|an|the|some|another|my|our|your)\s+)(?!(?:step|steps|way|ways|reason|reasons|difference|differences|basics|pros|cons|options|alternatives|trade-?offs|risks|requirements|best|right|correct|proper|main|key|most|first|next|last|only|same|other)\b))|help (?:me|us) (?:to )?(?:understand|figure out|learn|know|see|grasp|decide|choose)|(?:me|nos) (?:ajude|ajudem) a (?:entender|compreender|saber|decidir|escolher)|(?:ajude|ajudem)(?:-| )(?:me|nos) a (?:entender|compreender|saber|decidir|escolher)|(?:me|nos) (?:explique|expliquem|conte|contem|descreva|descrevam|esclareca|esclarecam)|(?:me|nos) (?:mostre|mostrem|diga|digam)(?!\s+(?:um|uma|o|a|os|as|alguns|algumas|outro|outra|meu|minha|nosso|nossa|seu|sua)\s+(?!(?:passo|passos|jeito|forma|formas|maneira|maneiras|motivo|motivos|razao|razoes|diferenca|diferencas|opcoes|alternativas|riscos|requisitos|melhor|melhores|principal|principais|mesmo|mesma|outros|outras)\b))|(?:diga|digam|explique|expliquem|mostre|mostrem|conte|contem|descreva|descrevam|esclareca|esclarecam) (?:me|nos|pra mim|para mim|para nos))|(?:can|could|would|will) you (?:(?:please|kindly) )?(?:say|explain|describe|clarify|walk|(?:show|tell)(?!\s+(?:me|us)\s+(?:a|an|the|some|another|my|our|your)\s+(?!(?:step|steps|way|ways|reason|reasons|difference|differences|basics|pros|cons|options|alternatives|trade-?offs|risks|requirements|best|right|correct|proper|main|key|most|first|next|last|only|same|other)\b))|help (?:me |us )?(?:to )?(?:understand|figure out|learn|know|see|grasp|decide|choose))|(?:voce|voces) (?:pode|podem|poderia|poderiam|consegue|conseguem|sabe|sabem) (?:por favor )?(?:me )?(?:explicar|contar|descrever|esclarecer|orientar|indicar|(?:mostrar|dizer)(?!\s+(?:um|uma|o|a|os|as|alguns|algumas|outro|outra|meu|minha|nosso|nossa|seu|sua)\s+(?!(?:passo|passos|jeito|forma|formas|maneira|maneiras|motivo|motivos|razao|razoes|diferenca|diferencas|opcoes|alternativas|riscos|requisitos|melhor|melhores|principal|principais|mesmo|mesma|outros|outras)\b))|ajudar a (?:entender|compreender|saber|decidir|escolher)))\b(?:[^.?!\n]|\.(?=\S)|\n(?![ \t]*\n))*(?:\?|!|\.(?!\S)|$|(?=\n[ \t]*\n))/
 
-// The profile an engine may leave out in whole or in part: what Opus and Sonnet read.
+// The profile an engine may leave out in whole or in part: what Opus, Sonnet and Fable read.
 const DEFAULT_PROFILE = { verbs: DEFAULT_VERBS, categories: CATEGORY_RULES, dataNoun: DATA_NOUN, dataUnless: null, foldLimit: DEFAULT_FOLD_LIMIT }
 
 // A make verb with a review, a plan, a data file or an automation as its object: tried before every profile's verbs.

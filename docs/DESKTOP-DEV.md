@@ -11,6 +11,7 @@ are in `AGENTS.md`; the standing decisions are in `docs/adr/`; the vocabulary is
 | `desktop/src/engine-opus.js` | Claude Opus 5.5 prompt engine. Pure ESM, deterministic; imports only the detection core (`import { DETECTION } from './detection-core.js'`), no DOM. |
 | `desktop/src/engine-astra.js` | GPT-6 Astra prompt engine. Same shape and rules. |
 | `desktop/src/engine-sonnet.js` | Claude Sonnet 5.5 prompt engine. Same shape and rules. |
+| `desktop/src/engine-fable.js` | Claude Fable 5.2 prompt engine. Same shape and rules. |
 | `desktop/src/studio-core.js` | Step flow (questions, recommendations, answers to brief). Holds the target registry (`TARGETS`: id, label, model, key, default-target pattern, engine, capabilities); imports only the engines and `i18n-core.js`. The build reads its engine list from those imports. |
 | `desktop/src/i18n-core.js` | Questions, help and option labels, `en` and `pt`. |
 | `desktop/src/i18n-ui.js` | Every string `plugin.js` shows (buttons, notes, errors, shortcut help), `en` and `pt`. |
@@ -74,15 +75,15 @@ headers and rule lines stay English, and the user's text is copied as written.
 The draft recognizers support Portuguese and English only. The recognition rules live once, in
 `desktop/src/detection-core.js`, as data: `DETECTION.createDetector(profile)` takes a profile of rule lines
 (`verbs`, `categories`, `dataNoun`, `dataUnless`, `foldLimit`) and returns the detector. An engine passes only the rule
-lines in which it differs: Opus and Sonnet read the default profile, Astra passes its own verbs and data rule
+lines in which it differs: Opus, Sonnet and Fable read the default profile, Astra passes its own verbs and data rule
 (`desktop/src/engine-astra.js`, `DETECTOR`). A recognition fix is made in the core and reaches every target. The
 other keyword regexes (`UI_*`, `*_NOUN`, `ASK_FIRST`, subagent and format hints in `engine-astra.js`; `INTERFACE` in
-`engine-opus.js` and `engine-sonnet.js`) stay in their engine. The core lower-cases the draft and strips diacritics
+`engine-opus.js`, `engine-sonnet.js` and `engine-fable.js`) stay in their engine. The core lower-cases the draft and strips diacritics
 first (`fold()`), so the Portuguese words are written without accents. The dashboard's
 `REQUIRED_LINES` proof words and `_AUTONOMY_HEADERS` in `dashboard/suggest_engine.py` are also
 English + Portuguese. Each pattern carries a `Languages:` comment; other languages fall back to defaults.
 The first verb in the draft decides the deliverable. A "show me / give me / tell me" request for code ("Can you show me a script that extracts data?", "Me mostre uma função") is read as a question: it asks for an answer, and only a build verb in a later sentence or after "and" makes it an implementation. `tests/desktop/draft-recognition.test.mjs` holds the draft table
-all three engines must agree on; `tests/desktop/detection-core.test.mjs` fails when an engine declares a detection
+every engine must agree on; `tests/desktop/detection-core.test.mjs` fails when an engine declares a detection
 rule of its own, and the build allows an engine no import but the core (`node scripts/build.mjs`).
 
 ## Keyboard

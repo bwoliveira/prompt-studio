@@ -51,7 +51,7 @@ export const SHORTCUTS = {
 const OPEN_BINDING = 'mod+shift+e'
 // The combo of digit `n` for a range entry of the map ('pick' → Alt+3, 'edit' → Alt+Shift+3).
 const digitCombo = (action, n) => SHORTCUTS[action].replace('1…9', String(n))
-// What the F1 list prints for an entry: the combo, or the three target combos joined.
+// What the F1 list prints for an entry: the combo, or the target combos joined.
 const shortcutLabel = value => (typeof value === 'string' ? value : Object.values(value).join(' / '))
 
 // Mac keyboards: Alt is the Option key (⌥) and Shift is ⇧; F-keys show as themselves (whether they need fn is the
@@ -67,7 +67,7 @@ function modifierGlyph(name) {
   return /^[⌘⌃⌥⇧]$/.test(sdk) ? sdk : MAC_MODIFIERS[key] ?? name
 }
 // How a combo of the map is shown to the user: as is, except on a Mac, where 'Alt+Shift+1…9' reads ⌥⇧1…9 and
-// 'F4' stays F4 (the three target combos stay joined with ' / '). Attributes and tooltips' machine
+// 'F4' stays F4 (the target combos stay joined with ' / '). Attributes and tooltips' machine
 // readers keep the canonical combo.
 function displayCombo(combo) {
   if (!isMacPlatform()) return combo

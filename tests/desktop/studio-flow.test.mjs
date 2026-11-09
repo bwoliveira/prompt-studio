@@ -910,6 +910,8 @@ test('absolutely everything has a key: F4 opens, F10 closes, Alt+digit picks, Al
   assert.equal($('[data-studio-target-option="astra"]').getAttribute('aria-pressed'), 'true')
   await press(K().model.sonnet)
   assert.equal($('[data-studio-target-option="sonnet"]').getAttribute('aria-pressed'), 'true')
+  await press(K().model.fable)
+  assert.equal($('[data-studio-target-option="fable"]').getAttribute('aria-pressed'), 'true')
   await press(K().model.opus)
   assert.equal($('[data-studio-target-option="opus"]').getAttribute('aria-pressed'), 'true')
   const mode = aiMode()
@@ -2363,7 +2365,7 @@ test('KEYS-MAC-CAPS: on a Mac every key cap, tooltip and F1 row reads ⌥E / ⇧
       const combo = row.getAttribute('data-studio-shortcut-row')
       assert.equal(row.textContent, macCap(combo), `F1 row ${combo}`)
     }
-    assert.ok(rows.some(row => row.textContent === 'F4') && rows.some(row => row.textContent === '⌥O / ⌥A / ⌥T') && rows.some(row => row.textContent === '⌥⇧1…9'))
+    assert.ok(rows.some(row => row.textContent === 'F4') && rows.some(row => row.textContent === '⌥O / ⌥A / ⌥T / ⌥F') && rows.some(row => row.textContent === '⌥⇧1…9'))
     assert.match(list.textContent, /Mac/, 'Mac note in F1')
     assert.ok(!/\bfn\b/.test(list.textContent), 'no fn anywhere in F1: whether F-keys need fn is the Mac setting')
     assert.match(list.textContent, /⌥\+digits/, 'digit note uses the Option glyph')
@@ -3728,7 +3730,7 @@ test('CLOSE-1: a dispose with Settings open closes both, and the reloaded plugin
 // the new target does not share, an AI mode starts or stops model calls. Pressed buttons change only on
 // Enter/Space/click, every option stays in the tab order, and the key listener has no arrow key to share.
 const GROUPS = [
-  { name: 'target', group: '[data-studio-target]', option: id => `[data-studio-target-option="${id}"]`, ids: ['opus', 'sonnet', 'astra'], initial: 'opus' },
+  { name: 'target', group: '[data-studio-target]', option: id => `[data-studio-target-option="${id}"]`, ids: ['opus', 'sonnet', 'astra', 'fable'], initial: 'opus' },
   { name: 'AI mode', group: '[data-studio-ai-toggle]', option: id => `[data-studio-ai-mode-option="${id}"]`, ids: ['auto', 'manual', 'off'], initial: 'auto' }
 ]
 
@@ -4998,3 +5000,36 @@ for (const restored of [false, true]) {
     }
   })
 }
+
+// The Fable target, end to end in the UI: the default-target rule picks it for a Fable session (it runs once per
+// plugin registration, so the test reloads the host), the switch shows it, and with the AI off the prompt placed in
+// the composer is the Fable engine's own.
+test('FABLE-TARGET: a Fable session opens on the Fable target, and with the AI off the full Fable prompt is placed', { skip }, async () => {
+  const sessionModel = ui.host.state.model.get()
+  if ($('[data-studio-cancel]')) await click('[data-studio-cancel]')
+  ui.storage.remove('target')
+  ui.host.state.model.set('anthropic/claude-fable-5-2')
+  try {
+    await hostReload()
+    await openStudio(INTENT, 'off')
+    const options = [...document.querySelectorAll('[data-studio-target-option]')]
+    assert.deepEqual(options.map(el => el.getAttribute('data-studio-target-option')), ['opus', 'astra', 'sonnet', 'fable'])
+    assert.deepEqual(options.map(el => el.getAttribute('aria-pressed')), ['false', 'false', 'false', 'true'], 'picked from the session model, no click')
+    assert.equal($('[data-studio-target-option="fable"]').textContent.includes('Fable'), true)
+    assert.equal(ui.storage.get('target', null), null, 'the default is not saved as a choice of the user')
+    for (let guard = 0; guard < 20 && $('[data-studio-step]'); guard += 1) await answerStep()
+    assert.match(currentText(), /All steps answered/)
+    await generateAndUse()
+    const prompt = draft()
+    assert.ok(prompt.startsWith('TASK\n'), prompt)
+    for (const header of ['REQUIREMENTS', 'AUTONOMY', 'SUBAGENTS', 'OUTPUT', 'DONE WHEN']) assert.ok(prompt.includes(`\n\n${header}\n`), `${header} section`)
+    assert.ok(prompt.includes('AUTONOMY\nPlease avoid stopping while you still owe work the user asked for.'), 'the Fable 5.2 finishing text')
+    assert.ok(prompt.includes('Subagents can account for a large part of what a session costs'), 'the Fable 5.2 delegation rule')
+    assert.ok(!backend.calls.some(c => c.path === '/compose' || c.path === '/suggest'), 'no model call with the AI off')
+  } finally {
+    if ($('[data-studio-cancel]')) await click('[data-studio-cancel]')
+    ui.storage.remove('target')
+    ui.host.state.model.set(sessionModel)
+    await hostReload()
+  }
+})

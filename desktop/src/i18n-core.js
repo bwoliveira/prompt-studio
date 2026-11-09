@@ -59,12 +59,14 @@ export const CORE_MESSAGES = {
           help: {
             opus: 'Take initiative = does reversible work without approval pauses; Clarify first = asks only what changes the result before going on; Unattended = does not stop for check-ins.',
             astra: 'Astra already tends to ask more and stop before the end. Take initiative = does reversible work without approval pauses; Clarify first = asks what changes the result before going on (it will stop earlier).',
-            sonnet: 'Sonnet can stop to check in before finishing long tasks at low or medium effort. Take initiative = does reversible work without approval pauses; Clarify first = asks only what changes the result before going on; Unattended = does not stop for check-ins.'
+            sonnet: 'Sonnet can stop to check in before finishing long tasks at low or medium effort. Take initiative = does reversible work without approval pauses; Clarify first = asks only what changes the result before going on; Unattended = does not stop for check-ins.',
+            fable: 'Fable can end a turn before the work is done, more often at low or medium effort, and it applies approval rules as written. Take initiative = does reversible work without approval pauses; Clarify first = asks only what it cannot settle itself and keeps working on the rest; Unattended = works through ordinary obstacles and leaves deliberate blockers alone.'
           },
           guide: {
             opus: '',
             astra: 'The target (GPT-6 Astra) already asks clarifying questions more often and may stop early. Recommend "Clarify first" only when the draft asks to confirm or discuss before acting.',
-            sonnet: 'The target (Claude Sonnet 5.5) may stop to check in before the work is done at low or medium effort, and at higher effort it may do more than asked. Recommend "Clarify first" only when the draft asks to confirm or discuss before acting; otherwise keep the scope to what was asked.'
+            sonnet: 'The target (Claude Sonnet 5.5) may stop to check in before the work is done at low or medium effort, and at higher effort it may do more than asked. Recommend "Clarify first" only when the draft asks to confirm or discuss before acting; otherwise keep the scope to what was asked.',
+            fable: 'The target (Claude Fable 5.2) may end a turn before the work is done, more often at low or medium effort, and it applies approval rules exactly as written. Recommend "Clarify first" only when the draft asks to confirm or discuss before acting; do not recommend it out of caution.'
           },
           options: { balanced: 'Balanced', proactive: 'Take initiative', guided: 'Clarify first', unattended: 'Unattended · no check-ins' }
         },
@@ -144,12 +146,14 @@ export const CORE_MESSAGES = {
           help: {
             opus: 'Tomar iniciativa = faz o trabalho reversível sem pausas para aprovação; Esclarecer primeiro = pergunta só o que muda o resultado antes de seguir; Sem supervisão = não para para check-ins.',
             astra: 'O Astra já tende a perguntar mais e parar antes do fim. Tomar iniciativa = faz o trabalho reversível sem pausas para aprovação; Esclarecer primeiro = pergunta o que muda o resultado antes de seguir (ele vai parar mais cedo).',
-            sonnet: 'O Sonnet pode parar para conferir com você antes de terminar tarefas longas em esforço baixo ou médio. Tomar iniciativa = faz o trabalho reversível sem pausas para aprovação; Esclarecer primeiro = pergunta só o que muda o resultado antes de seguir; Sem supervisão = não para para check-ins.'
+            sonnet: 'O Sonnet pode parar para conferir com você antes de terminar tarefas longas em esforço baixo ou médio. Tomar iniciativa = faz o trabalho reversível sem pausas para aprovação; Esclarecer primeiro = pergunta só o que muda o resultado antes de seguir; Sem supervisão = não para para check-ins.',
+            fable: 'O Fable pode encerrar o turno antes de terminar o trabalho, mais em esforço baixo ou médio, e aplica regras de aprovação ao pé da letra. Tomar iniciativa = faz o trabalho reversível sem pausas para aprovação; Esclarecer primeiro = pergunta só o que não consegue resolver sozinho e segue com o resto; Sem supervisão = contorna obstáculos comuns e respeita bloqueios deliberados.'
           },
           guide: {
             opus: '',
             astra: 'The target (GPT-6 Astra) already asks clarifying questions more often and may stop early. Recommend "Esclarecer primeiro" only when the draft asks to confirm or discuss before acting.',
-            sonnet: 'The target (Claude Sonnet 5.5) may stop to check in before the work is done at low or medium effort, and at higher effort it may do more than asked. Recommend "Esclarecer primeiro" only when the draft asks to confirm or discuss before acting; otherwise keep the scope to what was asked.'
+            sonnet: 'The target (Claude Sonnet 5.5) may stop to check in before the work is done at low or medium effort, and at higher effort it may do more than asked. Recommend "Esclarecer primeiro" only when the draft asks to confirm or discuss before acting; otherwise keep the scope to what was asked.',
+            fable: 'The target (Claude Fable 5.2) may end a turn before the work is done, more often at low or medium effort, and it applies approval rules exactly as written. Recommend "Esclarecer primeiro" only when the draft asks to confirm or discuss before acting; do not recommend it out of caution.'
           },
           options: { balanced: 'Equilibrada', proactive: 'Tomar iniciativa', guided: 'Esclarecer primeiro', unattended: 'Sem supervisão · sem check-ins' }
         },

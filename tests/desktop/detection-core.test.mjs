@@ -7,9 +7,10 @@ import { DETECTION } from '../../desktop/src/detection-core.js'
 import { ENGINE as OPUS } from '../../desktop/src/engine-opus.js'
 import { ENGINE as SONNET } from '../../desktop/src/engine-sonnet.js'
 import { ENGINE as ASTRA } from '../../desktop/src/engine-astra.js'
+import { ENGINE as FABLE } from '../../desktop/src/engine-fable.js'
 
 const src = name => readFile(new URL(`../../desktop/src/${name}`, import.meta.url), 'utf8')
-const ENGINE_FILES = ['engine-opus.js', 'engine-sonnet.js', 'engine-astra.js']
+const ENGINE_FILES = ['engine-opus.js', 'engine-sonnet.js', 'engine-astra.js', 'engine-fable.js']
 const importLines = source => source.split('\n').filter(line => /^\s*import\b/.test(line))
 
 test('the detection core imports nothing and exposes the detector factory, fold and the make-verb rule', async () => {
@@ -46,8 +47,8 @@ test('a recognition rule is written once: no engine declares a detection constan
   }
 })
 
-test('Opus and Sonnet carry no detection profile of their own: both read the core default, so they cannot drift', async () => {
-  for (const file of ['engine-opus.js', 'engine-sonnet.js']) {
+test('Opus, Sonnet and Fable carry no detection profile of their own: they read the core default, so they cannot drift', async () => {
+  for (const file of ['engine-opus.js', 'engine-sonnet.js', 'engine-fable.js']) {
     const source = await src(file)
     assert.ok(!/^const (?:CATEGORY_RULES|DELIVERABLE_RULES|DATA_NOUN) =/m.test(source), file)
     assert.ok(/DETECTION\.createDetector\(\)/.test(source), `${file} uses the default profile`)
@@ -90,8 +91,8 @@ test('fold: lower-cased, accents stripped, capped at 4000 characters unless the 
   assert.equal(open.detect(long, '').signal, 'implementation', 'a profile may lift the cap')
 })
 
-test('engine profiles: Opus and Sonnet read the default rules; Astra keeps its own verb order and data rule', () => {
-  for (const engine of [OPUS, SONNET, ASTRA]) {
+test('engine profiles: Opus, Sonnet and Fable read the default rules; Astra keeps its own verb order and data rule', () => {
+  for (const engine of [OPUS, SONNET, ASTRA, FABLE]) {
     assert.equal(engine.analyze({ goal: 'Create a plan for the product launch' }).deliverable, 'plan')
     assert.equal(engine.analyze({ goal: 'Como funciona o cron do Linux?' }).deliverable, 'answer')
   }

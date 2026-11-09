@@ -3,13 +3,13 @@
 ![Prompt Studio banner: guided prompt builder for Hermes Desktop](docs/images/banner.png)
 
 Prompt Studio is a Hermes Desktop plugin that turns a rough request into a well-built prompt for
-**Claude Opus 5.5**, **Claude Sonnet 5.5** or **GPT-6 Astra**. It asks the few questions that change the result, one step
+**Claude Fable 5.2**, **Claude Opus 5.5**, **Claude Sonnet 5.5** or **GPT-6 Astra**. It asks the few questions that change the result, one step
 at a time, with a recommended answer on each. Then it writes the prompt and places it in the message field for you to
 review. It never sends anything on its own.
 
 Each step can get a suggestion from an auxiliary AI model, and at the end that model can polish the prompt from your
 answers. When the AI is off, slow or unavailable, you still get a complete prompt, built locally by the plugin's own
-engine for the chosen model. The three engines were written for this plugin from the official Anthropic and OpenAI
+engine for the chosen model. The four engines were written for this plugin from the official Anthropic and OpenAI
 documentation ([how each prompt is built](docs/MODELS.md)).
 
 ## Requirements
@@ -64,11 +64,11 @@ close Hermes Desktop on the app machine. Every option, the Windows path and the 
 
 1. Write your request in the message field and press **F4**, or click **✨ Prompt Studio**, or run
    *Prompt Studio* from the command palette.
-2. Pick the model (**Opus**, **Astra** or **Sonnet**). The first choice follows the session's model: Sonnet for a
-   Sonnet, Astra for an OpenAI model, Opus otherwise.
+2. Pick the model (**Opus**, **Astra**, **Sonnet** or **Fable**). The first choice follows the session's model: Fable
+   for a Fable, Sonnet for a Sonnet, Astra for an OpenAI model, Opus otherwise.
 3. Answer the steps. Depending on the request they cover what you want to receive, reference text to paste (and where
    it came from), context, rules that cannot be broken, how you will know it is done, interface patterns to avoid
-   (Opus and Sonnet, code work), autonomy, subagents, an example of the result, format and length.
+   (Opus, Sonnet and Fable, code work), autonomy, subagents, an example of the result, format and length.
    Every step has a recommended choice. You can skip, go back, or edit any earlier answer.
 4. Generate. The preview shows the prompt; switch between the AI version and the version built without AI,
    then **Send now** (F9) to send it at once, or **Put in composer to edit** (Alt+E) to place it in the message field and edit it first.
@@ -103,7 +103,7 @@ plugin's shortcut map; the Studio's own **F1** list shows the same keys.
 | Alt+D | ⌥D | Discard the suggestion, or stop the AI |
 | Alt+M | ⌥M | Improve my text |
 | Alt+C | ⌥C | Paste text |
-| Alt+O / Alt+A / Alt+T | ⌥O / ⌥A / ⌥T | Model: Opus, Astra or Sonnet |
+| Alt+O / Alt+A / Alt+T / Alt+F | ⌥O / ⌥A / ⌥T / ⌥F | Model: Opus, Astra, Sonnet or Fable |
 | Alt+I | ⌥I | Next AI help mode |
 | Alt+V | ⌥V | Other version in the preview |
 | Alt+E | ⌥E | Put the prompt in the composer to edit before sending |

@@ -1,6 +1,6 @@
 # How each model's prompt is built
 
-The three models need different prompts, and the engines follow each vendor's guidance:
+The four models need different prompts, and the engines follow each vendor's guidance:
 
 - **Claude Opus 5.5** (Anthropic, *Prompting Claude Opus 5.5* and the prompting best practices):
   - Pasted material goes in `<pasted_content>` tags with the documented note; long material goes above the task.
@@ -24,7 +24,22 @@ The three models need different prompts, and the engines follow each vendor's gu
     before the work is done.
   - Scope stays to what was asked: it tends to add tests, documentation and small supporting files on its own.
   - The prompt never asks it to write out its reasoning in the answer.
-- **All three models:**
+- **Claude Fable 5.2** (Anthropic, *Prompting Claude Fable 5.2*):
+  - Autonomy uses the guide's own "finishing work" text: Fable can end a turn before the work is done, more often at low
+    and medium effort. The unattended mode adds the part that tells ordinary obstacles (errors, timeouts, failing
+    tools: work through them) from deliberate blockers (a file marked not to be touched, withheld access: leave them
+    alone and report).
+  - Approval rules are applied as written, so "Clarify first" names what needs your answer and, in the same rule, what
+    needs no approval. No general "ask first" line is added.
+  - The default subagent line puts cost first, then when delegating pays off, then how to brief a subagent; it also
+    says not to start subagents to review its own work unless you asked for a review.
+  - Hands-on work gets a one-line progress update every few tool calls (not in the unattended mode) and a final report
+    written for a reader who has not seen the tool calls.
+  - Pasted material goes in `<document>` tags, as for Sonnet. Scope stays to what was asked, and the prompt never says
+    the code is the model's own.
+  - No lines that ask for less thinking (they have no effect on this model), no hard limits on sentence or word
+    counts, and the prompt never asks it to write out its reasoning in the answer.
+- **All four models:**
   - An optional **subagents** step. "Team" splits the task into independent parts that run in parallel,
     and names one reviewer who did not write any of the work and starts from a fresh context.
   - Examples go in `<example>` tags.

@@ -27,7 +27,7 @@ function missingTargetText(targets, messages) {
 }
 
 test('every registry entry carries id, label, model, key, engine and capabilities', () => {
-  assert.deepEqual(TARGETS.map(t => t.id), ['opus', 'astra', 'sonnet'])
+  assert.deepEqual(TARGETS.map(t => t.id), ['opus', 'astra', 'sonnet', 'fable'])
   const keys = new Set()
   for (const target of TARGETS) {
     assert.ok(target.id && target.label, `${target.id}: id and label`)
@@ -58,6 +58,7 @@ test('default target: the registry patterns decide, the fallback target takes th
   const cases = {
     'gpt-6-astra': 'astra', 'openai/gpt-5': 'astra', 'o3': 'astra', 'codex-mini': 'astra',
     'claude-sonnet-5-5': 'sonnet', 'anthropic/Claude Sonnet 5.5': 'sonnet', 'openai/claude-sonnet-5-5': 'sonnet',
+    'claude-fable-5-2': 'fable', 'anthropic/Claude Fable 5.2': 'fable', 'openai/claude-fable-5-2': 'fable', 'openrouter/anthropic/claude-fable-5.2': 'fable',
     'claude-opus-5-5': 'opus', 'claude-haiku-4': 'opus', 'gemini-3-pro': 'opus', 'deepseek-v4': 'opus', '': 'opus'
   }
   for (const [model, expected] of Object.entries(cases)) assert.equal(defaultTarget(model), expected, model)
@@ -67,7 +68,7 @@ test('default target: the registry patterns decide, the fallback target takes th
 
 test('design-avoid applies to the targets whose capabilities say so, and to no unknown target', () => {
   for (const target of TARGETS) assert.equal(fieldForTarget('designAvoid', target.id), Boolean(target.capabilities.designAvoid), target.id)
-  assert.deepEqual(TARGETS.filter(t => t.capabilities.designAvoid).map(t => t.id), ['opus', 'sonnet'])
+  assert.deepEqual(TARGETS.filter(t => t.capabilities.designAvoid).map(t => t.id), ['opus', 'sonnet', 'fable'])
   assert.equal(fieldForTarget('designAvoid', 'nobody'), false)
 })
 
@@ -78,7 +79,7 @@ test('the question names the target by its registry label', () => {
 
 test('no second table of target ids, names or keys outside the registry', async () => {
   const code = text => text.split('\n').filter(line => !/^\s*\/\//.test(line))
-  const idLines = code(await read('desktop/src/studio-core.js')).filter(line => /['"](opus|astra|sonnet)['"]/.test(line))
+  const idLines = code(await read('desktop/src/studio-core.js')).filter(line => /['"](opus|astra|sonnet|fable)['"]/.test(line))
   assert.equal(idLines.length, TARGETS.length, 'target ids appear only on the registry entries')
   assert.ok(idLines.every(line => /^\s*\{ id: /.test(line)), idLines.join('\n'))
   assert.doesNotMatch(await read('desktop/src/studio-core.js'), /TARGET_NAME|STUDIO_ENGINES/)
@@ -86,6 +87,6 @@ test('no second table of target ids, names or keys outside the registry', async 
   const uiFiles = (await readdir(new URL('../../desktop/src', import.meta.url))).filter(name => /^ui-.*\.js$/.test(name))
   assert.ok(uiFiles.includes('ui-keys.js') && uiFiles.includes('ui-steps.js'), uiFiles.join())
   const ui = (await Promise.all(uiFiles.map(name => read(`desktop/src/${name}`)))).join('\n')
-  assert.doesNotMatch(ui, /['"](opus|astra|sonnet)['"]/)
-  assert.doesNotMatch(ui, /Alt\+[OAT]['"]/)
+  assert.doesNotMatch(ui, /['"](opus|astra|sonnet|fable)['"]/)
+  assert.doesNotMatch(ui, /Alt\+[OATF]['"]/)
 })
