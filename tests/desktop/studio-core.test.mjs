@@ -107,7 +107,9 @@ test('fable target: TARGETS entry, default-target rule, step walk, per-target he
   assert.equal(fable.engine.build({ goal: CODE }).prompt, FABLE.build({ goal: CODE }).prompt, 'the generated core carries the engine of desktop/src')
   // A gateway name must reach Fable before Astra's broad pattern sees "openai".
   for (const model of ['claude-fable-5-2', 'anthropic/claude-fable-5-2', 'openai/claude-fable-5-2', 'Claude Fable 5.2', 'claude-fable-5-2-fast']) assert.equal(defaultTarget(model), 'fable', model)
-  assert.equal(defaultTarget('claude-mythos-5-2'), 'opus', 'a model no pattern names keeps the fallback target')
+  // Anthropic's Fable 5.2 guide is written for both models, so a Mythos session opens on the Fable engine.
+  for (const model of ['claude-mythos-5-2', 'anthropic/claude-mythos-5-2', 'openai/claude-mythos-5-2', 'Claude Mythos 5.2']) assert.equal(defaultTarget(model), 'fable', model)
+  assert.equal(defaultTarget('claude-haiku-5-5'), 'opus', 'a model no pattern names keeps the fallback target')
   const pasted = q => (q.paste ? 'Some pasted mail' : q.recommended || SKIPPED)
   const { order } = walk('fable', CODE, 'en', pasted)
   assert.deepEqual(order, walk('opus', CODE, 'en', pasted).order, 'the same steps as the other Claude targets')
