@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 from pathlib import Path
 
 import pytest
@@ -48,3 +49,56 @@ def test_unreadable_file(tmp_path):
     with pytest.raises(vi.ValidationError, match="cannot read plugin.yaml") as info:
         vi.parse_yaml_mapping(tmp_path / "missing.yaml")
     assert isinstance(info.value.__cause__, OSError)
+
+
+SHELL_SCRIPT_CLI = pytest.mark.skipif(os.name == "nt", reason="the fake Hermes CLI is a shell script")
+
+
+def _slow_hermes(tmp_path):
+    # `exec` so the timeout kills the sleeping process itself and no child keeps the pipes open.
+    fake = tmp_path / "hermes"
+    fake.write_text("#!/bin/sh\nexec sleep 5\n", encoding="utf-8")
+    fake.chmod(0o755)
+    return fake
+
+
+@SHELL_SCRIPT_CLI
+def test_a_hermes_cli_that_does_not_answer_is_a_validation_error(tmp_path, monkeypatch):
+    monkeypatch.setattr(vi, "VERSION_TIMEOUT_S", 0.3)
+    with pytest.raises(vi.ValidationError, match=r"^Hermes CLI did not answer --version within 0\.3 s"):
+        vi.host_version(str(_slow_hermes(tmp_path)))
+
+
+@SHELL_SCRIPT_CLI
+def test_a_slow_hermes_cli_ends_the_preflight_with_one_error_line_and_no_traceback(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(vi, "VERSION_TIMEOUT_S", 0.3)
+    monkeypatch.setattr("sys.argv", ["validate_install.py", "--source", str(ROOT), "--hermes-bin", str(_slow_hermes(tmp_path))])
+    assert vi.main() == 1
+    out = capsys.readouterr()
+    assert out.out == ""
+    assert out.err.count("\n") == 1
+    assert out.err.startswith("[ERROR] Hermes CLI did not answer --version within 0.3 s")
+    assert "manifest" not in out.err and "Traceback" not in out.err
+
+
+def test_the_preflight_waits_a_minute_for_the_hermes_version():
+    # `hermes --version` took more than 40 s on a loaded machine; 15 s cut it off.
+    assert vi.VERSION_TIMEOUT_S == 60
+
+
+@SHELL_SCRIPT_CLI
+def test_a_hermes_cli_that_fails_reports_the_reason_the_cli_gave(tmp_path):
+    fake = tmp_path / "hermes"
+    fake.write_text("#!/bin/sh\necho 'starting' >&2\necho 'hermes: no dependency environment; run hermes pm repair' >&2\nexit 1\n", encoding="utf-8")
+    fake.chmod(0o755)
+    with pytest.raises(vi.ValidationError, match=r"^could not determine Hermes version: hermes: no dependency environment; run hermes pm repair$"):
+        vi.host_version(str(fake))
+
+
+@SHELL_SCRIPT_CLI
+def test_a_hermes_cli_that_fails_in_silence_keeps_the_plain_message(tmp_path):
+    fake = tmp_path / "hermes"
+    fake.write_text("#!/bin/sh\nexit 3\n", encoding="utf-8")
+    fake.chmod(0o755)
+    with pytest.raises(vi.ValidationError, match=r"^could not determine Hermes version$"):
+        vi.host_version(str(fake))

@@ -10,6 +10,10 @@ import sys
 from pathlib import Path
 
 
+# Seconds to wait for `hermes --version`. The CLI can take more than 40 s to start on a loaded machine.
+VERSION_TIMEOUT_S = 60
+
+
 class ValidationError(Exception):
     pass
 
@@ -93,12 +97,19 @@ def host_version(hermes_bin: str) -> tuple[int, int, int]:
         raise ValidationError("Hermes CLI not found; install Hermes or set HERMES_BIN")
     try:
         result = subprocess.run(
-            [executable, "--version"], text=True, capture_output=True, check=False, timeout=15
+            [executable, "--version"], text=True, capture_output=True, check=False, timeout=VERSION_TIMEOUT_S
         )
+    except subprocess.TimeoutExpired as exc:
+        raise ValidationError(
+            f"Hermes CLI did not answer --version within {VERSION_TIMEOUT_S:g} s; "
+            "check that `hermes --version` works in this shell, then run the installer again"
+        ) from exc
     except OSError as exc:
         raise ValidationError(f"could not run Hermes CLI: {exc}") from exc
     if result.returncode:
-        raise ValidationError("could not determine Hermes version")
+        # The last line the CLI printed is its own reason (for example a missing dependency environment).
+        said = (result.stderr.strip() or result.stdout.strip()).splitlines()
+        raise ValidationError("could not determine Hermes version" + (f": {said[-1].strip()[:200]}" if said else ""))
     return normalized_version((result.stdout + result.stderr).strip())
 
 
