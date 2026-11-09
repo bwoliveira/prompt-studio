@@ -23,6 +23,12 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
   vendors and now carry the current wording. No guidance behind a prompt line was changed or withdrawn, so the prompts
   are the same.
 
+### Installer
+
+- Fix: `install.sh` waits up to 60 seconds for `hermes --version` (it was 15) and, when the Hermes CLI still does not
+  answer, ends with one error line that says what to check. Before, a slow CLI ended the install with a Python
+  traceback.
+
 ### README art and screenshots
 
 - Docs: new README art (hero, three feature cards, a how-it-works strip) and a new 2:1 banner for the plugin catalog
