@@ -1,6 +1,6 @@
-# Prompt Studio
+<p align="center"><img src="docs/images/hero.jpg" width="100%" alt="Prompt Studio banner: an engraved printer's composing stick holding a row of blank metal type blocks, with more blocks falling in over a red disc. Text: A Hermes Desktop plugin. Prompt Studio. Turns a rough request into a well-built prompt, one step at a time. Claude Fable 5.2, Claude Opus 5.5, Claude Sonnet 5.5, GPT-6 Astra."></p>
 
-![Prompt Studio banner: guided prompt builder for Hermes Desktop](docs/images/banner.png)
+# Prompt Studio
 
 Prompt Studio is a Hermes Desktop plugin that turns a rough request into a well-built prompt for
 **Claude Fable 5.2**, **Claude Opus 5.5**, **Claude Sonnet 5.5** or **GPT-6 Astra**. It asks the few questions that change the result, one step
@@ -11,6 +11,14 @@ Each step can get a suggestion from an auxiliary AI model, and at the end that m
 answers. When the AI is off, slow or unavailable, you still get a complete prompt, built locally by the plugin's own
 engine for the chosen model. The four engines were written for this plugin from the official Anthropic and OpenAI
 documentation ([how each prompt is built](docs/MODELS.md)).
+
+<table><tr>
+<td width="33%" valign="top"><img src="docs/images/card-one-step.jpg" alt="Feature card: One step at a time. The few questions that change the result, each with a recommended answer. Illustration of an engraved staircase climbed one step at a time."><h3>One step at a time</h3><p>It asks the few questions that change the result, one at a time. Every step has a recommended answer, and you can skip, go back or edit an earlier one.</p></td>
+<td width="33%" valign="top"><img src="docs/images/card-four-engines.jpg" alt="Feature card: Built for your model. Four engines written from the official prompting docs of each model. Illustration of four different engraved pen nibs."><h3>Built for your model</h3><p>Four prompt engines, for Claude Fable 5.2, Claude Opus 5.5, Claude Sonnet 5.5 and GPT-6 Astra, each written from the vendor's official prompting documentation.</p></td>
+<td width="33%" valign="top"><img src="docs/images/card-ai-off.jpg" alt="Feature card: Works with the AI off. AI suggestions when you want them. A complete prompt even without them. Illustration of a hand-cranked lantern, lit, next to an unplugged cable."><h3>Works with the AI off</h3><p>An auxiliary model can suggest answers and polish the final prompt. When it is off, slow or unavailable, the plugin's own engine still builds a complete prompt.</p></td>
+</tr></table>
+
+<p align="center"><img src="docs/images/how-it-works.jpg" width="100%" alt="How it works. Write: type a rough request and press F4. Answer: a few steps, each with a recommended answer. Generate: preview the prompt, with or without the AI version. Send or edit: F9 sends it, Alt+E puts it in the message field."></p>
 
 ## Requirements
 
@@ -60,7 +68,7 @@ close Hermes Desktop on the app machine. Every option, the Windows path and the 
 
 ## Usage
 
-![Prompt Studio step with option cards, the AI-recommended choice and its reason, and a key on every control](docs/images/step-question.png)
+<img src="docs/images/step-question.png" width="715" alt="Prompt Studio step with the model switch (Opus, Astra, Sonnet, Fable; Fable selected), option cards, the AI-recommended choice and its reason, and a key on every control">
 
 1. Write your request in the message field and press **F4**, or click **✨ Prompt Studio**, or run
    *Prompt Studio* from the command palette.
@@ -73,7 +81,7 @@ close Hermes Desktop on the app machine. Every option, the Windows path and the 
 4. Generate. The preview shows the prompt; switch between the AI version and the version built without AI,
    then **Send now** (F9) to send it at once, or **Put in composer to edit** (Alt+E) to place it in the message field and edit it first.
 
-![The final prompt preview with the AI-written prompt, the Send now (F9), Put in composer to edit (Alt+E), See the version without AI, Back to steps and Cancel buttons, and the red note that attachments do not go with Send now](docs/images/step-preview.png)
+<img src="docs/images/step-preview.png" width="788" alt="The final prompt preview with the AI-written prompt, the Send now (F9), Put in composer to edit (Alt+E), See the version without AI, Back to steps and Cancel buttons, and the red note that attachments do not go with Send now">
 
 The AI mode (Auto, On request, Off) decides when step suggestions are requested. The interface is in English or
 Brazilian Portuguese: the Studio follows the Hermes language, and Settings (F3) can fix it to Português or English,
@@ -127,7 +135,7 @@ plugin's shortcut map; the Studio's own **F1** list shows the same keys.
 
 ## Configuration
 
-![Prompt Studio settings opened with F3: questions model, context model, reading context on open, and language](docs/images/step-settings.png)
+<img src="docs/images/step-settings.png" width="548" alt="Prompt Studio settings opened with F3: questions model, context model, reading context on open, and language">
 
 Nothing needs setting up: with no model picked, the Studio uses your Hermes default model. **Settings (F3)** picks one
 model for the questions and the final polish, one for reading the session context (a fast model keeps opening quick),

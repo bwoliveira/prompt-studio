@@ -14,6 +14,12 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
   and no request to write out reasoning. The AI writer follows the same rules for this target. Every line and its source
   are in `docs/PROMPT-DOCS-REVIEW.md`, section 6.
 
+### README art and screenshots
+
+- Docs: new README art (hero, three feature cards, a how-it-works strip) and a new 2:1 banner for the plugin catalog
+  card. The three screenshots were taken again from the current interface, in the dark theme, and show the model switch
+  with Fable.
+
 ### Regression protection
 
 - Tests: an adversarial battery covers model/settings changes, large or malformed contexts, cancellation and provider
