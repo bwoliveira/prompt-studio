@@ -5,8 +5,9 @@ make inside a Hermes session. Everything the engine can read from the draft, and
 already decides, is not asked. The prompt lines each answer produces, with their doc sources, are in
 [PROMPT-DOCS-REVIEW.md](PROMPT-DOCS-REVIEW.md).
 
-Every step has a recommended answer (the engine's default or the AI suggestion) and can be skipped; a skipped
-step uses the recommendation.
+Every choice step has a recommended answer (the engine's default or the AI pick), and a skipped choice uses it.
+The text steps are optional and have no fixed recommendation: with the AI on, it suggests a text for each of them
+except the pasted reference.
 
 ## Steps asked (in order)
 
