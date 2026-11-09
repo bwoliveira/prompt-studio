@@ -259,7 +259,8 @@ Claude Mythos 5.2 uses this engine too: a session on a Mythos model opens on the
 both models, *"Prompting patterns specific to Claude Fable 5.2 and Claude Mythos 5.2"* [fable52-prompting], and the
 what's-new page lists Mythos 5.2 with the *"Same capabilities as Claude Fable 5.2"* [fable52-whats-new].
 
-Read and not quoted: `fable52-whats-new` (its "Behavior differences" list repeats the prompting page), `fable52-overview`
+Read, and quoted for no emitted line: `fable52-whats-new` (quoted above for the Mythos pairing only; its "Behavior
+differences" list repeats the prompting page). Read and not quoted: `fable52-overview`
 and `fable52-migration` (API changes: thinking blocks, tool versions, effort), and `fable51-prompting` (the Fable 5.2
 page replaces its guidance on effort, finishing and progress updates). No emitted line depends on them. The vendor-wide
 snapshots were not fetched again for this section, because the other engines' rows are checked against them; the live
