@@ -11,7 +11,7 @@
 //   TASK, CONTEXT, THIRD-PARTY MATERIAL (short paste), REQUIREMENTS, AUTONOMY, SUBAGENTS, EXAMPLE(S),
 //   OUTPUT, DONE WHEN.
 // Deliberately absent: tool lists and effort ([review] section 1, "Not emitted": effort is a Hermes session setting), personas,
-// "show your reasoning" ([opus55] "If your prompt asked the model to write out its reasoning in the response
+// "show your reasoning" ([opus55] "If your prompt asked the model to write its reasoning in the response
 // as a substitute for thinking, remove that instruction"), re-check lines ([opus5] "Claude Opus 5 verifies
 // its own work without being told to. ... remove them").
 
@@ -81,20 +81,20 @@ const AUTONOMY_LINES = {
 
 // SUBAGENTS ([review] section 3 and O16-O21a; user's own wording built on the quotes below).
 // [pe] "Use subagents when tasks can run in parallel, require isolated context, or involve independent
-// workstreams that don't need to share state."; [opus5] "Delegation pays off on genuinely independent, sizeable tracks of work".
+// workstreams that don't need to share state."; [opus5] "Delegation is worthwhile for genuinely independent, sizeable tracks of work".
 const SUBAGENT_SPLIT = 'Use subagents. Split the task into parts that can run in parallel without sharing state (separate modules, files, sources or questions) and give each part to its own subagent, with its goal, the context it needs and the result to hand back. Launch independent parts together rather than one at a time. Keep dependent steps, integration and the final answer with the lead agent.'
 // [opus5] "Do not delegate work you can finish yourself in a handful of tool calls".
 const SUBAGENT_SIZE = 'Work directly on steps you can finish in a handful of tool calls; delegate the sizeable independent parts.'
-// [opus5] "effective writer-verifier patterns"; [cc] a reviewer "running in a fresh subagent context sees only the
-// diff and the criteria you give it, not the reasoning that produced the change"; "Tell the reviewer to flag only
-// gaps that affect correctness or the stated requirements, and treat the rest as optional."
+// [opus5] "effective writer-verifier patterns"; [cc] a review that "reviews the diff in a fresh subagent that never saw
+// your conversation. It isn't swayed by the reasoning that produced the code."; the reviewer prompt: "check that every
+// requirement is implemented and the listed edge cases have tests, and report only the gaps that affect correctness. Skip style."
 const SUBAGENT_REVIEWER = 'Name one subagent as the reviewer. The reviewer did not write any of the work and starts from a fresh context: give it only the integrated result, the requirements and the definition of done, not the reasoning behind the work. It checks the result once and reports only gaps that affect correctness or the stated requirements, each with its evidence; style preferences are not findings. Writers do not review their own work; the lead agent fixes or sends back what the reviewer finds and treats the rest as optional.'
 // [review] O19 (report only delegation that happened).
 const SUBAGENT_REAL = 'Only report delegation that actually happened through subagent tools; if they are not available, do the parts yourself in the same order and say so.'
 // [opus55] "Time signals for multiagent harnesses" (verbatim sentence).
 const TIME_LINE = 'Time matters here: do not spend time that can be avoided, and the earlier a correct result is obtained, the better.'
 const SUBAGENT_DIRECT = 'Do not use subagents; perform the work directly.'
-// [opus5] the guide's own sample delegation guidance, verbatim: "Delegation pays off on genuinely independent,
+// [opus5] the guide's own sample delegation guidance, verbatim: "Delegation is worthwhile for genuinely independent,
 // sizeable tracks of work, but it multiplies cost and time when applied to small tasks." Default ('auto') for hands-on work.
 const SUBAGENT_AUTO = 'Delegate to a subagent only for large tasks that are genuinely independent and parallelizable, such as a wide multi-file investigation. Do not delegate work you can finish yourself in a handful of tool calls, and do not use subagents to verify or double-check your own work. If one subagent can complete the task, use one rather than several, and keep spawn counts low.'
 
@@ -115,13 +115,13 @@ const LENGTH_LINES = {
   // [opus5] "Keep responses focused, brief, and concise. Keep disclaimers and caveats short, and spend most of
   // the response on the main answer."
   concise: 'Keep the response focused, brief, and concise. Keep disclaimers and caveats short, and spend most of the response on the main answer.',
-  // [pe] "Less verbose: May skip detailed summaries for efficiency unless prompted otherwise" -> ask for detail.
+  // [pe] "Less verbose: Might skip detailed summaries for efficiency unless prompted otherwise" -> ask for detail.
   detailed: 'Give a complete, detailed response: cover every part of the task with the specifics needed to act on it.'
 }
 
 // DONE WHEN evidence lines. [review] O28: [opus5] "Claude Opus 5 verifies its own work without being told to";
-// [pe] "remove these instructions rather than rewriting them"; [cc] "Have Claude show evidence rather than
-// asserting success". Plan, text and answer get no line. Data and workflow name what to get right.
+// [pe] "remove these instructions rather than rewriting them"; [cc] "ask Claude for evidence: the command it ran
+// and its output, or the screenshot." Plan, text and answer get no line. Data and workflow name what to get right.
 // Implementation is two sentences: the generic "behavior works" one, and the evidence one. After a user
 // criterion only the evidence sentence follows, so the criterion is not trailed by a weaker restatement of it.
 const IMPLEMENTATION_EVIDENCE = 'show the commands you ran and what they returned.'

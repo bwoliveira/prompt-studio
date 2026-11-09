@@ -106,9 +106,10 @@ const SUBAGENT_SPLIT = 'Use subagents. Split the task into parts that can run in
 // steps, work directly rather than delegating."
 const SUBAGENT_SIZE = 'Work directly on simple tasks, sequential steps and single-file edits; delegate the independent parts.'
 // The user asks for the review (team mode), which is what the [sonnet55] "Thoroughness" snippet requires for a reviewer
-// sub-agent: "don't launch reviewer sub-agents unless the user asked for a review". [cc] a reviewer "running in a fresh
-// subagent context sees only the diff and the criteria you give it, not the reasoning that produced the change"; "Tell
-// the reviewer to flag only gaps that affect correctness or the stated requirements, and treat the rest as optional."
+// sub-agent: "don't launch reviewer sub-agents unless the user asked for a review". [cc] a review that "reviews the diff in a
+// fresh subagent that never saw your conversation. It isn't swayed by the reasoning that produced the code."; the reviewer
+// prompt: "check that every requirement is implemented and the listed edge cases have tests, and report only the gaps that
+// affect correctness. Skip style."
 const SUBAGENT_REVIEWER = 'The user asks for an independent review of the result: name one subagent as the reviewer. The reviewer did not write any of the work and starts from a fresh context: give it only the integrated result, the requirements and the definition of done, not the reasoning behind the work. It checks the result once and reports only gaps that affect correctness or the stated requirements, each with its evidence; style preferences are not findings. Writers do not review their own work; the lead agent fixes or sends back what the reviewer finds and treats the rest as optional.'
 // [review] S20 (report only delegation that happened).
 const SUBAGENT_REAL = 'Only report delegation that actually happened through subagent tools; if they are not available, do the parts yourself in the same order and say so.'
@@ -139,7 +140,7 @@ const JSON_THINK_DELIVERABLES = ['analysis', 'review', 'data', 'answer', 'plan']
 const LENGTH_LINES = {
   // [sonnet5] "Provide concise, focused responses. Skip non-essential context, and keep examples minimal." (verbatim)
   concise: 'Provide concise, focused responses. Skip non-essential context, and keep examples minimal.',
-  // [sonnet5] "Claude Sonnet 5 calibrates response length to the complexity of the task"; [pe] "Less verbose: May skip
+  // [sonnet5] "Claude Sonnet 5 calibrates response length to the complexity of the task"; [pe] "Less verbose: Might skip
   // detailed summaries for efficiency unless prompted otherwise" -> ask for detail.
   detailed: 'Give a complete, detailed response: cover every part of the task with the specifics needed to act on it.'
 }
@@ -160,16 +161,16 @@ const DELIVERABLE_LINES = {
 
 // DONE WHEN lines. [review] S30-S32. Plan, text and answer get no line.
 const DONE_LINES = {
-  // [sonnet55] "Verification on coding tasks": the doc's paragraph, verbatim ("If you see changes reported as complete
+  // [sonnet55] "Verification on coding tasks": the doc's paragraph, one phrase changed ([review] S30) ("If you see changes reported as complete
   // without test or build output in the transcript, add this paragraph"; at low effort the model "sometimes reports a
   // change as done without running a check that exercises it").
   implementation: "When you change code that can be run, built, or type-checked, run a real check that exercises the change before reporting it done: the project's tests, type-checker, or build, or the changed command itself. A syntax-only check, or a check command that failed to start, does not count; if all that is missing is the project's declared dependencies, install them with its own package manager and lockfile (e.g. npm install, pip install -r requirements.txt), never with elevated privileges or the system package manager, unless told not to. Only if no real check can run here, say which one you did not run and why instead of reporting the change as done.",
-  // [sonnet5] "Code review harnesses": "be concrete about where the bar is rather than using qualitative terms like
+  // [sonnet5] "Code review harnesses": "be concrete about what the reporting threshold is rather than using qualitative terms such as
   // \"important\": for example, \"report any bugs that could cause incorrect behavior, a test failure, or a misleading
   // result; only omit nits like pure style or naming preferences.\"" (verbatim); "include your confidence level and an
-  // estimated severity"; [cc] "Have Claude show evidence rather than asserting success" (location and evidence).
+  // estimated severity"; [cc] "ask Claude for evidence: the command it ran and its output, or the screenshot." (location and evidence).
   review: 'Report any bugs that could cause incorrect behavior, a test failure, or a misleading result; only omit nits like pure style or naming preferences. For each finding, give its location, the evidence for it, your confidence level and an estimated severity; label untested hypotheses.',
-  // [cc] "Have Claude show evidence rather than asserting success" (vendor fallback; wording local).
+  // [cc] "ask Claude for evidence: the command it ran and its output, or the screenshot." (vendor fallback; wording local).
   analysis: 'Back each conclusion with the source or data it rests on.',
   data: 'Units, totals and record counts match the source; report any rows dropped and why.',
   workflow: 'Running it again must not repeat side effects; show the output of a real run.'

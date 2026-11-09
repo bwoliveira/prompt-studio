@@ -527,7 +527,7 @@ const OPUS_ENGINE = (() => {
 //   TASK, CONTEXT, THIRD-PARTY MATERIAL (short paste), REQUIREMENTS, AUTONOMY, SUBAGENTS, EXAMPLE(S),
 //   OUTPUT, DONE WHEN.
 // Deliberately absent: tool lists and effort ([review] section 1, "Not emitted": effort is a Hermes session setting), personas,
-// "show your reasoning" ([opus55] "If your prompt asked the model to write out its reasoning in the response
+// "show your reasoning" ([opus55] "If your prompt asked the model to write its reasoning in the response
 // as a substitute for thinking, remove that instruction"), re-check lines ([opus5] "Claude Opus 5 verifies
 // its own work without being told to. ... remove them").
 
@@ -596,20 +596,20 @@ const AUTONOMY_LINES = {
 
 // SUBAGENTS ([review] section 3 and O16-O21a; user's own wording built on the quotes below).
 // [pe] "Use subagents when tasks can run in parallel, require isolated context, or involve independent
-// workstreams that don't need to share state."; [opus5] "Delegation pays off on genuinely independent, sizeable tracks of work".
+// workstreams that don't need to share state."; [opus5] "Delegation is worthwhile for genuinely independent, sizeable tracks of work".
 const SUBAGENT_SPLIT = 'Use subagents. Split the task into parts that can run in parallel without sharing state (separate modules, files, sources or questions) and give each part to its own subagent, with its goal, the context it needs and the result to hand back. Launch independent parts together rather than one at a time. Keep dependent steps, integration and the final answer with the lead agent.'
 // [opus5] "Do not delegate work you can finish yourself in a handful of tool calls".
 const SUBAGENT_SIZE = 'Work directly on steps you can finish in a handful of tool calls; delegate the sizeable independent parts.'
-// [opus5] "effective writer-verifier patterns"; [cc] a reviewer "running in a fresh subagent context sees only the
-// diff and the criteria you give it, not the reasoning that produced the change"; "Tell the reviewer to flag only
-// gaps that affect correctness or the stated requirements, and treat the rest as optional."
+// [opus5] "effective writer-verifier patterns"; [cc] a review that "reviews the diff in a fresh subagent that never saw
+// your conversation. It isn't swayed by the reasoning that produced the code."; the reviewer prompt: "check that every
+// requirement is implemented and the listed edge cases have tests, and report only the gaps that affect correctness. Skip style."
 const SUBAGENT_REVIEWER = 'Name one subagent as the reviewer. The reviewer did not write any of the work and starts from a fresh context: give it only the integrated result, the requirements and the definition of done, not the reasoning behind the work. It checks the result once and reports only gaps that affect correctness or the stated requirements, each with its evidence; style preferences are not findings. Writers do not review their own work; the lead agent fixes or sends back what the reviewer finds and treats the rest as optional.'
 // [review] O19 (report only delegation that happened).
 const SUBAGENT_REAL = 'Only report delegation that actually happened through subagent tools; if they are not available, do the parts yourself in the same order and say so.'
 // [opus55] "Time signals for multiagent harnesses" (verbatim sentence).
 const TIME_LINE = 'Time matters here: do not spend time that can be avoided, and the earlier a correct result is obtained, the better.'
 const SUBAGENT_DIRECT = 'Do not use subagents; perform the work directly.'
-// [opus5] the guide's own sample delegation guidance, verbatim: "Delegation pays off on genuinely independent,
+// [opus5] the guide's own sample delegation guidance, verbatim: "Delegation is worthwhile for genuinely independent,
 // sizeable tracks of work, but it multiplies cost and time when applied to small tasks." Default ('auto') for hands-on work.
 const SUBAGENT_AUTO = 'Delegate to a subagent only for large tasks that are genuinely independent and parallelizable, such as a wide multi-file investigation. Do not delegate work you can finish yourself in a handful of tool calls, and do not use subagents to verify or double-check your own work. If one subagent can complete the task, use one rather than several, and keep spawn counts low.'
 
@@ -630,13 +630,13 @@ const LENGTH_LINES = {
   // [opus5] "Keep responses focused, brief, and concise. Keep disclaimers and caveats short, and spend most of
   // the response on the main answer."
   concise: 'Keep the response focused, brief, and concise. Keep disclaimers and caveats short, and spend most of the response on the main answer.',
-  // [pe] "Less verbose: May skip detailed summaries for efficiency unless prompted otherwise" -> ask for detail.
+  // [pe] "Less verbose: Might skip detailed summaries for efficiency unless prompted otherwise" -> ask for detail.
   detailed: 'Give a complete, detailed response: cover every part of the task with the specifics needed to act on it.'
 }
 
 // DONE WHEN evidence lines. [review] O28: [opus5] "Claude Opus 5 verifies its own work without being told to";
-// [pe] "remove these instructions rather than rewriting them"; [cc] "Have Claude show evidence rather than
-// asserting success". Plan, text and answer get no line. Data and workflow name what to get right.
+// [pe] "remove these instructions rather than rewriting them"; [cc] "ask Claude for evidence: the command it ran
+// and its output, or the screenshot." Plan, text and answer get no line. Data and workflow name what to get right.
 // Implementation is two sentences: the generic "behavior works" one, and the evidence one. After a user
 // criterion only the evidence sentence follows, so the criterion is not trailed by a weaker restatement of it.
 const IMPLEMENTATION_EVIDENCE = 'show the commands you ran and what they returned.'
@@ -1383,9 +1383,10 @@ const SUBAGENT_SPLIT = 'Use subagents. Split the task into parts that can run in
 // steps, work directly rather than delegating."
 const SUBAGENT_SIZE = 'Work directly on simple tasks, sequential steps and single-file edits; delegate the independent parts.'
 // The user asks for the review (team mode), which is what the [sonnet55] "Thoroughness" snippet requires for a reviewer
-// sub-agent: "don't launch reviewer sub-agents unless the user asked for a review". [cc] a reviewer "running in a fresh
-// subagent context sees only the diff and the criteria you give it, not the reasoning that produced the change"; "Tell
-// the reviewer to flag only gaps that affect correctness or the stated requirements, and treat the rest as optional."
+// sub-agent: "don't launch reviewer sub-agents unless the user asked for a review". [cc] a review that "reviews the diff in a
+// fresh subagent that never saw your conversation. It isn't swayed by the reasoning that produced the code."; the reviewer
+// prompt: "check that every requirement is implemented and the listed edge cases have tests, and report only the gaps that
+// affect correctness. Skip style."
 const SUBAGENT_REVIEWER = 'The user asks for an independent review of the result: name one subagent as the reviewer. The reviewer did not write any of the work and starts from a fresh context: give it only the integrated result, the requirements and the definition of done, not the reasoning behind the work. It checks the result once and reports only gaps that affect correctness or the stated requirements, each with its evidence; style preferences are not findings. Writers do not review their own work; the lead agent fixes or sends back what the reviewer finds and treats the rest as optional.'
 // [review] S20 (report only delegation that happened).
 const SUBAGENT_REAL = 'Only report delegation that actually happened through subagent tools; if they are not available, do the parts yourself in the same order and say so.'
@@ -1416,7 +1417,7 @@ const JSON_THINK_DELIVERABLES = ['analysis', 'review', 'data', 'answer', 'plan']
 const LENGTH_LINES = {
   // [sonnet5] "Provide concise, focused responses. Skip non-essential context, and keep examples minimal." (verbatim)
   concise: 'Provide concise, focused responses. Skip non-essential context, and keep examples minimal.',
-  // [sonnet5] "Claude Sonnet 5 calibrates response length to the complexity of the task"; [pe] "Less verbose: May skip
+  // [sonnet5] "Claude Sonnet 5 calibrates response length to the complexity of the task"; [pe] "Less verbose: Might skip
   // detailed summaries for efficiency unless prompted otherwise" -> ask for detail.
   detailed: 'Give a complete, detailed response: cover every part of the task with the specifics needed to act on it.'
 }
@@ -1437,16 +1438,16 @@ const DELIVERABLE_LINES = {
 
 // DONE WHEN lines. [review] S30-S32. Plan, text and answer get no line.
 const DONE_LINES = {
-  // [sonnet55] "Verification on coding tasks": the doc's paragraph, verbatim ("If you see changes reported as complete
+  // [sonnet55] "Verification on coding tasks": the doc's paragraph, one phrase changed ([review] S30) ("If you see changes reported as complete
   // without test or build output in the transcript, add this paragraph"; at low effort the model "sometimes reports a
   // change as done without running a check that exercises it").
   implementation: "When you change code that can be run, built, or type-checked, run a real check that exercises the change before reporting it done: the project's tests, type-checker, or build, or the changed command itself. A syntax-only check, or a check command that failed to start, does not count; if all that is missing is the project's declared dependencies, install them with its own package manager and lockfile (e.g. npm install, pip install -r requirements.txt), never with elevated privileges or the system package manager, unless told not to. Only if no real check can run here, say which one you did not run and why instead of reporting the change as done.",
-  // [sonnet5] "Code review harnesses": "be concrete about where the bar is rather than using qualitative terms like
+  // [sonnet5] "Code review harnesses": "be concrete about what the reporting threshold is rather than using qualitative terms such as
   // \"important\": for example, \"report any bugs that could cause incorrect behavior, a test failure, or a misleading
   // result; only omit nits like pure style or naming preferences.\"" (verbatim); "include your confidence level and an
-  // estimated severity"; [cc] "Have Claude show evidence rather than asserting success" (location and evidence).
+  // estimated severity"; [cc] "ask Claude for evidence: the command it ran and its output, or the screenshot." (location and evidence).
   review: 'Report any bugs that could cause incorrect behavior, a test failure, or a misleading result; only omit nits like pure style or naming preferences. For each finding, give its location, the evidence for it, your confidence level and an estimated severity; label untested hypotheses.',
-  // [cc] "Have Claude show evidence rather than asserting success" (vendor fallback; wording local).
+  // [cc] "ask Claude for evidence: the command it ran and its output, or the screenshot." (vendor fallback; wording local).
   analysis: 'Back each conclusion with the source or data it rests on.',
   data: 'Units, totals and record counts match the source; report any rows dropped and why.',
   workflow: 'Running it again must not repeat side effects; show the output of a real run.'
@@ -1673,7 +1674,7 @@ const FABLE_ENGINE = (() => {
 // cover it points to the vendor-wide page ([pe]). So a line the guide has no text for falls back to the vendor-wide
 // pages ([pe], [jail]) and its comment says "vendor fallback". [fable5] is cited twice, as support only, and marked
 // "family guide" (it was measured on an earlier model). The Opus-only and Sonnet-only pages are never cited here, and
-// neither is the Claude Code page: the sentences the other engines quote from it are no longer on the live page.
+// neither is the Claude Code page: no Fable line needs it.
 //
 // Section order (same as engine-opus.js; plain uppercase headers, blank line between sections, empty sections omitted):
 //   THIRD-PARTY MATERIAL (only when the paste is long: [pe] "Place your long documents and inputs near the

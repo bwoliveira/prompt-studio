@@ -16,6 +16,13 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
 - A session that runs **Claude Mythos 5.2** now opens on the Fable target instead of Opus: Anthropic's Fable 5.2 guide
   is written for both models.
 
+### Official sources checked again
+
+- Docs: the Opus, Sonnet and Astra rules were checked against the vendor pages as published on 2026-11-09. Of the 55
+  pages, 41 had changed since September. Fourteen quotes in `docs/PROMPT-DOCS-REVIEW.md` had been reworded by the
+  vendors and now carry the current wording. No guidance behind a prompt line was changed or withdrawn, so the prompts
+  are the same.
+
 ### README art and screenshots
 
 - Docs: new README art (hero, three feature cards, a how-it-works strip) and a new 2:1 banner for the plugin catalog
