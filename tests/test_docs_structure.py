@@ -47,7 +47,7 @@ def test_the_catalog_banner_is_two_to_one():
 
 def test_docs_promise_a_recommendation_on_choices_only():
     # Text steps have none of their own (tests/desktop/studio-core.test.mjs pins it), so "every step" is untrue.
-    claim = re.compile(r"(?:each|every) step\b[^.]{0,60}recommend|steps?, each with a recommended", re.I)
+    claim = re.compile(r"(?:each|every) step\b[^.]{0,60}recommend|\beach with a recommended|recommended \w+ on each\b", re.I)
     for name in ("README.md", "docs/STEPS-REVIEW.md"):
         assert not claim.search((REPO / name).read_text()), name
 
