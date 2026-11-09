@@ -9,7 +9,7 @@
 // cover it points to the vendor-wide page ([pe]). So a line the guide has no text for falls back to the vendor-wide
 // pages ([pe], [jail]) and its comment says "vendor fallback". [fable5] is cited twice, as support only, and marked
 // "family guide" (it was measured on an earlier model). The Opus-only and Sonnet-only pages are never cited here, and
-// neither is the Claude Code page: the sentences the other engines quote from it are no longer on the live page.
+// neither is the Claude Code page: no Fable line needs it.
 //
 // Section order (same as engine-opus.js; plain uppercase headers, blank line between sections, empty sections omitted):
 //   THIRD-PARTY MATERIAL (only when the paste is long: [pe] "Place your long documents and inputs near the
