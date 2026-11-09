@@ -25,6 +25,7 @@ The four models need different prompts, and the engines follow each vendor's gui
   - Scope stays to what was asked: it tends to add tests, documentation and small supporting files on its own.
   - The prompt never asks it to write out its reasoning in the answer.
 - **Claude Fable 5.2** (Anthropic, *Prompting Claude Fable 5.2*):
+  - Also the target for Claude Mythos 5.2: the guide is written for both models, so a Mythos session opens on Fable.
   - Autonomy uses the guide's own "finishing work" text: Fable can end a turn before the work is done, more often at low
     and medium effort. The unattended mode adds the part that tells ordinary obstacles (errors, timeouts, failing
     tools: work through them) from deliberate blockers (a file marked not to be touched, withheld access: leave them

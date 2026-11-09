@@ -13,6 +13,8 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
   written for a reader who has not seen the tool calls. The prompt adds no "think less" line, no hard limit on length
   and no request to write out reasoning. The AI writer follows the same rules for this target. Every line and its source
   are in `docs/PROMPT-DOCS-REVIEW.md`, section 6.
+- A session that runs **Claude Mythos 5.2** now opens on the Fable target instead of Opus: Anthropic's Fable 5.2 guide
+  is written for both models.
 
 ### README art and screenshots
 

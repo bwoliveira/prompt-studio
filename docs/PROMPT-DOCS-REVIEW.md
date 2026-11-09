@@ -255,6 +255,10 @@ Fable 5 page is quoted twice, as support only, and the row says **family** (meas
 Sonnet pages are never cited for Fable lines. Neither is `cc-best-practices`: the three sentences the other engines quote
 from it are in the archived snapshot but no longer on the live page (checked 2026-11-09).
 
+Claude Mythos 5.2 uses this engine too: a session on a Mythos model opens on the Fable target. The guide is written for
+both models, *"Prompting patterns specific to Claude Fable 5.2 and Claude Mythos 5.2"* [fable52-prompting], and the
+what's-new page lists Mythos 5.2 with the *"Same capabilities as Claude Fable 5.2"* [fable52-whats-new].
+
 Read and not quoted: `fable52-whats-new` (its "Behavior differences" list repeats the prompting page), `fable52-overview`
 and `fable52-migration` (API changes: thinking blocks, tool versions, effort), and `fable51-prompting` (the Fable 5.2
 page replaces its guidance on effort, finishing and progress updates). No emitted line depends on them. The vendor-wide

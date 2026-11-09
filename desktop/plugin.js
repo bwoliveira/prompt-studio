@@ -2269,12 +2269,13 @@ const CORE_MESSAGES = {
 //                 pattern (null) is the fallback. `priority` orders the patterns (lowest first): a gateway name
 //                 such as 'openai/claude-sonnet-5-5' must reach Sonnet (and 'openai/claude-fable-5-2' Fable) before the
 //                 broader GPT pattern sees it.
+//                 Fable also takes the Mythos names: Anthropic's Fable 5.2 guide is written for both models.
 //   capabilities  designAvoid: the engine takes the design-avoid line (interface work)
 const TARGETS = [
   { id: 'opus', label: 'Opus', model: OPUS_ENGINE.model, key: 'Alt+O', pattern: null, priority: 0, engine: OPUS_ENGINE, capabilities: { designAvoid: true } },
   { id: 'astra', label: 'Astra', model: ASTRA_ENGINE.model, key: 'Alt+A', pattern: /gpt|openai|astra|codex|\bo[1-9]\b/i, priority: 2, engine: ASTRA_ENGINE, capabilities: { designAvoid: false } },
   { id: 'sonnet', label: 'Sonnet', model: SONNET_ENGINE.model, key: 'Alt+T', pattern: /sonnet/i, priority: 1, engine: SONNET_ENGINE, capabilities: { designAvoid: true } },
-  { id: 'fable', label: 'Fable', model: FABLE_ENGINE.model, key: 'Alt+F', pattern: /fable/i, priority: 1, engine: FABLE_ENGINE, capabilities: { designAvoid: true } }
+  { id: 'fable', label: 'Fable', model: FABLE_ENGINE.model, key: 'Alt+F', pattern: /fable|mythos/i, priority: 1, engine: FABLE_ENGINE, capabilities: { designAvoid: true } }
 ]
 const FALLBACK_TARGET = TARGETS.find(target => target.pattern === null)
 const targetOf = id => TARGETS.find(target => target.id === id)

@@ -73,7 +73,7 @@ close Hermes Desktop on the app machine. Every option, the Windows path and the 
 1. Write your request in the message field and press **F4**, or click **✨ Prompt Studio**, or run
    *Prompt Studio* from the command palette.
 2. Pick the model (**Opus**, **Astra**, **Sonnet** or **Fable**). The first choice follows the session's model: Fable
-   for a Fable, Sonnet for a Sonnet, Astra for an OpenAI model, Opus otherwise.
+   for a Fable or a Mythos, Sonnet for a Sonnet, Astra for an OpenAI model, Opus otherwise.
 3. Answer the steps. Depending on the request they cover what you want to receive, reference text to paste (and where
    it came from), context, rules that cannot be broken, how you will know it is done, interface patterns to avoid
    (Opus, Sonnet and Fable, code work), autonomy, subagents, an example of the result, format and length.

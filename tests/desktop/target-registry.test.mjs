@@ -59,6 +59,7 @@ test('default target: the registry patterns decide, the fallback target takes th
     'gpt-6-astra': 'astra', 'openai/gpt-5': 'astra', 'o3': 'astra', 'codex-mini': 'astra',
     'claude-sonnet-5-5': 'sonnet', 'anthropic/Claude Sonnet 5.5': 'sonnet', 'openai/claude-sonnet-5-5': 'sonnet',
     'claude-fable-5-2': 'fable', 'anthropic/Claude Fable 5.2': 'fable', 'openai/claude-fable-5-2': 'fable', 'openrouter/anthropic/claude-fable-5.2': 'fable',
+    'claude-mythos-5-2': 'fable', 'anthropic/Claude Mythos 5.2': 'fable', 'openai/claude-mythos-5-2': 'fable',
     'claude-opus-5-5': 'opus', 'claude-haiku-4': 'opus', 'gemini-3-pro': 'opus', 'deepseek-v4': 'opus', '': 'opus'
   }
   for (const [model, expected] of Object.entries(cases)) assert.equal(defaultTarget(model), expected, model)
