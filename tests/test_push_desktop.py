@@ -394,8 +394,16 @@ class PushDesktopTests(unittest.TestCase):
         """Runs Desktop's own reconcileUnifiedDesktopHalves against fixture homes (it writes only under them)."""
 
         def rescan(home: Path, app: Path) -> None:
+            # Desktop's sources import their siblings without a file extension (a bundler resolves them); plain node
+            # does not, so a resolve hook retries a relative import that was not found with ".ts" added
+            # (module.registerHooks, Node 22.15 or later; an older Node runs without the hook).
             js = (
-                f"import {{reconcileUnifiedDesktopHalves as r}} from {json.dumps(DESKTOP_ROOT_TS.as_uri())};"
+                "import * as nodeModule from 'node:module';"
+                "nodeModule.registerHooks?.({resolve(spec, context, next) {"
+                " try { return next(spec, context) } catch (error) {"
+                "  if (error?.code !== 'ERR_MODULE_NOT_FOUND' || !/^\\.{1,2}\\//.test(spec) || /\\.[cm]?[jt]sx?$/.test(spec)) throw error;"
+                "  return next(spec + '.ts', context) } } });"
+                f"const {{reconcileUnifiedDesktopHalves: r}} = await import({json.dumps(DESKTOP_ROOT_TS.as_uri())});"
                 "await r(process.argv[1], process.argv[2]);"
             )
             done = subprocess.run(
