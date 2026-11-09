@@ -8,11 +8,12 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { ENGINE as OPUS } from '../../desktop/src/engine-opus.js'
 import { ENGINE as SONNET } from '../../desktop/src/engine-sonnet.js'
 import { ENGINE as ASTRA } from '../../desktop/src/engine-astra.js'
+import { ENGINE as FABLE } from '../../desktop/src/engine-fable.js'
 
 const DIR = new URL('./fixtures/prompt-snapshots/', import.meta.url)
 const BRIEF = JSON.parse(readFileSync(new URL('brief.json', DIR), 'utf8'))
 
-for (const [name, engine] of [['opus', OPUS], ['sonnet', SONNET], ['astra', ASTRA]]) {
+for (const [name, engine] of [['opus', OPUS], ['sonnet', SONNET], ['astra', ASTRA], ['fable', FABLE]]) {
   test(`prompt snapshot: ${name} for the fixed brief`, () => {
     const file = new URL(`${name}.txt`, DIR)
     const { prompt } = engine.build(BRIEF)

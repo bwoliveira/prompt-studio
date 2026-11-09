@@ -28,7 +28,7 @@ adaptation follows the chosen provider. The `model` label in every response is t
 ## POST /suggest
 ```json
 {
-  "target": "opus|astra|sonnet",
+  "target": "opus|astra|sonnet|fable",
   "intent": "the user's draft (required)",
   "ladder": [ { "question": "string", "answer": "string", "category": "field id|null" } ],
   "mode": "suggest|improve (default suggest)",
@@ -61,7 +61,7 @@ cannot pose as a new section.
 ## POST /compose
 ```json
 {
-  "target": "opus|astra|sonnet",
+  "target": "opus|astra|sonnet|fable",
   "intent": "the user's draft (required)",
   "answers": [ { "id": "field id", "kind": "enum|text|design|example", "question": "…", "answer": "…", "isDefault": true } ],
   "baseline": "the engine's prompt for the same answers",

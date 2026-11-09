@@ -57,7 +57,7 @@ MIN_PROMPT_CHARS = 20  # shorter compose output is treated as a failure
 # The prompt itself always follows the language of the user's draft.
 LOCALE_LANGUAGES = {"en": "English", "pt": "Brazilian Portuguese"}
 DEFAULT_LOCALE = "en"
-TARGET_NAMES = {"opus": "Claude Opus 5.5", "astra": "GPT-6 Astra", "sonnet": "Claude Sonnet 5.5"}
+TARGET_NAMES = {"opus": "Claude Opus 5.5", "astra": "GPT-6 Astra", "sonnet": "Claude Sonnet 5.5", "fable": "Claude Fable 5.2"}
 
 SUGGEST_SYSTEM = (
     "You help a user fill one field of a prompt-builder form. "
@@ -346,7 +346,7 @@ THIRD_PARTY_PREVIEW = 1500
 THIRD_PARTY_MARKER = "[[THIRD_PARTY_BLOCK]]"
 # The Studio's tagged block: header, then Opus's <pasted_content id="…"> (optionally after a
 # "Source, as described by the user:" line) or Astra's <document> with optional <source>, then
-# its handling lines up to the next blank line. Sonnet uses one of these two shapes.
+# its handling lines up to the next blank line. Sonnet and Fable use one of these two shapes.
 _THIRD_PARTY_RE = re.compile(
     r'THIRD-PARTY MATERIAL\n(?:'
     r'<document>\n.*?\n</document>'
@@ -533,8 +533,27 @@ COMPOSE_TARGET_RULES = {
         # remove those instructions, because they invite reasoning_extraction declines."
         "- Do not ask the model to write out or include its reasoning in the response."
     ),
+    "fable": (
+        "- Keep any BASELINE lines about finishing the work, keeping changes to what was asked, the cost of subagents, progress updates, the final report and the autonomy wording: they come from Anthropic's official Claude Fable 5.2 prompting guidance.\n"
+        # Prompting Claude Fable 5.2: "Claude Fable 5.2 sometimes ends a turn before the work is done." /
+        # "name the exact actions they cover, because the model applies them as written" / "Write the exception into the rule."
+        "- Claude Fable 5.2 can end a turn before the work is done, and it applies approval rules exactly as written: do not add \"ask first\", \"confirm the plan\" or approval steps the user did not ask for; when the user did ask for one, name the exact actions it covers and write any exception into the same rule.\n"
+        # Prompting Claude Fable 5.2: "Cautious instructions build up wherever context carries over" and the model
+        # "follows these instructions closely"; "a hard limit ... can make its prose choppy".
+        "- Claude Fable 5.2 follows cautions and style rules closely: do not add general cautions, \"never\" rules or hard limits on sentence or word counts that the user did not ask for.\n"
+        # Prompting Claude Fable 5.2: "an instruction to answer directly without deliberating didn't stop the model
+        # from thinking at `medium` and above"; effort is a Hermes session setting.
+        "- Do not add lines that ask the model to think less, answer without deliberating or use a given effort level: they have no effect on this model.\n"
+        # Prompting Claude Fable 5.2: "When the prompt says the code base is the model's own, the model often merges
+        # repeated code and makes related fixes without being asked." / "Leave the ownership sentence out where the
+        # user owns the code and wants it changed as little as possible."
+        "- Do not say that the code or project is the model's own unless the user's answers say so.\n"
+        # Prompting Claude Fable 5.2: "If your prompts, skills, or tool descriptions ask the model to write its
+        # reasoning in the response, remove those instructions."
+        "- Do not ask the model to write out or include its reasoning in the response."
+    ),
 }
-# All three targets: the SUBAGENTS section is either the user's explicit team/direct choice or the default
+# All four targets: the SUBAGENTS section is either the user's explicit team/direct choice or the default
 # delegation rule (one conditional line, no split or reviewer lines); keep exactly what the BASELINE has.
 COMPOSE_SUBAGENT_RULE = (
     "- If the BASELINE has a SUBAGENTS section, keep it as its own section with every line it has, word for word, "

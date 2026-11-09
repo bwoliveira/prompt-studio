@@ -4,6 +4,16 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
 
 ## Unreleased
 
+### Claude Fable 5.2
+
+- New target: **Claude Fable 5.2** (**Fable**, Alt+F), with its own prompt engine written from Anthropic's *Prompting
+  Claude Fable 5.2*. A session that runs a Fable model opens on it. The autonomy lines use the guide's "finishing work"
+  text; the unattended mode tells ordinary obstacles (work through them) from deliberate blockers (leave them alone and
+  report). The default subagent line puts cost first. Hands-on work gets a short progress update and a final report
+  written for a reader who has not seen the tool calls. The prompt adds no "think less" line, no hard limit on length
+  and no request to write out reasoning. The AI writer follows the same rules for this target. Every line and its source
+  are in `docs/PROMPT-DOCS-REVIEW.md`, section 6.
+
 ### Regression protection
 
 - Tests: an adversarial battery covers model/settings changes, large or malformed contexts, cancellation and provider

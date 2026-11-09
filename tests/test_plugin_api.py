@@ -104,6 +104,8 @@ def test_compose_route(monkeypatch):
     assert api.post("/compose", json={"intent": " "}).status_code == 400
     r = api.post("/compose", json={"target": "sonnet", "intent": "Crie um app", "answers": [], "baseline": "B"})
     assert r.status_code == 200 and fake.calls[-1]["target"] == "sonnet"
+    r = api.post("/compose", json={"target": "fable", "intent": "Crie um app", "answers": [], "baseline": "B"})
+    assert r.status_code == 200 and fake.calls[-1]["target"] == "fable"
 
 
 def test_routes_pass_every_field_the_desktop_sends(monkeypatch):

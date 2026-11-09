@@ -229,7 +229,7 @@ test('regex or division: topLevelNames and findCollisions read the same contexts
 })
 
 test('stripExports: on the repository sources it agrees with plain line-by-line removal of the export keyword (#52)', async () => {
-  const files = ['detection-core.js', 'engine-opus.js', 'engine-sonnet.js', 'engine-astra.js', 'i18n-core.js', 'i18n-ui.js', 'studio-core.js']
+  const files = ['detection-core.js', 'engine-opus.js', 'engine-sonnet.js', 'engine-astra.js', 'engine-fable.js', 'i18n-core.js', 'i18n-ui.js', 'studio-core.js']
   for (const file of files) {
     const source = stripImports(await readFile(join(repo, 'desktop/src', file), 'utf8'))
     const lineByLine = source

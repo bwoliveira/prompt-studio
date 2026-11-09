@@ -7,11 +7,12 @@ import * as core from '../../desktop/studio-core.mjs'
 import { ENGINE as OPUS } from '../../desktop/src/engine-opus.js'
 import { ENGINE as ASTRA } from '../../desktop/src/engine-astra.js'
 import { ENGINE as SONNET } from '../../desktop/src/engine-sonnet.js'
+import { ENGINE as FABLE } from '../../desktop/src/engine-fable.js'
 import { CORE_MESSAGES } from '../../desktop/src/i18n-core.js'
 import { UI_MESSAGES } from '../../desktop/src/i18n-ui.js'
 
 const { SKIPPED, TARGETS, answerLabel, answerToValue, briefFromLadder, defaultTarget, fieldForTarget, nextQuestion, questionFor, stepCount, studioAnswers, studioPrompt, studioWarnings } = core
-const ENGINES = { opus: OPUS, astra: ASTRA, sonnet: SONNET }
+const ENGINES = { opus: OPUS, astra: ASTRA, sonnet: SONNET, fable: FABLE }
 const repo = fileURLToPath(new URL('../../', import.meta.url))
 const CODE = 'Crie um dashboard web em React para acompanhar gastos mensais da casa'
 const WRITE = 'Escreva um e-mail para o cliente explicando o atraso na entrega'
@@ -32,10 +33,12 @@ function walk(target, intent, locale = 'en', answer = q => q.recommended || SKIP
 const keys = (obj, prefix = '') => Object.entries(obj).flatMap(([k, v]) => (v && typeof v === 'object' ? keys(v, `${prefix}${k}.`) : [`${prefix}${k}`])).sort()
 
 test('targets, default target, SKIPPED', () => {
-  assert.deepEqual(TARGETS.map(t => t.id), ['opus', 'astra', 'sonnet'])
+  assert.deepEqual(TARGETS.map(t => t.id), ['opus', 'astra', 'sonnet', 'fable'])
   assert.equal(defaultTarget('gpt-6-astra'), 'astra')
   assert.equal(defaultTarget('claude-sonnet-5-5'), 'sonnet')
   assert.equal(defaultTarget('anthropic/Claude Sonnet 5.5'), 'sonnet')
+  assert.equal(defaultTarget('claude-fable-5-2'), 'fable')
+  assert.equal(defaultTarget('anthropic/Claude Fable 5.2'), 'fable')
   assert.equal(defaultTarget('claude-opus-5-5'), 'opus')
   assert.equal(SKIPPED, '(skipped)')
 })
@@ -82,6 +85,37 @@ test('sonnet target: TARGETS entry, step walk, per-target help and prompt', () =
   assert.equal(studioAnswers('sonnet', CODE, walk('sonnet', CODE).ladder, 'en').length > 0, true)
 })
 
+test('fable target: TARGETS entry, default-target rule, step walk, per-target help and prompt', () => {
+  const fable = TARGETS.find(t => t.id === 'fable')
+  assert.deepEqual([fable.label, fable.model, fable.key], ['Fable', 'Claude Fable 5.2', 'Alt+F'])
+  // TARGETS comes from the generated studio-core.mjs, which inlines the engine: same engine, another object.
+  assert.deepEqual([fable.engine.id, fable.engine.model], [FABLE.id, FABLE.model])
+  assert.equal(fable.engine.build({ goal: CODE }).prompt, FABLE.build({ goal: CODE }).prompt, 'the generated core carries the engine of desktop/src')
+  // A gateway name must reach Fable before Astra's broad pattern sees "openai".
+  for (const model of ['claude-fable-5-2', 'anthropic/claude-fable-5-2', 'openai/claude-fable-5-2', 'Claude Fable 5.2', 'claude-fable-5-2-fast']) assert.equal(defaultTarget(model), 'fable', model)
+  assert.equal(defaultTarget('claude-mythos-5-2'), 'opus', 'a model no pattern names keeps the fallback target')
+  const pasted = q => (q.paste ? 'Some pasted mail' : q.recommended || SKIPPED)
+  const { order } = walk('fable', CODE, 'en', pasted)
+  assert.deepEqual(order, walk('opus', CODE, 'en', pasted).order, 'the same steps as the other Claude targets')
+  assert.ok(order.includes('designAvoid') && fieldForTarget('designAvoid', 'fable'), 'design step follows the engine')
+  const { ladder, order: vague } = walk('fable', VAGUE)
+  assert.equal(vague[0], 'deliverable')
+  assert.equal(stepCount('fable', VAGUE, ladder), vague.length)
+  assert.equal(questionFor('fable', CODE, [], 'autonomy', 'en').question, 'How much autonomy should Fable have?')
+  assert.equal(questionFor('fable', CODE, [], 'autonomy', 'pt').question, 'Quanta autonomia o Fable deve ter?')
+  assert.match(questionFor('fable', CODE, [], 'autonomy', 'en').help, /Fable can end a turn before the work is done/)
+  assert.match(questionFor('fable', CODE, [], 'autonomy', 'pt').help, /O Fable pode encerrar o turno/)
+  assert.match(questionFor('fable', CODE, [], 'autonomy', 'en').guide, /Claude Fable 5\.2/)
+  assert.match(questionFor('fable', CODE, [], 'autonomy', 'pt').guide, /"Esclarecer primeiro"/)
+  for (const other of ['opus', 'astra', 'sonnet']) assert.doesNotMatch(questionFor(other, CODE, [], 'autonomy', 'en').help, /Fable/, other)
+  assert.deepEqual(questionFor('fable', CODE, [], 'autonomy', 'en').options, questionFor('opus', CODE, [], 'autonomy', 'en').options, 'the same autonomy modes as Opus, unattended included')
+  // With the AI off the Studio prompt is the engine's own prompt for the same answers.
+  const built = studioPrompt('fable', CODE, walk('fable', CODE).ladder)
+  assert.ok(built.prompt.startsWith('TASK\n') && built.prompt.includes('\n\nAUTONOMY\nPlease avoid stopping while you still owe work the user asked for.'), built.prompt)
+  assert.notEqual(built.prompt, studioPrompt('opus', CODE, walk('opus', CODE).ladder).prompt)
+  assert.equal(studioAnswers('fable', CODE, walk('fable', CODE).ladder, 'en').length > 0, true)
+})
+
 test('question object shape, locale text and detected deliverable', () => {
   const q = nextQuestion('opus', VAGUE, [], 'en')
   assert.equal(q.category, 'deliverable')
@@ -104,7 +138,7 @@ test('question object shape, locale text and detected deliverable', () => {
 
 test('an enum step with no real choice is skipped; the deliverable step is always asked', () => {
   // The deliverable is asked even when the draft names it, so a wrong guess can be corrected (#23).
-  for (const target of ['opus', 'astra', 'sonnet']) {
+  for (const target of ['opus', 'astra', 'sonnet', 'fable']) {
     assert.equal(walk(target, WRITE).order[0], 'deliverable', target)
     assert.equal(walk(target, CODE).order[0], 'deliverable', target)
   }
@@ -119,7 +153,7 @@ const CRON = 'Como funciona o cron do Linux?'
 const PLAN = 'Create a plan for the product launch'
 
 test('deliverable step lists every deliverable for every target, even for a misread draft', () => {
-  for (const target of ['opus', 'astra', 'sonnet']) {
+  for (const target of ['opus', 'astra', 'sonnet', 'fable']) {
     for (const intent of [CRON, PLAN, CODE, WRITE, VAGUE]) {
       for (const locale of ['en', 'pt']) {
         const q = nextQuestion(target, intent, [], locale)
@@ -136,7 +170,7 @@ test('deliverable step lists every deliverable for every target, even for a misr
 
 test('picking a deliverable that contradicts the draft keeps the choice and notes the conflict', () => {
   // Whatever deliverable each engine detects, picking another one that conflicts with the draft must reach the prompt.
-  for (const target of ['opus', 'astra', 'sonnet']) {
+  for (const target of ['opus', 'astra', 'sonnet', 'fable']) {
     const engine = ENGINES[target]
     for (const intent of [CRON, PLAN]) {
       const detectedValue = engine.analyze({ goal: intent }).deliverable
@@ -156,7 +190,7 @@ test('picking a deliverable that contradicts the draft keeps the choice and note
 })
 
 test('studioWarnings: a conflicting answer gives one warning in the asked locale, with the option and question labels', () => {
-  for (const target of ['opus', 'astra', 'sonnet']) {
+  for (const target of ['opus', 'astra', 'sonnet', 'fable']) {
     const engine = ENGINES[target]
     const detectedValue = engine.analyze({ goal: PLAN }).deliverable
     const picked = engine.options.deliverable.find(value => value !== detectedValue && (engine.analyze({ goal: PLAN, deliverable: value }).conflicts.deliverable || []).includes(value))
@@ -237,7 +271,7 @@ test('studioPrompt is exactly ENGINE.build(brief), both targets', () => {
 
 test('studioAnswers: an answer whose step no longer applies to the final brief is not sent to the AI writer (Codex P2)', () => {
   const goal = 'Create a React app to manage product launches'
-  for (const target of ['opus', 'sonnet']) {
+  for (const target of ['opus', 'sonnet', 'fable']) {
     const design = { category: 'designAvoid', answer: 'purple gradients' }
     const built = studioAnswers(target, goal, [{ category: 'deliverable', answer: 'Working implementation' }, design])
     assert.ok(built.some(a => a.id === 'designAvoid' && a.answer === 'purple gradients'), `${target}: kept while the app is built`)
@@ -275,7 +309,7 @@ test('core i18n: en and pt have identical keys; core and UI bundles never clobbe
     const clash = Object.keys(CORE_MESSAGES[locale]).filter(k => k in UI_MESSAGES[locale])
     assert.deepEqual(clash, [], `top-level keys shared by core and UI (${locale})`)
   }
-  for (const engine of [OPUS, ASTRA, SONNET]) {
+  for (const engine of [OPUS, ASTRA, SONNET, FABLE]) {
     for (const [field, values] of Object.entries(engine.options)) {
       for (const locale of ['en', 'pt']) for (const v of values) assert.ok(CORE_MESSAGES[locale].core.fields[field].options[v], `${locale} ${field}.${v}`)
     }
@@ -304,7 +338,7 @@ test('UI i18n: errors.<code> has a text, in en and pt, for every code CONTRACT.m
 
 test('studio-core.js imports only the engines and its i18n bundle', async () => {
   const src = await readFile(new URL('../../desktop/src/studio-core.js', import.meta.url), 'utf8')
-  assert.deepEqual([...src.matchAll(/from '([^']+)'/g)].map(m => m[1]).sort(), ['./engine-astra.js', './engine-opus.js', './engine-sonnet.js', './i18n-core.js'])
+  assert.deepEqual([...src.matchAll(/from '([^']+)'/g)].map(m => m[1]).sort(), ['./engine-astra.js', './engine-fable.js', './engine-opus.js', './engine-sonnet.js', './i18n-core.js'])
 })
 
 test('build drift check: plugin.js and studio-core.mjs match desktop/src (A3/C12)', () => {
@@ -343,7 +377,7 @@ test('OP-3: designAvoid step not asked for an interface bugfix, asked for new in
 
 test('the design step follows the chosen deliverable: not asked for an answer or plan about an app (Codex P2)', () => {
   const goal = 'Create a React app to manage product launches'
-  for (const target of ['opus', 'sonnet']) {
+  for (const target of ['opus', 'sonnet', 'fable']) {
     const ids = value => {
       const seen = []
       walk(target, goal, 'en', q => { seen.push(q.category); return q.category === 'deliverable' ? CORE_MESSAGES.en.core.fields.deliverable.options[value] : (q.recommended || SKIPPED) })

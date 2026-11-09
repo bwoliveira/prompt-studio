@@ -1,13 +1,14 @@
-// Ticket #24: the three engines classify the same drafts the same way. The table mixes positive drafts,
+// Ticket #24: the engines classify the same drafts the same way. The table mixes positive drafts,
 // negative ones (no verb, a question) and near misses (a word that looks like a signal but is not one).
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { ENGINE as OPUS } from '../../desktop/src/engine-opus.js'
 import { ENGINE as SONNET } from '../../desktop/src/engine-sonnet.js'
 import { ENGINE as ASTRA } from '../../desktop/src/engine-astra.js'
+import { ENGINE as FABLE } from '../../desktop/src/engine-fable.js'
 import { nextQuestion } from '../../desktop/studio-core.mjs'
 
-const ENGINES = { opus: OPUS, sonnet: SONNET, astra: ASTRA }
+const ENGINES = { opus: OPUS, sonnet: SONNET, astra: ASTRA, fable: FABLE }
 
 // [draft, expected deliverable, why]
 const TABLE = [
@@ -1044,7 +1045,7 @@ const TABLE = [
 for (const [draft, expected, why] of TABLE) {
   test(`draft recognition: "${draft}" is ${expected} (${why})`, () => {
     const got = Object.fromEntries(Object.entries(ENGINES).map(([id, engine]) => [id, engine.analyze({ goal: draft }).deliverable]))
-    assert.deepEqual(got, { opus: expected, sonnet: expected, astra: expected })
+    assert.deepEqual(got, { opus: expected, sonnet: expected, astra: expected, fable: expected })
   })
 }
 
@@ -1124,7 +1125,7 @@ test('draft recognition: a requested text with an explanatory clause stays text 
     ['I need a blog post. Then configure nginx.', 'workflow'],
   ]
   for (const [goal, expected] of cases) {
-    for (const id of ['opus', 'sonnet']) assert.equal(ENGINES[id].analyze({ goal }).deliverable, expected, `${id}: ${goal}`)
+    for (const id of ['opus', 'sonnet', 'fable']) assert.equal(ENGINES[id].analyze({ goal }).deliverable, expected, `${id}: ${goal}`)
   }
 })
 
@@ -1148,7 +1149,7 @@ test('draft recognition: Astra build keeps the CRLF-free goal', () => {
 
 test('marketing copy is text: the Studio asks for examples, not design patterns, on every target', () => {
   for (const draft of ['Write the copy for the landing page', 'Redija a descrição do app']) {
-    for (const target of ['opus', 'sonnet', 'astra']) {
+    for (const target of ['opus', 'sonnet', 'astra', 'fable']) {
       const asked = []
       const ladder = []
       for (let i = 0; i < 30; i++) {
@@ -1161,7 +1162,7 @@ test('marketing copy is text: the Studio asks for examples, not design patterns,
       assert.ok(!asked.includes('designAvoid'), `${target}: ${draft} asks no design patterns`)
     }
   }
-  for (const [id, engine] of Object.entries({ opus: OPUS, sonnet: SONNET })) {
+  for (const [id, engine] of Object.entries({ opus: OPUS, sonnet: SONNET, fable: FABLE })) {
     assert.equal(engine.analyze({ goal: 'Write the copy for the landing page' }).interface, false, id)
     assert.equal(engine.analyze({ goal: 'Build a landing page for my bakery' }).interface, true, id)
   }

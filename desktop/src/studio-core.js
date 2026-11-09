@@ -3,6 +3,7 @@
 import { ENGINE as OPUS_ENGINE } from './engine-opus.js'
 import { ENGINE as ASTRA_ENGINE } from './engine-astra.js'
 import { ENGINE as SONNET_ENGINE } from './engine-sonnet.js'
+import { ENGINE as FABLE_ENGINE } from './engine-fable.js'
 import { CORE_MESSAGES } from './i18n-core.js'
 
 // The target registry: one entry per target model. The core, the UI target switch, the default-target rule, the
@@ -11,12 +12,14 @@ import { CORE_MESSAGES } from './i18n-core.js'
 //   key           the Alt chord that selects the target in the UI
 //   pattern       default-target rule: a session model name matching it picks this target; the target without a
 //                 pattern (null) is the fallback. `priority` orders the patterns (lowest first): a gateway name
-//                 such as 'openai/claude-sonnet-5-5' must reach Sonnet before the broader GPT pattern sees it.
+//                 such as 'openai/claude-sonnet-5-5' must reach Sonnet (and 'openai/claude-fable-5-2' Fable) before the
+//                 broader GPT pattern sees it.
 //   capabilities  designAvoid: the engine takes the design-avoid line (interface work)
 export const TARGETS = [
   { id: 'opus', label: 'Opus', model: OPUS_ENGINE.model, key: 'Alt+O', pattern: null, priority: 0, engine: OPUS_ENGINE, capabilities: { designAvoid: true } },
   { id: 'astra', label: 'Astra', model: ASTRA_ENGINE.model, key: 'Alt+A', pattern: /gpt|openai|astra|codex|\bo[1-9]\b/i, priority: 2, engine: ASTRA_ENGINE, capabilities: { designAvoid: false } },
-  { id: 'sonnet', label: 'Sonnet', model: SONNET_ENGINE.model, key: 'Alt+T', pattern: /sonnet/i, priority: 1, engine: SONNET_ENGINE, capabilities: { designAvoid: true } }
+  { id: 'sonnet', label: 'Sonnet', model: SONNET_ENGINE.model, key: 'Alt+T', pattern: /sonnet/i, priority: 1, engine: SONNET_ENGINE, capabilities: { designAvoid: true } },
+  { id: 'fable', label: 'Fable', model: FABLE_ENGINE.model, key: 'Alt+F', pattern: /fable/i, priority: 1, engine: FABLE_ENGINE, capabilities: { designAvoid: true } }
 ]
 const FALLBACK_TARGET = TARGETS.find(target => target.pattern === null)
 const targetOf = id => TARGETS.find(target => target.id === id)
@@ -146,7 +149,7 @@ function acceptedValues(step, target, intent, ladder) {
   })
 }
 
-// Subagent recommendation: every engine owns it (Opus, Sonnet and Astra: 'auto').
+// Subagent recommendation: every engine owns it (Opus, Sonnet, Fable and Astra: 'auto').
 function recommendSubagents(target, brief) {
   return engineOf(target).recommend(brief)
 }
