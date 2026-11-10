@@ -11,10 +11,10 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
 - New target: **Claude Fable 5.2** (**Fable**, Alt+F), with its own prompt engine written from Anthropic's *Prompting
   Claude Fable 5.2*. A session that runs a Fable model opens on it. The autonomy lines use the guide's "finishing work"
   text; the unattended mode tells ordinary obstacles (work through them) from deliberate blockers (leave them alone and
-  report). The default subagent line puts cost first. Hands-on work gets a short progress update and a final report
-  written for a reader who has not seen the tool calls. The prompt adds no "think less" line, no hard limit on length
-  and no request to write out reasoning. The AI writer follows the same rules for this target. Every line and its source
-  are in `docs/PROMPT-DOCS-REVIEW.md`, section 6.
+  report). The default subagent line puts cost first. Hands-on work gets a final report written for a reader who has
+  not seen the tool calls and, unless it runs unattended, a short progress update; a JSON answer gets neither. The
+  prompt adds no "think less" line, no hard limit on length and no request to write out reasoning. The AI writer
+  follows the same rules for this target. Every line and its source are in `docs/PROMPT-DOCS-REVIEW.md`, section 6.
 - A session that runs **Claude Mythos 5.2** now opens on the Fable target instead of Opus: Anthropic's Fable 5.2 guide
   is written for both models.
 
@@ -59,8 +59,8 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
 - Fix: suggestions and generated prompts arriving behind an open menu or Settings no longer steal keyboard focus.
   Closing Settings restores lost focus without replacing a target already restored by Hermes.
 - Fix: composition preserves protected pasted blocks in large baselines, including the REST limit of 250,000
-  characters, without sending those blocks to the model. Direct context reads reject malformed session/profile IDs
-  before opening the session store, matching the REST validation.
+  characters, without sending those blocks to the model. A direct context read rejects a session or profile ID that
+  ends in a newline before opening the session store, as the REST route already did.
 - Fix: malformed non-string text suggestions are rejected instead of becoming a successful empty answer. Literal
   `<think>`, `<thinking>` and `<reasoning>` tags inside valid JSON strings are preserved; external reasoning is not
   treated as the answer. JSON-aware text is not cleaned a second time by the host's destructive extractor; the
