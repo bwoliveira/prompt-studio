@@ -199,7 +199,8 @@ signature it is about to use, so a Hermes update fails in one place with a stabl
 | What the plugin relies on | Checked |
 |---|---|
 | `agent.auxiliary_client.call_llm` takes `task`, `messages`, `max_tokens`, `timeout`, `route_info`, `extra_body`, `reasoning_config` (and `provider`, `model` for a chosen model), with no other required argument; no sampling parameter is ever sent | before each call |
-| `_resolve_task_provider_model(task)` returns a tuple of 5; `_get_auxiliary_task_config(task)` returns a dict; `extract_content_or_reasoning(response)`, `_is_model_not_found_error(exc)` | before each call |
+| `_resolve_task_provider_model(task)` returns a tuple of 5; `_get_auxiliary_task_config(task)` returns a dict; `extract_content_or_reasoning(response)` | before each call |
+| the "model not found" check: `_is_model_not_found_error(exc)` while Hermes has it (up to 0.23.0), otherwise `agent.error_classifier.classify_api_error(exc)` with a verdict whose `reason` is `FailoverReason.model_not_found` | before each call |
 | `hermes_constants.parse_reasoning_effort(effort)` | before each call |
 | `agent.redact.redact_sensitive_text(text, force=True)` | before each call |
 | `hermes_cli.web_server_sessions._open_session_db_for_profile(profile, read_only=True)` (else `hermes_state.SessionDB(read_only=True)` for the default profile) and the store methods `resolve_session_id`, `resolve_resume_session_id` (optional), `get_messages(session_id, limit=, latest=)`, `close()` (no argument) | when a store is opened |

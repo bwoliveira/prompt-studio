@@ -81,6 +81,11 @@ def test_the_model_not_found_check_accepts_an_exception():
     assert host.is_model_not_found_error(RuntimeError("boom")) in (True, False)
 
 
+def test_the_model_not_found_check_tells_an_unknown_model_from_another_error():
+    assert host.is_model_not_found_error(RuntimeError("model not found: no-such-model-1")) is True
+    assert host.is_model_not_found_error(RuntimeError("connection reset by peer")) is False
+
+
 def test_reasoning_effort_parses_the_efforts_the_plugin_sends():
     assert host.parse_reasoning_effort("none") is None or isinstance(host.parse_reasoning_effort("none"), dict)
     for effort in ("minimal", "low", "medium", "high", "xhigh"):

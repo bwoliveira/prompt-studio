@@ -5,6 +5,7 @@ real install.
 """
 from __future__ import annotations
 
+import enum
 import json
 import sys
 import types
@@ -89,9 +90,9 @@ def _fake_hermes(monkeypatch, **overrides):
     for key, value in overrides.items():
         module_name, name = key.rsplit(".", 1)
         if value is None:
-            attrs[module_name].pop(name, None)
+            attrs.setdefault(module_name, {}).pop(name, None)
         else:
-            attrs[module_name][name] = value
+            attrs.setdefault(module_name, {})[name] = value
     _install_modules(monkeypatch, attrs)
     return store_calls
 
@@ -546,3 +547,84 @@ def test_a_provider_error_with_a_changed_classifier_still_gets_the_fixed_text_th
     field = {"id": "a", "kind": "enum", "question": "Q?", "options": ["Yes", "No"]}
     out = se.suggest({"target": "opus", "intent": "Build a thing", "field": field}, llm=llm)
     assert out["code"] == "host_incompatible" and out["error"] == adapter.HOST_INCOMPATIBLE_ERROR
+
+
+# --- Hermes after 0.23.0: the not-found helper is gone, the auxiliary client reads the error classifier's verdict ----
+class _Reason(enum.Enum):
+    model_not_found = "model_not_found"
+    unknown = "unknown"
+
+
+def _classify_api_error(error, *, provider="", model=""):
+    return types.SimpleNamespace(reason=_Reason.model_not_found if "nf" in str(error) else _Reason.unknown)
+
+
+def _newer_hermes(**members) -> dict:
+    """Overrides for a Hermes that has ``agent.error_classifier`` and no ``_is_model_not_found_error``."""
+    return {"agent.auxiliary_client._is_model_not_found_error": None,
+            "agent.error_classifier.classify_api_error": _classify_api_error,
+            "agent.error_classifier.FailoverReason": _Reason, **members}
+
+
+def test_a_hermes_without_the_old_not_found_helper_passes_the_check_and_reads_the_error_classifier(monkeypatch):
+    _fake_hermes(monkeypatch, **_newer_hermes())
+    assert host.verify()["auxiliary_client"] == "ok"
+    adapter.check_host()
+    assert host.is_model_not_found_error(RuntimeError("nf: no such model")) is True
+    assert host.is_model_not_found_error(RuntimeError("provider down")) is False
+    assert adapter.provider_error_code(RuntimeError("nf: no such model")) == "model_not_found"
+    assert adapter.provider_error_code(RuntimeError("provider down")) == "unavailable"
+
+
+def test_a_suggestion_reaches_the_provider_on_a_hermes_without_the_old_not_found_helper(monkeypatch):
+    calls = []
+
+    def call_llm(**kwargs):
+        calls.append(kwargs)
+        raise RuntimeError("nf: no such model")
+
+    _fake_hermes(monkeypatch, **_newer_hermes(**_override("agent.auxiliary_client", "call_llm", call_llm)))
+    se = _engine()
+    field = {"id": "a", "kind": "enum", "question": "Q?", "options": ["Yes", "No"]}
+    out = se.suggest({"target": "opus", "intent": "Build a thing", "field": field})
+    assert calls, "the provider was never called: the host check refused this Hermes"
+    assert out["ok"] is False and out["code"] == "model_not_found"
+
+
+def test_the_old_not_found_helper_is_the_one_used_while_hermes_has_it(monkeypatch):
+    def classify_api_error(error):
+        raise AssertionError("the error classifier is not consulted while the helper exists")
+
+    _fake_hermes(monkeypatch, **{"agent.error_classifier.classify_api_error": classify_api_error,
+                                 "agent.error_classifier.FailoverReason": _Reason})
+    assert host.is_model_not_found_error(Exception("nf")) is True
+    assert host.is_model_not_found_error(Exception("other")) is False
+
+
+def test_a_hermes_with_neither_not_found_check_is_host_incompatible_before_the_provider_is_called(monkeypatch):
+    calls = []
+
+    def call_llm(**kwargs):
+        calls.append(kwargs)
+        raise RuntimeError("provider down")
+
+    _fake_hermes(monkeypatch, **_override("agent.auxiliary_client", "call_llm", call_llm),
+                 **_override("agent.auxiliary_client", "_is_model_not_found_error", None))
+    with pytest.raises(host.HostIncompatible, match=r"_is_model_not_found_error is missing.*agent\.error_classifier"):
+        adapter._default_llm(messages=[], max_tokens=10, timeout=5)
+    assert calls == []
+
+
+def test_an_error_classifier_that_no_longer_takes_one_exception_is_host_incompatible(monkeypatch):
+    _fake_hermes(monkeypatch, **_newer_hermes(**{"agent.error_classifier.classify_api_error": lambda error, route: None}))
+    with pytest.raises(host.HostIncompatible, match="classify_api_error"):
+        host.verify()
+
+
+def test_an_error_classifier_without_the_model_not_found_reason_is_host_incompatible(monkeypatch):
+    class Reasons(enum.Enum):
+        unknown = "unknown"
+
+    _fake_hermes(monkeypatch, **_newer_hermes(**{"agent.error_classifier.FailoverReason": Reasons}))
+    with pytest.raises(host.HostIncompatible, match="FailoverReason.model_not_found"):
+        host.verify()
