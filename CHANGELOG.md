@@ -4,6 +4,13 @@ Versions come from the commit subjects. Only 1.6.0 and later have git tags (`v1.
 
 ## Unreleased
 
+### Hermes builds after 0.23.0
+
+- Fix: AI suggestions, the AI-written prompt and the session summary work again on Hermes builds later than 0.23.0.
+  Those builds removed an internal helper the plugin asked for before every model call, so each call ended with
+  "Hermes changed in a way this Prompt Studio version does not support" and the Studio showed that it could not use
+  the AI. The plugin now uses Hermes' error classifier on those builds; on Hermes 0.23.0 and earlier nothing changes.
+
 ### Claude Fable 5.2
 
 - New target: **Claude Fable 5.2** (**Fable**, Alt+F), with its own prompt engine written from Anthropic's *Prompting

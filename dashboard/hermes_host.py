@@ -24,6 +24,7 @@ from typing import Any
 CODE = "host_incompatible"
 
 _AUX = "agent.auxiliary_client"
+_CLASSIFIER = "agent.error_classifier"
 _REDACT = "agent.redact"
 _CONSTANTS = "hermes_constants"
 _SESSIONS = "hermes_cli.web_server_sessions"
@@ -116,7 +117,7 @@ def check_after_call_helpers() -> None:
     classifier) are there and take that call. Asked before the call: a changed one must not be found after the
     provider has already been paid, so ``host_incompatible`` always means no provider call."""
     _check_call(_symbol(_AUX, "extract_content_or_reasoning"), f"{_AUX}.extract_content_or_reasoning", None)
-    _check_call(_symbol(_AUX, "_is_model_not_found_error"), f"{_AUX}._is_model_not_found_error", Exception())
+    _not_found_check()
 
 
 def auxiliary_task_config(task: str) -> dict[str, Any]:
@@ -139,10 +140,31 @@ def resolve_route(task: str) -> tuple:
     return route
 
 
+def _not_found_check() -> Any:
+    """Hermes' own "the provider does not know this model" check, as ``exc -> bool``.
+
+    Hermes up to 0.23.0 has ``auxiliary_client._is_model_not_found_error``. Later builds removed it: the auxiliary
+    client reads the verdict of ``error_classifier.classify_api_error`` instead, and so does this. A helper that is
+    there but takes another call is a changed Hermes, not a reason to try the classifier.
+    """
+    legacy = getattr(_module(_AUX), "_is_model_not_found_error", None)
+    if callable(legacy):
+        _check_call(legacy, f"{_AUX}._is_model_not_found_error", Exception())
+        return legacy
+    try:
+        classify = _symbol(_CLASSIFIER, "classify_api_error")
+        reasons = getattr(_module(_CLASSIFIER), "FailoverReason", None)
+    except HostIncompatible as exc:
+        raise HostIncompatible(f"{_AUX}._is_model_not_found_error is missing and so is its replacement: {exc}") from exc
+    _check_call(classify, f"{_CLASSIFIER}.classify_api_error", Exception())
+    not_found = getattr(reasons, "model_not_found", None)
+    if not_found is None:
+        raise HostIncompatible(f"{_CLASSIFIER}.FailoverReason.model_not_found is missing")
+    return lambda exc: getattr(classify(exc), "reason", None) is not_found
+
+
 def is_model_not_found_error(exc: BaseException) -> bool:
-    fn = _symbol(_AUX, "_is_model_not_found_error")
-    _check_call(fn, f"{_AUX}._is_model_not_found_error", exc)
-    return bool(fn(exc))
+    return bool(_not_found_check()(exc))
 
 
 def parse_reasoning_effort(effort: str) -> dict[str, Any] | None:
